@@ -1,7 +1,7 @@
 
 import React, { useMemo, Suspense, useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { MapControls, Stars, PerspectiveCamera, Cloud, Fog, Ring, Sparkles, Instances, Instance } from '@react-three/drei';
+import { MapControls, Stars, PerspectiveCamera, Cloud, Ring, Sparkles, Instances, Instance } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
 import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
@@ -348,7 +348,7 @@ const PostProcessingEffects = () => {
     if(isLowQual) return null;
 
     return (
-        <EffectComposer disableNormalPass>
+        <EffectComposer>
             <Bloom luminanceThreshold={1} mipmapBlur intensity={1.5} radius={0.4} />
             <Noise opacity={0.05} />
             <Vignette eskil={false} offset={0.1} darkness={1.1} />
@@ -375,7 +375,7 @@ export const Scene: React.FC = () => {
       <Suspense fallback={null}>
           <AtmosphericController />
           {isHighQuality && <Stars radius={200} depth={50} count={5000} factor={4} saturation={0} fade speed={0.5} />}
-          {isHighQuality && <Cloud opacity={0.2} speed={0.2} width={100} depth={5} segments={10} position={[0, 15, -20]} color="#4c1d95" />}
+          {isHighQuality && <Cloud opacity={0.2} speed={0.2} bounds={[100, 5, 5]} segments={10} position={[0, 15, -20]} color="#4c1d95" />}
           
           <VazarothTitan />
           
