@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
-import { Html, Float, Sparkles, Trail } from '@react-three/drei';
+import React, { useState, useRef } from 'react';
+import { Html, Float, Sparkles, Trail, useTexture } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PALETTE } from '../../constants';
 import { TaskPriority, Era, NPC, RaceType } from '../../types';
@@ -27,20 +28,89 @@ export const InteractiveStructure = ({ name, position = [0,0,0], rotation = [0,0
     )
 };
 
-const Fire = ({ position, scale = 1 }: { position: [number, number, number], scale?: number }) => (
+const Fire = ({ position, scale = 1, color = "#ea580c" }: { position: [number, number, number], scale?: number, color?: string }) => (
     <group position={position} scale={[scale, scale, scale]}>
-        <pointLight color="#ea580c" intensity={3} distance={8} decay={2} />
-        <Sparkles count={20} scale={1} size={4} speed={0.4} opacity={1} color="#fbbf24" />
+        <pointLight color={color} intensity={2} distance={6} decay={2} />
+        <Sparkles count={15} scale={1.5} size={6} speed={0.4} opacity={0.8} color="#fbbf24" />
         <mesh position={[0, 0.2, 0]}>
-            <coneGeometry args={[0.2, 0.5, 5]} />
-            <meshStandardMaterial color="#ea580c" emissive="#ea580c" emissiveIntensity={2} transparent opacity={0.8} />
+            <dodecahedronGeometry args={[0.3, 0]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={4} transparent opacity={0.8} />
         </mesh>
     </group>
 );
 
 const Smoke = ({ position }: { position: [number, number, number] }) => (
     <group position={position}>
-        <Sparkles count={30} scale={1} size={10} speed={0.2} opacity={0.3} color="#57534e" noise={1} />
+        <Sparkles count={30} scale={2} size={15} speed={0.2} opacity={0.2} color="#57534e" noise={1} />
+    </group>
+);
+
+// --- NEW ATMOSPHERIC ASSETS ---
+
+export const Torch: React.FC<{ position: [number, number, number] }> = ({ position }) => (
+    <group position={position}>
+        {/* Stick */}
+        <mesh position={[0, 1, 0]}>
+            <cylinderGeometry args={[0.05, 0.08, 2]} />
+            <meshStandardMaterial color="#292524" />
+        </mesh>
+        {/* Fire Cage */}
+        <mesh position={[0, 2, 0]}>
+            <cylinderGeometry args={[0.15, 0.1, 0.4, 4]} />
+            <meshStandardMaterial color="#1c1917" />
+        </mesh>
+        <Fire position={[0, 2.2, 0]} scale={0.6} />
+    </group>
+);
+
+export const GlowingMushroom: React.FC<{ position: [number, number, number] }> = ({ position }) => (
+    <group position={position} scale={[Math.random()*0.5 + 0.5, Math.random()*0.5 + 0.5, Math.random()*0.5 + 0.5]}>
+        <mesh position={[0, 0.2, 0]}>
+            <cylinderGeometry args={[0.05, 0.08, 0.4]} />
+            <meshStandardMaterial color="#e7e5e4" />
+        </mesh>
+        <mesh position={[0, 0.4, 0]}>
+            <sphereGeometry args={[0.25, 16, 8, 0, Math.PI * 2, 0, Math.PI/2]} />
+            <meshStandardMaterial color="#3b82f6" emissive="#2563eb" emissiveIntensity={2} />
+        </mesh>
+        <pointLight position={[0, 0.5, 0]} color="#3b82f6" intensity={0.5} distance={2} />
+    </group>
+);
+
+export const TwistedTree: React.FC<{ position: [number, number, number], scale?: number, rotation?: [number, number, number] }> = ({ position, scale = 1, rotation = [0,0,0] }) => (
+    <group position={position} scale={[scale, scale, scale]} rotation={rotation as any}>
+        {/* Trunk */}
+        <mesh position={[0, 1.5, 0]} rotation={[0.1, 0, 0.1]}>
+            <cylinderGeometry args={[0.3, 0.5, 3, 5]} />
+            <meshStandardMaterial color="#1a120b" roughness={1} />
+        </mesh>
+        {/* Twisted Branches */}
+        <mesh position={[0.2, 2.8, 0]} rotation={[0, 0, -0.5]}>
+            <cylinderGeometry args={[0.15, 0.25, 2, 4]} />
+            <meshStandardMaterial color="#1a120b" roughness={1} />
+        </mesh>
+        <mesh position={[-0.3, 2.5, 0.2]} rotation={[0.5, 0, 0.8]}>
+            <cylinderGeometry args={[0.1, 0.2, 1.5, 4]} />
+            <meshStandardMaterial color="#1a120b" roughness={1} />
+        </mesh>
+        {/* Dead Foliage / Moss */}
+        <mesh position={[0, 3.5, 0]} rotation={[Math.random(), Math.random(), Math.random()]}>
+            <dodecahedronGeometry args={[1.2, 0]} />
+            <meshStandardMaterial color="#2d2a26" roughness={1} />
+        </mesh>
+    </group>
+);
+
+export const GhostWisp: React.FC<{ position: [number, number, number] }> = ({ position }) => (
+    <group position={position}>
+        <Float speed={2} rotationIntensity={0} floatIntensity={1}>
+            <mesh>
+                <sphereGeometry args={[0.2]} />
+                <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={3} transparent opacity={0.6} />
+            </mesh>
+            <Sparkles count={10} scale={2} size={2} color="#d8b4fe" speed={0.5} />
+            <pointLight color="#a855f7" intensity={1} distance={4} decay={2} />
+        </Float>
     </group>
 );
 
@@ -88,11 +158,11 @@ export const VoidCrystal: React.FC<{ position: [number, number, number] }> = ({ 
         <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
             <mesh rotation={[Math.random(), Math.random(), 0]}>
                 <octahedronGeometry args={[0.4, 0]} />
-                <meshStandardMaterial color="#7e22ce" emissive="#581c87" emissiveIntensity={2} transparent opacity={0.8} />
+                <meshStandardMaterial color="#7e22ce" emissive="#581c87" emissiveIntensity={4} transparent opacity={0.9} />
             </mesh>
         </Float>
-        <pointLight color="#a855f7" intensity={1} distance={3} decay={2} />
-        <Sparkles count={5} scale={2} size={2} color="#d8b4fe" speed={0.2} />
+        <pointLight color="#a855f7" intensity={2} distance={4} decay={2} />
+        <Sparkles count={5} scale={2} size={4} color="#d8b4fe" speed={0.2} />
     </group>
 );
 
@@ -131,7 +201,7 @@ export const RuinedArch: React.FC<{ position: [number, number, number] }> = ({ p
 export const ForestStag = ({ position, rotation }: any) => (
     <group position={position} rotation={rotation} scale={[0.5, 0.5, 0.5]}>
         {/* Body */}
-        <mesh position={[0, 1, 0]}>
+        <mesh position={[0, 1, 0]} castShadow>
             <boxGeometry args={[0.8, 0.9, 1.5]} />
             <meshStandardMaterial color="#50453d" />
         </mesh>
@@ -149,11 +219,11 @@ export const ForestStag = ({ position, rotation }: any) => (
         <group position={[0, 2.4, 1.0]}>
             <mesh position={[0.3, 0.4, 0]} rotation={[0, 0, -0.5]}>
                 <cylinderGeometry args={[0.02, 0.05, 0.8]} />
-                <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={0.5} />
+                <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={2} />
             </mesh>
             <mesh position={[-0.3, 0.4, 0]} rotation={[0, 0, 0.5]}>
                 <cylinderGeometry args={[0.02, 0.05, 0.8]} />
-                <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={0.5} />
+                <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={2} />
             </mesh>
         </group>
         {/* Legs */}
@@ -168,7 +238,7 @@ export const ForestStag = ({ position, rotation }: any) => (
 
 export const WolfConstruct = ({ position, rotation }: any) => (
     <group position={position} rotation={rotation} scale={[0.4, 0.4, 0.4]}>
-        <mesh position={[0, 0.8, 0]}>
+        <mesh position={[0, 0.8, 0]} castShadow>
             <boxGeometry args={[0.7, 0.7, 1.4]} />
             <meshStandardMaterial color="#1c1917" />
         </mesh>
@@ -179,11 +249,11 @@ export const WolfConstruct = ({ position, rotation }: any) => (
         {/* Eyes */}
         <mesh position={[0.15, 1.2, 1.0]}>
             <planeGeometry args={[0.1, 0.1]} />
-            <meshStandardMaterial color="red" emissive="red" emissiveIntensity={2} />
+            <meshStandardMaterial color="red" emissive="red" emissiveIntensity={5} />
         </mesh>
         <mesh position={[-0.15, 1.2, 1.0]}>
             <planeGeometry args={[0.1, 0.1]} />
-            <meshStandardMaterial color="red" emissive="red" emissiveIntensity={2} />
+            <meshStandardMaterial color="red" emissive="red" emissiveIntensity={5} />
         </mesh>
         {/* Legs */}
         {[[0.3, 0.6], [-0.3, 0.6], [0.3, -0.6], [-0.3, -0.6]].map(([x,z], i) => (
@@ -212,7 +282,7 @@ const CitadelRuin = () => (
             <meshStandardMaterial color="#0c0a09" />
         </mesh>
         <group position={[-1.5, 0, -1]} rotation={[0, 0.5, 0]}>
-            <mesh position={[0, 0.7, 0]}>
+            <mesh position={[0, 0.7, 0]} castShadow>
                 <coneGeometry args={[1.2, 1.4, 4]} />
                 <meshStandardMaterial color="#451a03" roughness={1} />
             </mesh>
@@ -238,25 +308,25 @@ const CitadelVillage = () => (
             const angle = (i / 12) * Math.PI * 2;
             if (angle > 0.5 && angle < 2.5) return null;
             return (
-                <mesh key={i} position={[Math.cos(angle) * 5, 1, Math.sin(angle) * 5]}>
+                <mesh key={i} position={[Math.cos(angle) * 5, 1, Math.sin(angle) * 5]} castShadow>
                     <cylinderGeometry args={[0.2, 0.2, 2.5, 6]} />
                     <meshStandardMaterial color="#451a03" />
                 </mesh>
             )
         })}
         <group position={[0, 0, -1]}>
-            <mesh position={[0, 1, 0]}>
+            <mesh position={[0, 1, 0]} castShadow>
                 <boxGeometry args={[3, 2, 2]} />
                 <meshStandardMaterial color="#3f2818" />
             </mesh>
-            <mesh position={[0, 2.5, 0]} rotation={[0, 0, 0]}>
+            <mesh position={[0, 2.5, 0]} rotation={[0, 0, 0]} castShadow>
                 <coneGeometry args={[2.5, 1.5, 4]} />
                 <meshStandardMaterial color="#1c1917" />
             </mesh>
             <Fire position={[0, 1, 1.2]} scale={0.5} />
         </group>
         <group position={[3, 0, 3]}>
-            <mesh position={[0, 2, 0]}>
+            <mesh position={[0, 2, 0]} castShadow>
                 <boxGeometry args={[1, 4, 1]} />
                 <meshStandardMaterial color="#3f2818" />
             </mesh>
@@ -289,10 +359,13 @@ const CitadelFortress = () => (
             </mesh>
         </group>
         {[[-4, -4], [4, -4], [-4, 4], [4, 4]].map(([x, z], i) => (
-            <mesh key={i} position={[x, 2.5, z]} castShadow>
-                <cylinderGeometry args={[0.8, 1, 5, 6]} />
-                <meshStandardMaterial color="#292524" />
-            </mesh>
+            <group key={i} position={[x, 0, z]}>
+                <mesh position={[0, 2.5, 0]} castShadow>
+                    <cylinderGeometry args={[0.8, 1, 5, 6]} />
+                    <meshStandardMaterial color="#292524" />
+                </mesh>
+                <Torch position={[0.8, 3, 0]} />
+            </group>
         ))}
     </group>
 );
@@ -306,7 +379,7 @@ const CitadelEclipse = () => (
             </mesh>
             <mesh position={[0, 6, 0]} rotation={[Math.PI/4, 0, 0]}>
                 <torusGeometry args={[5, 0.1, 16, 100]} />
-                <meshStandardMaterial color="#ef4444" emissive="#7f1d1d" />
+                <meshStandardMaterial color="#ef4444" emissive="#7f1d1d" emissiveIntensity={2} />
             </mesh>
              <mesh position={[0, 2, 0]} rotation={[-Math.PI/4, 0, 0]}>
                 <torusGeometry args={[4, 0.2, 16, 6]} />
@@ -314,7 +387,7 @@ const CitadelEclipse = () => (
             </mesh>
             <mesh position={[0, 4, 2.5]}>
                 <sphereGeometry args={[0.5, 32, 32]} />
-                <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={2} />
+                <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={5} />
             </mesh>
             <pointLight position={[0, 4, 3]} color="#ef4444" intensity={5} distance={20} />
         </Float>
@@ -582,25 +655,6 @@ const VillagerAvatar = ({ role, name, status, onClick, currentAction }: any) => 
         </group>
     )
 }
-
-// --- WORLD MAP CHUNKS ---
-export const AncientRuin = ({ position }: any) => (
-    <group position={position} scale={[2, 2, 2]}>
-        <mesh position={[0, 1, 0]}><boxGeometry args={[1, 2, 1]} /><meshStandardMaterial color="#1c1917" /></mesh>
-        <mesh position={[1.2, 0.5, 0]} rotation={[0, 0, 0.5]}><boxGeometry args={[0.5, 1, 0.5]} /><meshStandardMaterial color="#1c1917" /></mesh>
-        <pointLight position={[0, 2, 0]} color="cyan" distance={3} intensity={0.5} />
-    </group>
-);
-
-export const ResourceNode: React.FC<{ position: any, type: 'GOLD' | 'IRON' }> = ({ position, type }) => (
-    <group position={position}>
-        <mesh rotation={[-Math.PI/2, 0, 0]}>
-            <coneGeometry args={[1, 1.5, 5]} />
-            <meshStandardMaterial color={type === 'GOLD' ? '#fbbf24' : '#94a3b8'} metalness={0.8} roughness={0.2} />
-        </mesh>
-        <Sparkles count={5} scale={2} color={type === 'GOLD' ? '#fbbf24' : '#94a3b8'} />
-    </group>
-);
 
 // Exports at the bottom to avoid Temporal Dead Zone (TDZ) issues
 export { VazarothTitan, EnemyMesh, VillagerAvatar, House, BaseComplex };
