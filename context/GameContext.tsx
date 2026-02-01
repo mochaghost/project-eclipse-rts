@@ -35,14 +35,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const cloudUnsubRef = useRef<(() => void) | null>(null);
 
-    // --- AUTO CONNECT CLOUD ---
+    // --- AUTO CONNECT CLOUD (MAGIC LINK LOGIC) ---
     useEffect(() => {
-        // Automatically try to connect if we have a room ID saved, OR if it's the first run with defaults
-        const savedRoom = localStorage.getItem('ECLIPSE_ROOM_ID');
-        if (savedRoom && !state.syncConfig?.isConnected) {
-            console.log("[AutoConnect] Attempting to reconnect to room:", savedRoom);
-            connectToCloud(DEFAULT_FIREBASE_CONFIG, savedRoom);
-        }
+        const initCloud = async () => {
+            // 1. Check URL Params for magic link (?room=XYZ)
+            const params = new URLSearchParams(window.location.search);
+            const urlRoom = params.get('room');
+            
+            // 2. Check LocalStorage
+            const savedRoom = localStorage.getItem('ECLIPSE_ROOM_ID');
+            
+            // Priority: URL > LocalStorage
+            const targetRoom = urlRoom || savedRoom;
+
+            if (targetRoom && !state.syncConfig?.isConnected) {
+                console.log("[AutoConnect] Establishing Neural Link to:", targetRoom);
+                
+                // If it came from URL, save it locally for next time so URL param isn't needed forever
+                if (urlRoom) {
+                    localStorage.setItem('ECLIPSE_ROOM_ID', urlRoom);
+                    // Optional: Clean URL without reload
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+
+                await connectToCloud(DEFAULT_FIREBASE_CONFIG, targetRoom);
+            }
+        };
+
+        initCloud();
     }, []);
 
     // --- IDLE DETECTION ---
@@ -67,6 +87,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         return () => events.forEach(e => window.removeEventListener(e, resetIdleTimer));
     }, [resetIdleTimer]);
+
+    // --- HELPER FOR IMMEDIATE SYNC ---
+    const syncNow = (newState: GameState) => {
+        saveGame(newState); // Always save local first
+        if (newState.syncConfig?.isConnected && newState.syncConfig.roomId) {
+            pushToCloud(newState.syncConfig.roomId, newState);
+        }
+    };
 
     // --- GAME LOOP ---
     useEffect(() => {
@@ -288,13 +316,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 if (newState.effects.length > 20) newState.effects = newState.effects.slice(-20);
 
-                if (needsSave) saveGame(newState);
-                
-                if (newState.syncConfig?.isConnected && now - (prev.lastSyncTimestamp || 0) > 5000) {
-                     pushToCloud(newState.syncConfig.roomId, newState);
-                     newState.lastSyncTimestamp = now;
+                if (needsSave) {
+                    saveGame(newState);
+                    // Passive sync (every ~1m or on major events) can still happen here if needed, 
+                    // but we rely more on action-based sync now.
                 }
-
+                
                 return newState;
             });
         }, 50); 
@@ -359,7 +386,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 sageMessage: sageLine,
                 vazarothMessage: getVazarothLine("IDLE") // Reset Vazaroth
             };
-            saveGame(next);
+            syncNow(next); // IMMEDIATE SYNC
             return next;
         });
     };
@@ -443,7 +470,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } as HistoryLog, ...prev.history]
             };
             
-            saveGame(nextState);
+            syncNow(nextState); // IMMEDIATE SYNC
             return nextState;
         });
     };
@@ -463,7 +490,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 );
 
                 const nextState = { ...prev, tasks: updatedTasks };
-                saveGame(nextState);
+                syncNow(nextState); // IMMEDIATE SYNC
                 return nextState;
             });
         });
@@ -540,7 +567,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 selectedEnemyId: null,
                 isProfileOpen: false 
             };
-            saveGame(next);
+            syncNow(next); // IMMEDIATE SYNC
             return next;
         });
     };
@@ -577,7 +604,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } as HistoryLog, ...sim.logs, ...prev.history],
                 selectedEnemyId: null
             };
-            saveGame(next);
+            syncNow(next); // IMMEDIATE SYNC
             return next;
         });
     };
@@ -612,12 +639,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 effects.push({ id: generateId(), type: 'TEXT_DAMAGE', position: { ...mainEnemy.position, y: 3 }, text: "-10", timestamp: Date.now() });
             }
 
-            return {
+            const next = {
                 ...prev,
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, completed: true } : s) } : t),
                 enemies: updatedEnemies,
                 effects: [...prev.effects, ...effects]
             };
+            syncNow(next);
+            return next;
         });
     };
 
@@ -660,7 +689,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     details: `Reputation changed by ${repChange}.` 
                 } as HistoryLog, ...prev.history] 
             };
-            saveGame(next);
+            syncNow(next);
             return next;
         });
     };
@@ -684,7 +713,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (item.type === 'MERCENARY') { const target = prev.tasks.find(t => t.priority === TaskPriority.LOW && !t.completed && !t.failed); if (target) setTimeout(() => completeTask(target.id), 500); }
             updates.structures = newStructs;
             const next = { ...prev, ...updates, vazarothMessage: getVazarothLine('MARKET') };
-            saveGame(next as GameState);
+            syncNow(next as GameState);
             return next as GameState;
         });
     };
@@ -745,20 +774,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (success) {
             playSfx('UI_CLICK'); 
-            setState(prev => ({
-                ...prev,
-                mana: prev.mana - spell.cost,
-                enemies: newEnemies,
-                tasks: newTasks,
-                effects: [...prev.effects, ...effects],
-                history: [{ 
-                    id: generateId(), 
-                    timestamp: Date.now(), 
-                    type: 'MAGIC', 
-                    message: msg, 
-                    details: spell.desc 
-                } as HistoryLog, ...prev.history]
-            }));
+            setState(prev => {
+                const next = {
+                    ...prev,
+                    mana: prev.mana - spell.cost,
+                    enemies: newEnemies,
+                    tasks: newTasks,
+                    effects: [...prev.effects, ...effects],
+                    history: [{ 
+                        id: generateId(), 
+                        timestamp: Date.now(), 
+                        type: 'MAGIC', 
+                        message: msg, 
+                        details: spell.desc 
+                    } as HistoryLog, ...prev.history]
+                };
+                syncNow(next);
+                return next;
+            });
         }
     }
 
@@ -769,7 +802,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const success = initFirebase(config);
         if (success) {
             setState(prev => ({ ...prev, syncConfig: { firebase: config, roomId, isConnected: true } }));
-            subscribeToCloud(roomId, (data) => { playSfx('UI_CLICK'); setState(current => ({ ...current, ...data, syncConfig: { ...current.syncConfig!, isConnected: true } })); });
+            subscribeToCloud(roomId, (data) => { 
+                playSfx('UI_CLICK'); 
+                // CRITICAL: Preserve local syncConfig when receiving cloud data to avoid losing connection state
+                setState(current => ({ 
+                    ...current, 
+                    ...data, 
+                    syncConfig: { ...current.syncConfig!, isConnected: true } 
+                })); 
+            });
             return true;
         }
         playSfx('ERROR'); return false;
@@ -817,20 +858,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         state,
         addTask,
         editTask,
-        moveTask, // Uses new logic
+        moveTask, 
         completeTask,
         completeSubtask,
         failTask,
         selectEnemy: (id) => wrapUi(() => setState(p => ({ ...p, selectedEnemyId: id }))),
-        resolveCrisisHubris: (id) => wrapUi(() => setState(p => ({ ...p, activeAlert: AlertType.NONE, tasks: p.tasks.map(t => t.id === id ? { ...t, hubris: true } : t) }))),
+        resolveCrisisHubris: (id) => wrapUi(() => setState(p => {
+            const next = { ...p, activeAlert: AlertType.NONE, tasks: p.tasks.map(t => t.id === id ? { ...t, hubris: true } : t) };
+            syncNow(next);
+            return next;
+        })),
         resolveCrisisHumility: (id) => wrapUi(() => setState(p => ({ ...p, activeAlert: AlertType.AEON_ENCOUNTER, alertTaskId: id }))),
         resolveAeonBattle: (taskId, newSubtasks, success) => wrapUi(() => {
             setState(prev => {
+                let next;
                 if (success) {
                     const task = prev.tasks.find(t => t.id === taskId);
                     const newSubs = newSubtasks.map(s => ({ id: generateId(), title: s, completed: false }));
                     playSfx('VICTORY');
-                    return {
+                    next = {
                         ...prev,
                         activeAlert: AlertType.NONE,
                         tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: [...t.subtasks, ...newSubs], deadline: t.deadline + (60 * 60 * 1000) } : t),
@@ -844,7 +890,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     };
                 } else {
                     playSfx('FAILURE');
-                    return {
+                    next = {
                         ...prev,
                         activeAlert: AlertType.NONE,
                         heroHp: Math.max(0, prev.heroHp - 30),
@@ -857,6 +903,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         } as HistoryLog, ...prev.history]
                     }
                 }
+                syncNow(next);
+                return next;
             })
         }),
         triggerRitual: (t) => wrapUi(() => setState(p => ({ ...p, activeAlert: t }))),

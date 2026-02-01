@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy, Smartphone, Move } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy, Smartphone, Move, Share2 } from 'lucide-react';
 import { convertToEmbedUrl } from '../../utils/generators';
 import { DEFAULT_FIREBASE_CONFIG } from '../../services/firebase';
 
@@ -60,6 +60,12 @@ export const SettingsModal: React.FC = () => {
         } catch (e) {
             alert("Could not parse config.");
         }
+    };
+
+    const copySyncLink = () => {
+        const url = `${window.location.origin}${window.location.pathname}?room=${state.syncConfig?.roomId}`;
+        navigator.clipboard.writeText(url);
+        alert("Magic Link copied! Open this on your iPad to auto-sync.");
     };
 
     if (!state.isSettingsOpen) return null;
@@ -277,19 +283,30 @@ export const SettingsModal: React.FC = () => {
                                 <div className="text-green-500 text-xl font-bold mb-4 font-serif tracking-widest">CONNECTED TO VOID NET</div>
                                 <div className="text-xs font-mono text-stone-500 mb-8 p-2 bg-black inline-block border border-stone-800">Room: {state.syncConfig.roomId}</div>
                                 
-                                <div className="max-w-xs mx-auto mb-8 text-left">
-                                    <p className="text-[10px] text-stone-500 mb-2 uppercase font-bold text-center">Your Room ID</p>
-                                    <div className="flex items-center gap-2 bg-[#151210] border border-blue-900/50 p-3 rounded">
-                                        <code className="text-blue-300 font-mono text-sm flex-1 text-center select-all">{state.syncConfig.roomId}</code>
-                                        <button 
-                                            onClick={() => navigator.clipboard.writeText(state.syncConfig?.roomId || '')}
-                                            className="text-stone-500 hover:text-white"
-                                        >
-                                            <Copy size={14} />
-                                        </button>
+                                <div className="max-w-xs mx-auto mb-8 text-left space-y-6">
+                                    <div>
+                                        <p className="text-[10px] text-stone-500 mb-2 uppercase font-bold text-center">Your Room ID</p>
+                                        <div className="flex items-center gap-2 bg-[#151210] border border-blue-900/50 p-3 rounded">
+                                            <code className="text-blue-300 font-mono text-sm flex-1 text-center select-all">{state.syncConfig.roomId}</code>
+                                            <button 
+                                                onClick={() => navigator.clipboard.writeText(state.syncConfig?.roomId || '')}
+                                                className="text-stone-500 hover:text-white"
+                                                title="Copy ID"
+                                            >
+                                                <Copy size={14} />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <p className="text-[9px] text-stone-600 mt-2 text-center">
-                                        Enter this <strong>exact ID</strong> on your other device to sync.
+
+                                    {/* MAGIC LINK BUTTON */}
+                                    <button 
+                                        onClick={copySyncLink}
+                                        className="w-full bg-emerald-900/20 border border-emerald-700/50 text-emerald-400 py-3 font-serif font-bold tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-900/40 hover:scale-105 transition-all shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                                    >
+                                        <Share2 size={16} /> COPY MAGIC LINK
+                                    </button>
+                                    <p className="text-[9px] text-emerald-600/70 text-center">
+                                        Send this link to your iPad/Mobile to auto-connect instantly.
                                     </p>
                                 </div>
 

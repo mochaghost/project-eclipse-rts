@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -391,6 +391,19 @@ export const Grimoire: React.FC = () => {
                         className="w-full bg-[#151210] border-b border-[#292524] p-2 md:p-3 text-stone-200 focus:border-yellow-900 outline-none font-serif text-base md:text-lg placeholder:text-stone-800 placeholder:italic transition-colors"
                         placeholder="e.g., The Tax Beast"
                         autoFocus={!isEditing}
+                    />
+                </div>
+
+                {/* DESCRIPTION BOX - RESTORED */}
+                <div>
+                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
+                        <AlignLeft size={10} /> Description / Notes
+                    </label>
+                    <textarea 
+                        value={notes} 
+                        onChange={(e) => setNotes(e.target.value)} 
+                        className="w-full bg-[#151210] border border-[#292524] p-2 md:p-3 text-stone-400 text-xs focus:border-stone-600 outline-none min-h-[80px] font-mono resize-none"
+                        placeholder="Details of the summoning..."
                     />
                 </div>
 
