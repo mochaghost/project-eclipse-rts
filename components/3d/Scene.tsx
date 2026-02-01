@@ -1,7 +1,7 @@
 
 import React, { useMemo, Suspense, useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { MapControls, Stars, PerspectiveCamera, Ring, Sparkles, Instances, Instance, Html, Float } from '@react-three/drei';
+import { MapControls, Stars, PerspectiveCamera, Ring, Sparkles, Instances, Instance, Html, Float, Cloud } from '@react-three/drei';
 import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
 import { VisualEffectsRenderer } from './VisualEffects';
@@ -11,101 +11,133 @@ import { PALETTE } from '../../constants';
 import { VazarothTitan, AncientRuin, ResourceNode, GrassTuft, Pebble, BonePile, VoidCrystal, RuinedColumn, RuinedArch } from './Assets'; 
 import * as THREE from 'three';
 
-// Simple pseudo-noise function for forest clumping
-const noise = (x: number, z: number) => Math.sin(x * 0.1) * Math.cos(z * 0.1) + Math.sin(x * 0.3 + z * 0.2);
+// Improved Noise for clumping
+const noise = (x: number, z: number) => Math.sin(x * 0.05) * Math.cos(z * 0.05) + Math.sin(x * 0.1 + z * 0.1) * 0.5;
 
 const VegetationSystem = () => {
+    // 1. TREES (Dead Forest)
     const trees = useMemo(() => {
         const temp = [];
-        for (let i = 0; i < 400; i++) {
+        for (let i = 0; i < 300; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const dist = 15 + Math.random() * 80;
+            const dist = 20 + Math.random() * 100; // Push further out
             const x = Math.cos(angle) * dist;
             const z = Math.sin(angle) * dist;
             const n = noise(x, z);
-            if (n > 0.2) { // Forest clump
-                temp.push({ position: [x, 0, z], scale: 0.8 + Math.random() * 0.5, rotation: [0, Math.random() * Math.PI, 0] });
+            if (n > 0.3) { // Clumping
+                temp.push({ position: [x, 0, z], scale: 1 + Math.random() * 1.5, rotation: [0, Math.random() * Math.PI, 0] });
             }
         }
         return temp;
     }, []);
 
+    // 2. DENSE GRASS (The Carpet)
     const grass = useMemo(() => {
         const temp = [];
-        for (let i = 0; i < 2000; i++) { // 2000 blades, 1 draw call
-            const x = (Math.random() - 0.5) * 200;
-            const z = (Math.random() - 0.5) * 200;
-            if (Math.abs(x) < 5 && Math.abs(z) < 5) continue; // Clear spawn
-            const n = noise(x*2, z*2);
-            if (n > -0.2) {
-                temp.push({ position: [x, 0, z], rotation: [0, Math.random(), 0], scale: 0.5 + Math.random() });
+        const count = 15000; // Massive increase for density
+        for (let i = 0; i < count; i++) { 
+            const x = (Math.random() - 0.5) * 250;
+            const z = (Math.random() - 0.5) * 250;
+            // Clear spawn area slightly
+            if (Math.abs(x) < 8 && Math.abs(z) < 8) continue; 
+            
+            const n = noise(x * 2, z * 2);
+            if (n > -0.4) { // Grow almost everywhere except specific noise hollows
+                temp.push({ position: [x, 0, z], rotation: [0, Math.random() * Math.PI, 0], scale: 0.6 + Math.random() * 0.8 });
             }
         }
         return temp;
     }, []);
 
+    // 3. GROUND CLUTTER (Rocks/Debris)
     const rocks = useMemo(() => {
         const temp = [];
-        for (let i = 0; i < 100; i++) {
-            const x = (Math.random() - 0.5) * 150;
-            const z = (Math.random() - 0.5) * 150;
-            if (Math.abs(x) < 10 && Math.abs(z) < 10) continue;
-            temp.push({ position: [x, 0, z], scale: 0.5 + Math.random(), rotation: [Math.random(), Math.random(), Math.random()] });
+        for (let i = 0; i < 800; i++) {
+            const x = (Math.random() - 0.5) * 200;
+            const z = (Math.random() - 0.5) * 200;
+            if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
+            temp.push({ position: [x, 0, z], scale: 0.3 + Math.random() * 0.5, rotation: [Math.random(), Math.random(), Math.random()] });
         }
         return temp;
     }, []);
 
     return (
         <group>
-            {/* INSTANCED TREE TRUNKS */}
+            {/* TREES */}
             <Instances range={1000}>
-                <cylinderGeometry args={[0.1, 0.4, 3, 5]} />
-                <meshStandardMaterial color="#0f0505" roughness={0.9} />
+                <cylinderGeometry args={[0.2, 0.6, 6, 6]} />
+                <meshStandardMaterial color="#0f0505" roughness={1} />
                 {trees.map((data, i) => (
-                    <Instance key={i} position={[data.position[0], 1.5, data.position[2]]} scale={data.scale} rotation={data.rotation as any} />
+                    <Instance key={`tree-${i}`} position={[data.position[0], 3, data.position[2]]} scale={data.scale} rotation={data.rotation as any} />
+                ))}
+            </Instances>
+            {/* TREE TOPS */}
+            <Instances range={1000}>
+                <dodecahedronGeometry args={[1.5, 0]} />
+                <meshStandardMaterial color="#081008" roughness={1} />
+                {trees.map((data, i) => (
+                    <Instance key={`top-${i}`} position={[data.position[0], 6, data.position[2]]} scale={data.scale} rotation={data.rotation as any} />
                 ))}
             </Instances>
 
-            {/* INSTANCED TREE TOPS (Foliage) */}
+            {/* ROCKS */}
             <Instances range={1000}>
                 <dodecahedronGeometry args={[0.8, 0]} />
-                <meshStandardMaterial color="#0a1f0a" roughness={1} />
-                {trees.map((data, i) => (
-                    <Instance key={i} position={[data.position[0], 3, data.position[2]]} scale={[data.scale * 1.5, data.scale * 1.5, data.scale * 1.5]} rotation={data.rotation as any} />
-                ))}
-            </Instances>
-
-            {/* INSTANCED ROCKS */}
-            <Instances range={200}>
-                <dodecahedronGeometry args={[0.6, 0]} />
                 <meshStandardMaterial color="#1c1917" roughness={0.8} />
                 {rocks.map((data, i) => (
-                    <Instance key={i} position={data.position as any} scale={data.scale} rotation={data.rotation as any} />
+                    <Instance key={`rock-${i}`} position={data.position as any} scale={data.scale} rotation={data.rotation as any} />
                 ))}
             </Instances>
 
-            {/* INSTANCED GRASS */}
-            <Instances range={2500}>
-                <planeGeometry args={[0.1, 0.5]} />
+            {/* GRASS BLADES (Simple Planes for Performance) */}
+            <Instances range={20000}>
+                <planeGeometry args={[0.15, 0.8]} />
                 <meshStandardMaterial color="#1a2e10" side={THREE.DoubleSide} />
                 {grass.map((data, i) => (
-                    <Instance key={i} position={data.position as any} rotation={data.rotation as any} scale={data.scale} />
+                    <Instance key={`grass-${i}`} position={data.position as any} rotation={data.rotation as any} scale={data.scale} />
                 ))}
             </Instances>
         </group>
     );
 };
 
+// Adds texture to the floor without loading an image by using lots of flat geometry noise
+const GroundDetail = () => {
+    const patches = useMemo(() => {
+        const p = [];
+        for(let i=0; i<500; i++) {
+            const x = (Math.random() - 0.5) * 150;
+            const z = (Math.random() - 0.5) * 150;
+            const scale = 2 + Math.random() * 5;
+            p.push({ x, z, scale, rot: Math.random() * Math.PI });
+        }
+        return p;
+    }, []);
+
+    return (
+        <Instances range={1000}>
+            <circleGeometry args={[1, 8]} />
+            <meshStandardMaterial color="#22201e" transparent opacity={0.6} depthWrite={false} />
+            {patches.map((p, i) => (
+                <Instance 
+                    key={i} 
+                    position={[p.x, 0.02, p.z]} 
+                    rotation={[-Math.PI/2, 0, p.rot]} 
+                    scale={[p.scale, p.scale, 1]} 
+                />
+            ))}
+        </Instances>
+    )
+}
+
 const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, groundColor: string }) => {
-    // Visibility Radius based on Level. 
-    const viewRadius = 40 + (level * 2);
+    const viewRadius = 60 + (level * 2);
     
-    // Distant Chunks
     const chunks = useMemo(() => {
         const items: {x: number, z: number, dist: number, type: number, rotation: number}[] = [];
-        for(let x = -100; x <= 100; x+=10) { 
-            for(let z = -100; z <= 100; z+=10) {
-                if (Math.abs(x) < 15 && Math.abs(z) < 15) continue; 
+        for(let x = -120; x <= 120; x+=15) { 
+            for(let z = -120; z <= 120; z+=15) {
+                if (Math.abs(x) < 20 && Math.abs(z) < 20) continue; 
                 const dist = Math.sqrt(x*x + z*z);
                 const type = Math.random();
                 items.push({ x: x + (Math.random() * 5), z: z + (Math.random() * 5), dist, type, rotation: Math.random() * Math.PI });
@@ -116,9 +148,9 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
 
     const specialClutter = useMemo(() => {
         const items: {x: number, z: number, type: string, scale?: number}[] = [];
-        for(let i=0; i<150; i++) { 
+        for(let i=0; i<200; i++) { 
              const angle = Math.random() * Math.PI * 2;
-             const dist = 10 + (Math.random() * 90); 
+             const dist = 15 + (Math.random() * 100); 
              const x = Math.cos(angle) * dist;
              const z = Math.sin(angle) * dist;
              
@@ -129,7 +161,7 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
              else if (r > 0.96) type = 'BONE_PILE';
              else if (r > 0.94) type = 'VOID_CRYSTAL'; 
              else if (r > 0.8) type = 'PEBBLE';
-             else continue; // Skip if not special
+             else continue;
 
              items.push({ x, z, type, scale: 0.8 + Math.random() * 0.4 });
         }
@@ -138,17 +170,17 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
 
     return (
         <group>
-            {/* Infinite Floor Plane - DYNAMIC COLOR */}
-             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-                <planeGeometry args={[400, 400, 128, 128]} />
+            {/* Base Floor */}
+             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+                <planeGeometry args={[500, 500, 64, 64]} />
                 <meshStandardMaterial 
                     color={groundColor} 
                     roughness={1} 
-                    metalness={0.1}
+                    metalness={0.0}
                 />
             </mesh>
-
-            {/* Vegetation System (Optimized Instancing) */}
+            
+            <GroundDetail />
             <VegetationSystem />
 
             {/* Special Non-Instanced Clutter */}
@@ -162,13 +194,15 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
 
             {/* Distant Procedural Features */}
             {chunks.map((chunk, i) => {
-                if (chunk.dist > viewRadius + 20) return null;
+                if (chunk.dist > viewRadius + 30) return null;
                 const isVisible = chunk.dist < viewRadius;
+                
+                // Fog of War / Unexplored Areas
                 if (!isVisible) {
                     return (
                         <mesh key={i} position={[chunk.x, 0.5, chunk.z]} rotation={[-Math.PI/2,0,0]}>
-                            <planeGeometry args={[2, 2]} />
-                            <meshBasicMaterial color="#000" transparent opacity={0.5} />
+                            <planeGeometry args={[10, 10]} />
+                            <meshBasicMaterial color="#000" transparent opacity={0.8} />
                         </mesh>
                     )
                 }
@@ -184,13 +218,18 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
 }
 
 const WeatherSystem = ({ type }: { type: WeatherType }) => {
-    if (type === 'CLEAR') return null;
+    if (type === 'CLEAR') return (
+        <group>
+             {/* Subtle Dust Motes in Clear Weather */}
+             <Sparkles count={200} scale={50} size={2} speed={0.2} opacity={0.3} color="#fff" />
+        </group>
+    );
 
     if (type === 'RAIN') {
         return (
             <group position={[0, 10, 0]}>
-                <Sparkles count={1000} scale={30} size={2} speed={3} opacity={0.4} color="#60a5fa" noise={0} />
-                <fogExp2 attach="fog" args={['#1e293b', 0.02]} />
+                <Sparkles count={2000} scale={[50, 20, 50]} size={2} speed={5} opacity={0.4} color="#60a5fa" noise={0} />
+                <fogExp2 attach="fog" args={['#1e293b', 0.03]} />
                 <directionalLight position={[10, 10, 5]} intensity={0.2} color="#60a5fa" />
             </group>
         );
@@ -199,8 +238,8 @@ const WeatherSystem = ({ type }: { type: WeatherType }) => {
     if (type === 'ASH_STORM') {
         return (
             <group position={[0, 10, 0]}>
-                <Sparkles count={500} scale={40} size={5} speed={0.5} opacity={0.6} color="#450a0a" noise={1} />
-                <fogExp2 attach="fog" args={['#2a0a0a', 0.04]} />
+                <Sparkles count={1000} scale={60} size={6} speed={0.5} opacity={0.6} color="#450a0a" noise={1} />
+                <fogExp2 attach="fog" args={['#2a0a0a', 0.05]} />
                 <ambientLight intensity={0.5} color="#7f1d1d" />
             </group>
         );
@@ -209,8 +248,8 @@ const WeatherSystem = ({ type }: { type: WeatherType }) => {
     if (type === 'VOID_MIST') {
         return (
             <group>
-                <fogExp2 attach="fog" args={['#0f0518', 0.06]} />
-                <Sparkles count={200} scale={20} size={8} speed={0.1} opacity={0.2} color="#a855f7" />
+                <fogExp2 attach="fog" args={['#0f0518', 0.08]} />
+                <Sparkles count={500} scale={40} size={10} speed={0.1} opacity={0.2} color="#a855f7" />
             </group>
         );
     }
@@ -239,9 +278,9 @@ const GlobalSceneController = () => {
     const sunRadius = 100;
     const sunX = Math.cos(sunAngle) * sunRadius;
     const sunY = Math.sin(sunAngle) * sunRadius;
-    const sunZ = 20; // Slight offset
+    const sunZ = 20; 
 
-    const isNight = sunY < -5; // Below horizon
+    const isNight = sunY < -5; 
     const isDawn = hours >= 5 && hours < 7;
     const isDusk = hours >= 17 && hours < 19;
 
@@ -249,10 +288,10 @@ const GlobalSceneController = () => {
     let sunColor = '#fbbf24'; 
     let skyColor = '#7dd3fc'; 
     let fogColor = '#bae6fd'; 
-    let intensity = 4.0; 
-    let ambientIntensity = 1.0; 
+    let intensity = 3.5; 
+    let ambientIntensity = 0.8; 
     let bgColor = '#38bdf8'; 
-    let groundColor = '#78716c'; 
+    let groundColor = '#57534e'; // Darker base for grimdark feel
 
     if (isDawn) {
         sunColor = '#f97316'; 
@@ -261,7 +300,7 @@ const GlobalSceneController = () => {
         bgColor = '#ffedd5';
         intensity = 2.0;
         ambientIntensity = 0.6;
-        groundColor = '#a8a29e';
+        groundColor = '#78350f';
     } else if (isDusk) {
         sunColor = '#ef4444'; 
         skyColor = '#c084fc';
@@ -269,7 +308,7 @@ const GlobalSceneController = () => {
         bgColor = '#581c87';
         intensity = 1.5;
         ambientIntensity = 0.5;
-        groundColor = '#57534e';
+        groundColor = '#451a03';
     } else if (isNight) {
         sunColor = '#bfdbfe'; 
         skyColor = '#1e3a8a'; 
@@ -294,14 +333,15 @@ const GlobalSceneController = () => {
         groundColor = '#000000';
     }
 
-    const fogDist = 30 + (state.playerLevel * 2); 
+    // Closer fog for more atmosphere
+    const fogDist = 35 + (state.playerLevel * 2); 
 
     return (
         <>
             <color attach="background" args={[bgColor]} />
             <WeatherSystem type={weather} />
             {weather === 'CLEAR' && <fog attach="fog" args={[fogColor, 10, isNight ? fogDist * 1.5 : fogDist]} />}
-            <hemisphereLight intensity={ambientIntensity} color={skyColor} groundColor={isNight ? '#334155' : '#78716c'} />
+            <hemisphereLight intensity={ambientIntensity} color={skyColor} groundColor={isNight ? '#1e1b4b' : '#44403c'} />
             <directionalLight position={[sunX, sunY, sunZ]} intensity={intensity} castShadow shadow-mapSize={[2048, 2048]} color={sunColor} shadow-bias={-0.0005} />
             {isEclipse && <pointLight position={[0, 20, 0]} intensity={2} color="#ff0000" distance={100} decay={2} />}
             <ProceduralMap level={state.playerLevel} era={state.era} groundColor={groundColor} />
@@ -323,19 +363,40 @@ const RitualCircle = () => {
     )
 }
 
-// Visual for FUTURE enemies
+// Visual for FUTURE enemies (Fixed Geometry from Triangle to Portal)
 const PortalRift = ({ position }: { position: {x:number, y:number, z:number} }) => {
+    const r1 = useRef<THREE.Mesh>(null);
+    const r2 = useRef<THREE.Mesh>(null);
+    
+    useFrame((state, delta) => {
+        if(r1.current) r1.current.rotation.z += delta * 0.5;
+        if(r2.current) r2.current.rotation.z -= delta * 0.8;
+    });
+
     return (
-        <group position={[position.x, 1, position.z]}>
-            <Float speed={4} rotationIntensity={0.5} floatIntensity={0.5}>
-                <mesh rotation={[0,0,Math.PI/4]}>
-                    <ringGeometry args={[1, 1.2, 3]} />
-                    <meshStandardMaterial color="#000" emissive="#4c1d95" emissiveIntensity={2} />
+        <group position={[position.x, 2, position.z]}>
+            <Float speed={4} rotationIntensity={0.2} floatIntensity={0.5}>
+                {/* Main Ring - Explicitly 32 segments so it is circular, NOT 3 */}
+                <mesh ref={r1} rotation={[0,0,0]}>
+                    <ringGeometry args={[1.5, 1.8, 32]} />
+                    <meshStandardMaterial color="#4c1d95" emissive="#7e22ce" emissiveIntensity={2} side={THREE.DoubleSide} transparent opacity={0.8} />
+                </mesh>
+                {/* Inner Ring */}
+                <mesh ref={r2} rotation={[0,0,Math.PI/4]}>
+                    <ringGeometry args={[1.0, 1.1, 4]} />
+                    <meshStandardMaterial color="#c084fc" emissive="#fff" emissiveIntensity={1} side={THREE.DoubleSide} />
+                </mesh>
+                {/* Core */}
+                <mesh>
+                    <circleGeometry args={[0.8, 32]} />
+                    <meshBasicMaterial color="#000" transparent opacity={0.9} />
                 </mesh>
             </Float>
-            <Sparkles count={20} scale={3} size={2} color="#a855f7" />
-            <Html position={[0, 2, 0]} center distanceFactor={10}>
-                <div className="text-[10px] text-purple-300 font-mono bg-black/50 px-2 rounded border border-purple-900">MANIFESTING...</div>
+            <Sparkles count={40} scale={4} size={3} speed={0.5} opacity={0.8} color="#a855f7" />
+            <Html position={[0, -2.5, 0]} center distanceFactor={15}>
+                <div className="text-[9px] text-purple-300 font-serif tracking-[0.2em] bg-black/80 px-3 py-1 border border-purple-900 whitespace-nowrap">
+                    MANIFESTING...
+                </div>
             </Html>
         </group>
     )

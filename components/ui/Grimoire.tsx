@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, Clock, ShieldAlert, Users, Scroll, Calendar as CalIcon, Plus, Trash2, Layout, LayoutGrid, List, CalendarDays, Eye, Skull, Link as LinkIcon, Edit3, Save, Hourglass } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Clock, ShieldAlert, Users, Scroll, Calendar as CalIcon, Plus, Trash2, Layout, LayoutGrid, List, CalendarDays, Eye, Skull, Link as LinkIcon, Edit3, Save, Hourglass, Network } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -25,15 +25,20 @@ export const Grimoire: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [startTimeStr, setStartTimeStr] = useState("09:00");
   const [endTimeStr, setEndTimeStr] = useState("10:00");
-  const [duration, setDuration] = useState(60); // Auto-calculated
+  const [duration, setDuration] = useState(60); 
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.LOW);
   const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
-  const [newSubtaskDeadlineStr, setNewSubtaskDeadlineStr] = useState(''); // Optional specific deadline for subtask
+  const [newSubtaskDeadlineStr, setNewSubtaskDeadlineStr] = useState('');
   const [parentId, setParentId] = useState<string>(''); 
 
   if (!state.isGrimoireOpen) return null;
   const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
+
+  // Potential Parents (Any active main task except the one we are editing)
+  const potentialParents = useMemo(() => {
+      return state.tasks.filter(t => !t.completed && !t.failed && t.id !== editingTaskId && !t.parentId);
+  }, [state.tasks, editingTaskId]);
 
   // --- HELPER: GET NAME ---
   const getTaskDisplayTitle = (t: Task) => {
@@ -75,7 +80,7 @@ export const Grimoire: React.FC = () => {
       const deadlineDate = new Date(task.deadline);
       const startDate = new Date(task.startTime);
       
-      setSelectedDate(deadlineDate); // Focus on deadline day
+      setSelectedDate(deadlineDate); 
       setStartTimeStr(startDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: false}));
       setEndTimeStr(deadlineDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: false}));
   };
@@ -94,7 +99,6 @@ export const Grimoire: React.FC = () => {
     e.preventDefault();
     if (!title) return;
     
-    // Parse Main Task Times
     const [startH, startM] = startTimeStr.split(':').map(Number);
     const [endH, endM] = endTimeStr.split(':').map(Number);
     
@@ -104,12 +108,11 @@ export const Grimoire: React.FC = () => {
     const deadlineDate = new Date(selectedDate);
     deadlineDate.setHours(endH, endM, 0);
     
-    // Auto-calculate duration in minutes
     const dur = Math.max(15, (deadlineDate.getTime() - startDate.getTime()) / 60000);
 
     const finalSubtasks: SubtaskDraft[] = [...subtasks];
     if(newSubtask.trim()) {
-        finalSubtasks.push({ title: newSubtask.trim() }); // Add pending text if any
+        finalSubtasks.push({ title: newSubtask.trim() });
     }
 
     if (editingTaskId) {
@@ -136,13 +139,12 @@ export const Grimoire: React.FC = () => {
           let deadline: number | undefined = undefined;
           let startTime: number | undefined = undefined;
 
-          // If user picked a specific time for subtask
           if (newSubtaskDeadlineStr) {
               const [h, m] = newSubtaskDeadlineStr.split(':').map(Number);
               const d = new Date(selectedDate);
               d.setHours(h, m, 0);
               deadline = d.getTime();
-              startTime = d.getTime() - (30 * 60000); // Default 30 min before
+              startTime = d.getTime() - (30 * 60000);
           }
 
           setSubtasks([...subtasks, { title: newSubtask.trim(), startTime, deadline }]);
@@ -151,38 +153,26 @@ export const Grimoire: React.FC = () => {
       }
   };
 
-  // --- VIEW RENDERERS ---
-
+  // --- VIEW RENDERERS (Month, Day, Week, Year) ---
   const renderMonthView = () => {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
       const firstDay = new Date(year, month, 1);
       const startDay = firstDay.getDay();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
       const grid = [];
       for (let i=0; i<startDay; i++) grid.push(<div key={`empty-${i}`} className="bg-[#050202] border border-[#1c1917] min-h-[100px]"></div>);
-      
       for (let d=1; d<=daysInMonth; d++) {
           const date = new Date(year, month, d);
           const isToday = new Date().toDateString() === date.toDateString();
           const isSelected = selectedDate.toDateString() === date.toDateString();
           const tasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === date.toDateString());
-
           grid.push(
-              <div 
-                key={d} 
-                onClick={() => handleSelectSlot(date)}
-                className={`border border-[#1c1917] p-2 min-h-[100px] hover:bg-[#151210] cursor-pointer relative ${isSelected ? 'bg-[#1a1512]' : 'bg-[#050202]'}`}
-              >
+              <div key={d} onClick={() => handleSelectSlot(date)} className={`border border-[#1c1917] p-2 min-h-[100px] hover:bg-[#151210] cursor-pointer relative ${isSelected ? 'bg-[#1a1512]' : 'bg-[#050202]'}`}>
                   <div className={`text-xs font-serif ${isToday ? 'text-yellow-500 font-bold' : 'text-stone-500'}`}>{d}</div>
                   <div className="mt-2 space-y-1">
                       {tasks.map(t => (
-                          <div 
-                            key={t.id} 
-                            onClick={(e) => { e.stopPropagation(); handleEditTask(t); }}
-                            className={`text-[9px] px-1 truncate rounded cursor-pointer hover:brightness-125 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}
-                          >
+                          <div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`text-[9px] px-1 truncate rounded cursor-pointer hover:brightness-125 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}>
                               {getTaskDisplayTitle(t)}
                           </div>
                       ))}
@@ -191,160 +181,33 @@ export const Grimoire: React.FC = () => {
               </div>
           );
       }
-
-      return (
-          <div className="grid grid-cols-7 gap-0 h-full overflow-y-auto">
-              {DAYS.map(d => <div key={d} className="text-center text-[10px] uppercase text-stone-600 py-2 bg-[#0c0a09] border-b border-[#292524]">{d}</div>)}
-              {grid}
-          </div>
-      );
+      return <div className="grid grid-cols-7 gap-0 h-full overflow-y-auto">{DAYS.map(d => <div key={d} className="text-center text-[10px] uppercase text-stone-600 py-2 bg-[#0c0a09] border-b border-[#292524]">{d}</div>)}{grid}</div>;
   };
 
   const renderDayView = () => {
       const d = new Date(currentDate);
       const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString());
-
       return (
           <div className="flex h-full overflow-hidden flex-col">
-              <div className="flex border-b border-[#292524] bg-[#0c0a09]">
-                  <div className="w-16 border-r border-[#292524]"></div>
-                  <div className={`flex-1 text-center py-2 ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}>
-                      <div className="text-xs text-stone-500 uppercase">{DAYS[d.getDay()]}</div>
-                      <div className={`text-lg font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div>
-                  </div>
-              </div>
-              <div className="flex-1 overflow-y-auto flex custom-scrollbar relative">
-                  <div className="w-16 bg-[#0c0a09] border-r border-[#292524] shrink-0">
-                      {HOURS.map(h => (
-                          <div key={h} className="h-32 text-[10px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>
-                      ))}
-                  </div>
-                  <div className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
-                      {HOURS.map(h => (
-                          <div 
-                            key={h} 
-                            onClick={() => handleSelectSlot(d, h)}
-                            className="h-32 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
-                          ></div>
-                      ))}
-                      {dayTasks.map(t => {
-                          const date = new Date(t.startTime); // Use START time for visual pos
-                          const startHour = date.getHours() + (date.getMinutes()/60);
-                          const durationHrs = t.estimatedDuration / 60;
-                          const top = startHour * 128; 
-                          const height = Math.max(32, durationHrs * 128);
-                          
-                          return (
-                              <div 
-                                key={t.id}
-                                onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
-                                className={`absolute left-2 right-2 rounded border overflow-hidden p-2 text-xs flex flex-col cursor-pointer pointer-events-auto shadow-md hover:scale-[1.01] transition-transform
-                                    ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : 
-                                      t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 
-                                      'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`}
-                                style={{ top: `${top}px`, height: `${height}px` }}
-                              >
-                                  <div className="font-bold flex items-center justify-between">
-                                      <span className="truncate">{getTaskDisplayTitle(t)}</span>
-                                      {t.parentId && <LinkIcon size={10} className="opacity-50" />}
-                                  </div>
-                                  <span className="text-[10px] opacity-70 font-mono mt-1">
-                                      {new Date(t.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(t.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                  </span>
-                              </div>
-                          )
-                      })}
-                  </div>
-              </div>
-          </div>
+              <div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-16 border-r border-[#292524]"></div><div className={`flex-1 text-center py-2 ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-xs text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-lg font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div></div>
+              <div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-16 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-32 text-[10px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div><div className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">{HOURS.map(h => (<div key={h} onClick={() => handleSelectSlot(d, h)} className="h-32 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>))}{dayTasks.map(t => {
+                  const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 128; const height = Math.max(32, durationHrs * 128);
+                  return (<div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`absolute left-2 right-2 rounded border overflow-hidden p-2 text-xs flex flex-col cursor-pointer pointer-events-auto shadow-md hover:scale-[1.01] transition-transform ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`} style={{ top: `${top}px`, height: `${height}px` }}><div className="font-bold flex items-center justify-between"><span className="truncate">{getTaskDisplayTitle(t)}</span>{t.parentId && <LinkIcon size={10} className="opacity-50" />}</div><span className="text-[10px] opacity-70 font-mono mt-1">{new Date(t.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(t.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>)
+              })}</div></div></div>
       );
   }
 
   const renderWeekView = () => {
-      const startOfWeek = new Date(currentDate);
-      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
-      const weekDays = Array.from({length: 7}, (_, i) => {
-          const d = new Date(startOfWeek);
-          d.setDate(startOfWeek.getDate() + i);
-          return d;
-      });
-
+      const startOfWeek = new Date(currentDate); startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+      const weekDays = Array.from({length: 7}, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
       return (
-          <div className="flex h-full overflow-hidden flex-col">
-              <div className="flex border-b border-[#292524] bg-[#0c0a09]">
-                  <div className="w-12 border-r border-[#292524]"></div>
-                  {weekDays.map(d => (
-                      <div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}>
-                          <div className="text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div>
-                          <div className={`text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div>
-                      </div>
-                  ))}
-              </div>
-              <div className="flex-1 overflow-y-auto flex custom-scrollbar relative">
-                  <div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">
-                      {HOURS.map(h => (
-                          <div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>
-                      ))}
-                  </div>
-                  {weekDays.map(d => {
-                      const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString());
-                      return (
-                          <div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
-                              {HOURS.map(h => (
-                                  <div 
-                                    key={h} 
-                                    onClick={() => handleSelectSlot(d, h)}
-                                    className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
-                                  ></div>
-                              ))}
-                              {dayTasks.map(t => {
-                                  const date = new Date(t.startTime);
-                                  const startHour = date.getHours() + (date.getMinutes()/60);
-                                  const durationHrs = t.estimatedDuration / 60;
-                                  const top = startHour * 80;
-                                  const height = Math.max(20, durationHrs * 80);
-                                  
-                                  return (
-                                      <div 
-                                        key={t.id} 
-                                        onClick={(e) => { e.stopPropagation(); handleEditTask(t); }}
-                                        className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-pointer pointer-events-auto hover:scale-[1.02] transition-transform
-                                            ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : 
-                                              t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 
-                                              'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`}
-                                        style={{ top: `${top}px`, height: `${height}px` }}
-                                      >
-                                          <span className="font-bold truncate">{getTaskDisplayTitle(t)}</span>
-                                      </div>
-                                  )
-                              })}
-                          </div>
-                      )
-                  })}
-              </div>
-          </div>
+          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">{HOURS.map(h => (<div key={h} onClick={() => handleSelectSlot(d, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>))}{dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-pointer pointer-events-auto hover:scale-[1.02] transition-transform ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
       );
   };
 
   const renderYearView = () => {
       return (
-          <div className="grid grid-cols-4 gap-4 p-4 overflow-y-auto h-full bg-[#050202]">
-              {MONTHS.map((m, i) => (
-                  <div key={m} className="border border-[#292524] bg-[#0c0a09] p-2 hover:border-stone-500 cursor-pointer" onClick={() => { setCurrentDate(new Date(currentDate.getFullYear(), i, 1)); setViewMode('MONTH'); }}>
-                      <div className="text-center font-serif text-stone-400 mb-2 font-bold">{m}</div>
-                      <div className="grid grid-cols-7 gap-0.5">
-                          {Array.from({length: new Date(currentDate.getFullYear(), i+1, 0).getDate()}).map((_, d) => {
-                              const dDate = new Date(currentDate.getFullYear(), i, d+1);
-                              const count = state.tasks.filter(t => new Date(t.deadline).toDateString() === dDate.toDateString()).length;
-                              let bg = 'bg-[#1c1917]';
-                              if (count > 0) bg = 'bg-yellow-900/40';
-                              if (count > 2) bg = 'bg-yellow-700/60';
-                              return <div key={d} className={`w-full h-2 ${bg}`}></div>
-                          })}
-                      </div>
-                  </div>
-              ))}
-          </div>
+          <div className="grid grid-cols-4 gap-4 p-4 overflow-y-auto h-full bg-[#050202]">{MONTHS.map((m, i) => (<div key={m} className="border border-[#292524] bg-[#0c0a09] p-2 hover:border-stone-500 cursor-pointer" onClick={() => { setCurrentDate(new Date(currentDate.getFullYear(), i, 1)); setViewMode('MONTH'); }}><div className="text-center font-serif text-stone-400 mb-2 font-bold">{m}</div><div className="grid grid-cols-7 gap-0.5">{Array.from({length: new Date(currentDate.getFullYear(), i+1, 0).getDate()}).map((_, d) => { const dDate = new Date(currentDate.getFullYear(), i, d+1); const count = state.tasks.filter(t => new Date(t.deadline).toDateString() === dDate.toDateString()).length; let bg = 'bg-[#1c1917]'; if (count > 0) bg = 'bg-yellow-900/40'; if (count > 2) bg = 'bg-yellow-700/60'; return <div key={d} className={`w-full h-2 ${bg}`}></div> })}</div></div>))}</div>
       );
   };
 
@@ -447,6 +310,25 @@ export const Grimoire: React.FC = () => {
                         placeholder="e.g., The Tax Beast"
                         autoFocus={!isEditing}
                     />
+                </div>
+
+                {/* PARENT TASK SELECTOR (Hierarchical Linking) */}
+                <div>
+                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
+                        <Network size={10} /> Link to Overlord (Parent Task)
+                    </label>
+                    <select 
+                        value={parentId} 
+                        onChange={(e) => setParentId(e.target.value)}
+                        className="w-full bg-[#151210] border border-[#292524] p-3 text-stone-300 text-xs focus:border-blue-900 outline-none"
+                    >
+                        <option value="">-- None (Independent) --</option>
+                        {potentialParents.map(p => (
+                            <option key={p.id} value={p.id}>
+                                {getTaskDisplayTitle(p)}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
                 <div>
