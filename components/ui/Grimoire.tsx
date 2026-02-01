@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -11,13 +11,16 @@ const HOURS = Array.from({length: 24}, (_, i) => i);
 type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
 export const Grimoire: React.FC = () => {
-  const { state, toggleGrimoire, addTask, editTask, completeRitual } = useGame();
+  const { state, toggleGrimoire, addTask, editTask, moveTask, completeRitual } = useGame();
   
   // Navigation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('WEEK');
   const [showRealNames, setShowRealNames] = useState(false); 
   
+  // Drag State
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+
   // Form State
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null); 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -47,6 +50,40 @@ export const Grimoire: React.FC = () => {
       return enemy ? enemy.title : t.title;
   };
 
+  // --- DRAG & DROP HANDLERS ---
+  const handleDragStart = (e: React.DragEvent, task: Task) => {
+      e.dataTransfer.setData("taskId", task.id);
+      setDraggedTaskId(task.id);
+      e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault(); // Necessary to allow dropping
+      e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: Date, targetHour?: number) => {
+      e.preventDefault();
+      const taskId = e.dataTransfer.getData("taskId");
+      setDraggedTaskId(null);
+      
+      const task = state.tasks.find(t => t.id === taskId);
+      if(!task) return;
+
+      const newStart = new Date(targetDate);
+      
+      if (targetHour !== undefined) {
+          // DAY/WEEK View: Drop specific hour
+          newStart.setHours(targetHour, 0, 0, 0);
+      } else {
+          // MONTH View: Drop on day, preserve original time
+          const originalStart = new Date(task.startTime);
+          newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
+      }
+
+      moveTask(taskId, newStart.getTime());
+  };
+
   // --- NAVIGATION HELPERS ---
   const handleNav = (dir: -1 | 1) => {
       const newDate = new Date(currentDate);
@@ -73,7 +110,8 @@ export const Grimoire: React.FC = () => {
       setNotes(task.description || '');
       setDuration(task.estimatedDuration);
       setPriority(task.priority);
-      setSubtasks(task.subtasks.map(s => ({ title: s.title, startTime: s.startTime, deadline: s.deadline })));
+      // SAFEGUARD: Ensure subtasks is an array before mapping
+      setSubtasks((task.subtasks || []).map(s => ({ title: s.title, startTime: s.startTime, deadline: s.deadline })));
       setParentId(task.parentId || '');
       
       const deadlineDate = new Date(task.deadline);
@@ -167,11 +205,24 @@ export const Grimoire: React.FC = () => {
           const isSelected = selectedDate.toDateString() === date.toDateString();
           const tasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === date.toDateString());
           grid.push(
-              <div key={d} onClick={() => handleSelectSlot(date)} className={`border border-[#1c1917] p-1 md:p-2 min-h-[60px] md:min-h-[100px] hover:bg-[#151210] cursor-pointer relative ${isSelected ? 'bg-[#1a1512]' : 'bg-[#050202]'}`}>
+              <div 
+                key={d} 
+                onClick={() => handleSelectSlot(date)} 
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, date)}
+                className={`border border-[#1c1917] p-1 md:p-2 min-h-[60px] md:min-h-[100px] hover:bg-[#151210] cursor-pointer relative ${isSelected ? 'bg-[#1a1512]' : 'bg-[#050202]'}`}
+              >
                   <div className={`text-[10px] md:text-xs font-serif ${isToday ? 'text-yellow-500 font-bold' : 'text-stone-500'}`}>{d}</div>
                   <div className="mt-1 md:mt-2 space-y-1">
                       {tasks.map(t => (
-                          <div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`text-[8px] md:text-[9px] px-1 truncate rounded cursor-pointer hover:brightness-125 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}>
+                          <div 
+                            key={t.id} 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, t)}
+                            onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
+                            className={`text-[8px] md:text-[9px] px-1 truncate rounded cursor-grab active:cursor-grabbing hover:brightness-125 flex items-center gap-1 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}
+                          >
+                              <GripVertical size={8} className="opacity-50" />
                               {getTaskDisplayTitle(t)}
                           </div>
                       ))}
@@ -189,9 +240,24 @@ export const Grimoire: React.FC = () => {
       return (
           <div className="flex h-full overflow-hidden flex-col">
               <div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-16 border-r border-[#292524]"></div><div className={`flex-1 text-center py-2 ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-xs text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-lg font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div></div>
-              <div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-16 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-32 text-[10px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div><div className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">{HOURS.map(h => (<div key={h} onClick={() => handleSelectSlot(d, h)} className="h-32 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>))}{dayTasks.map(t => {
+              <div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-16 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-32 text-[10px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div><div className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
+                {HOURS.map(h => (
+                    <div 
+                        key={h} 
+                        onClick={() => handleSelectSlot(d, h)} 
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, d, h)}
+                        className="h-32 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
+                    ></div>
+                ))}
+                {dayTasks.map(t => {
                   const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 128; const height = Math.max(32, durationHrs * 128);
-                  return (<div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`absolute left-2 right-2 rounded border overflow-hidden p-2 text-xs flex flex-col cursor-pointer pointer-events-auto shadow-md hover:scale-[1.01] transition-transform ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`} style={{ top: `${top}px`, height: `${height}px` }}><div className="font-bold flex items-center justify-between"><span className="truncate">{getTaskDisplayTitle(t)}</span>{t.parentId && <LinkIcon size={10} className="opacity-50" />}</div><span className="text-[10px] opacity-70 font-mono mt-1">{new Date(t.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(t.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>)
+                  return (<div 
+                            key={t.id} 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, t)}
+                            onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
+                            className={`absolute left-2 right-2 rounded border overflow-hidden p-2 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.01] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-20'}`} style={{ top: `${top}px`, height: `${height}px` }}><div className="font-bold flex items-center justify-between"><span className="truncate">{getTaskDisplayTitle(t)}</span>{t.parentId && <LinkIcon size={10} className="opacity-50" />}</div><span className="text-[10px] opacity-70 font-mono mt-1">{new Date(t.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(t.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>)
               })}</div></div></div>
       );
   }
@@ -200,7 +266,22 @@ export const Grimoire: React.FC = () => {
       const startOfWeek = new Date(currentDate); startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
       const weekDays = Array.from({length: 7}, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
       return (
-          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[9px] md:text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-xs md:text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">{HOURS.map(h => (<div key={h} onClick={() => handleSelectSlot(d, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>))}{dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-pointer pointer-events-auto hover:scale-[1.02] transition-transform ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
+          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[9px] md:text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-xs md:text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
+            {HOURS.map(h => (
+                <div 
+                    key={h} 
+                    onClick={() => handleSelectSlot(d, h)} 
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, d, h)}
+                    className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
+                ></div>
+            ))}
+            {dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div 
+                key={t.id} 
+                draggable
+                onDragStart={(e) => handleDragStart(e, t)}
+                onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
+                className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-20'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
       );
   };
 
@@ -213,7 +294,7 @@ export const Grimoire: React.FC = () => {
   const isEditing = !!editingTaskId;
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md md:p-4">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md md:p-4 pointer-events-auto">
       <div className="relative w-full h-full md:max-w-[95vw] md:h-[85vh] bg-[#0c0a09] border border-[#44403c] flex flex-col md:flex-row shadow-2xl overflow-hidden">
         
         {/* LEFT PANEL: CALENDAR VISUALIZER */}

@@ -374,12 +374,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!existingTask) return prev;
 
             // Handle Subtasks: Identify new ones to spawn enemies
-            let updatedSubtasks = existingTask.subtasks;
+            // Ensure we handle cases where existingTask.subtasks might be undefined
+            let updatedSubtasks = existingTask.subtasks || [];
             let newEnemiesToSpawn: EnemyEntity[] = [];
 
             if (data.subtasks) {
                 updatedSubtasks = data.subtasks.map(draft => {
-                    const existingSub = existingTask.subtasks.find(s => s.title === draft.title); // Match by title if ID unknown
+                    const existingSub = (existingTask.subtasks || []).find(s => s.title === draft.title); // Match by title if ID unknown
                     if (existingSub) {
                         return { ...existingSub, deadline: draft.deadline || existingSub.deadline, startTime: draft.startTime || existingSub.startTime };
                     }
@@ -444,6 +445,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             saveGame(nextState);
             return nextState;
+        });
+    };
+
+    // UPDATED: Move Task Logic to shift both Start and End
+    const moveTask = (taskId: string, newStartTime: number) => {
+        wrapUi(() => {
+            setState(prev => {
+                const task = prev.tasks.find(t => t.id === taskId);
+                if(!task) return prev;
+
+                const duration = task.deadline - task.startTime;
+                const newDeadline = newStartTime + duration;
+
+                const updatedTasks = prev.tasks.map(t => 
+                    t.id === taskId ? { ...t, startTime: newStartTime, deadline: newDeadline } : t
+                );
+
+                const nextState = { ...prev, tasks: updatedTasks };
+                saveGame(nextState);
+                return nextState;
+            });
         });
     };
 
@@ -795,7 +817,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         state,
         addTask,
         editTask,
-        moveTask: (id, time) => wrapUi(() => setState(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, deadline: time } : t) }))),
+        moveTask, // Uses new logic
         completeTask,
         completeSubtask,
         failTask,

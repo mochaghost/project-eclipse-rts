@@ -16,7 +16,7 @@ export const DiplomacyMap: React.FC = () => {
     const activeDef = activeFaction ? FACTIONS[activeFaction.id] : null;
 
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4 pointer-events-auto">
             <div className="relative w-full max-w-6xl h-[80vh] bg-[#0c0a09] border-2 border-stone-800 flex shadow-2xl overflow-hidden">
                 <button onClick={toggleDiplomacy} className="absolute top-4 right-4 z-50 text-stone-500 hover:text-white"><X size={24} /></button>
 
@@ -53,7 +53,7 @@ export const DiplomacyMap: React.FC = () => {
                 {/* Right: Interaction Panel */}
                 <div className="flex-1 bg-[#0c0a09] relative flex flex-col">
                     {activeFaction && activeDef ? (
-                        <div className="flex-1 flex flex-col p-8">
+                        <div className="flex-1 flex flex-col p-8 overflow-y-auto">
                             {/* Header */}
                             <div className="mb-8 text-center border-b border-stone-800 pb-6">
                                 <div className="inline-block p-4 border-2 rounded-full mb-4" style={{ borderColor: activeDef.color }}>

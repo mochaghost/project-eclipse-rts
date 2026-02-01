@@ -18,7 +18,7 @@ export const EnemyProfile: React.FC = () => {
   const factionData = FACTIONS[enemy.factionId as keyof typeof FACTIONS];
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 pointer-events-auto">
       <div className="relative w-full max-w-5xl h-[85vh] bg-[#0c0a09] border-2 border-red-900/50 flex flex-col md:flex-row overflow-hidden shadow-2xl">
         <button onClick={() => selectEnemy(null)} className="absolute top-4 right-4 z-50 text-white/50"><X size={24} /></button>
         

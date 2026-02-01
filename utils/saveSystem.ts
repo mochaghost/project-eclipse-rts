@@ -115,7 +115,11 @@ export const loadGame = (): GameState => {
         return {
             ...DEFAULT_STATE,
             ...loadedState,
-            tasks: Array.isArray(loadedState.tasks) ? loadedState.tasks : [],
+            // Deep sanitize tasks to ensure subtasks array always exists
+            tasks: Array.isArray(loadedState.tasks) ? loadedState.tasks.map((t: any) => ({
+                ...t,
+                subtasks: Array.isArray(t.subtasks) ? t.subtasks : []
+            })) : [],
             enemies: Array.isArray(loadedState.enemies) ? loadedState.enemies : [],
             minions: Array.isArray(loadedState.minions) ? loadedState.minions : [], // Restore minions
             history: Array.isArray(loadedState.history) ? loadedState.history : [],

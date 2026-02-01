@@ -37,7 +37,7 @@ const AeonBattle = ({ onComplete }: { onComplete: (subs: string[], success: bool
     };
 
     return (
-        <div className="w-full max-w-2xl bg-[#0c0a09] border-4 border-purple-900 p-8 relative overflow-hidden">
+        <div className="w-full max-w-2xl bg-[#0c0a09] border-4 border-purple-900 p-8 relative overflow-hidden pointer-events-auto">
             {/* Aeon Visuals */}
             <div className="absolute top-0 right-0 p-8 opacity-20 pointer-events-none">
                 <Skull size={200} className="text-purple-500" />
@@ -97,14 +97,14 @@ export const CrisisIntervention: React.FC = () => {
   }
 
   return (
-    <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+    <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 pointer-events-auto">
         {mode === 'AEON' ? (
             <AeonBattle onComplete={(subs, success) => {
                 resolveAeonBattle(task.id, subs, success);
                 setMode('CHOICE'); // Reset for next time
             }} />
         ) : (
-            <div className="max-w-xl w-full bg-[#1c1917] border-2 border-red-600 p-8 relative shadow-2xl">
+            <div className="max-w-xl w-full bg-[#1c1917] border-2 border-red-600 p-8 relative shadow-2xl pointer-events-auto">
                 <h2 className="text-3xl text-red-500 font-serif tracking-widest mb-4 flex items-center gap-3"><ShieldAlert size={32} /> THE 75% THRESHOLD</h2>
                 <p className="text-stone-300 font-serif text-lg mb-8">
                     The task <strong>{task.title}</strong> nears its deadline. The Resistance tightens its grip. <br/><br/>

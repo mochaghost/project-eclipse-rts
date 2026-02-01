@@ -13,7 +13,7 @@ export const AuditModal: React.FC = () => {
     const stats = state.realmStats || { hope: 50, fear: 10, order: 50 };
 
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 pointer-events-auto">
             <div className="relative w-full max-w-6xl h-[85vh] bg-[#0c0a09] border-2 border-stone-800 flex flex-col shadow-2xl">
                 <div className="p-6 border-b border-stone-800 flex justify-between items-center bg-[#1c1917]">
                     <div className="flex items-center gap-4">

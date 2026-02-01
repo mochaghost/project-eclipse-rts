@@ -34,7 +34,7 @@ export const HeroProfile: React.FC<HeroProfileProps> = ({ isOpen, onClose, level
   const armorLore = getEquipmentLore(equip.armor);
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 pointer-events-auto">
       <div className="relative w-full max-w-5xl h-[70vh] bg-[#0c0a09] border border-[#44403c] flex">
         <button onClick={onClose} className="absolute top-4 right-4 z-50 text-white/50"><X size={24} /></button>
         
