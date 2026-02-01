@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy, Smartphone, Move, Share2, UploadCloud, DownloadCloud, AlertTriangle } from 'lucide-react';
 import { convertToEmbedUrl } from '../../utils/generators';
-import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase'; // Added pushToCloud import
+import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
     const { state, toggleSettings, exportSave, importSave, clearSave, connectToCloud, disconnectCloud, updateSettings, triggerEvent } = useGame();
@@ -32,13 +32,15 @@ export const SettingsModal: React.FC = () => {
             // Ensure default is set if nothing in local storage
             setConfig(DEFAULT_FIREBASE_CONFIG);
         }
-        if (savedRoom) setRoomId(savedRoom);
+        if (savedRoom) setRoomId(savedRoom.toUpperCase());
     }, []);
 
     const copySyncLink = () => {
-        const url = `${window.location.origin}${window.location.pathname}?room=${state.syncConfig?.roomId}`;
+        // Ensure we copy the Normalized (Uppercase) ID
+        const activeRoom = state.syncConfig?.roomId || roomId;
+        const url = `${window.location.origin}${window.location.pathname}?room=${activeRoom.toUpperCase()}`;
         navigator.clipboard.writeText(url);
-        alert("Magic Link copied! Open this on your iPad to auto-sync.");
+        alert("Magic Link copied! (ID Normalized to Uppercase)");
     };
 
     // MANUAL SYNC HANDLERS
@@ -55,6 +57,9 @@ export const SettingsModal: React.FC = () => {
     const handleConnect = async (e: React.FormEvent) => {
         e.preventDefault();
         
+        // Normalize to Uppercase to prevent iOS/PC mismatches
+        const normalizedRoomId = roomId.trim().toUpperCase();
+
         // Use default config if fields are empty (though they shouldn't be due to init)
         const finalConfig = {
             ...config,
@@ -62,10 +67,10 @@ export const SettingsModal: React.FC = () => {
             projectId: config.projectId || DEFAULT_FIREBASE_CONFIG.projectId
         };
 
-        const success = await connectToCloud(finalConfig, roomId);
+        const success = await connectToCloud(finalConfig, normalizedRoomId);
         if (success) {
             localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(finalConfig));
-            localStorage.setItem('ECLIPSE_ROOM_ID', roomId);
+            localStorage.setItem('ECLIPSE_ROOM_ID', normalizedRoomId);
         }
     };
 
@@ -320,7 +325,14 @@ export const SettingsModal: React.FC = () => {
                                     </p>
                                     
                                     <form onSubmit={handleConnect} className="space-y-3">
-                                        <input type="text" placeholder="Unique Room ID (e.g. MySecretRoom)" value={roomId} onChange={e => setRoomId(e.target.value)} className="w-full bg-black border border-stone-700 p-3 text-white text-xs outline-none focus:border-blue-500" required />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Unique Room ID (e.g. MYROOM)" 
+                                            value={roomId} 
+                                            onChange={e => setRoomId(e.target.value.toUpperCase())} 
+                                            className="w-full bg-black border border-stone-700 p-3 text-white text-xs outline-none focus:border-blue-500 uppercase" 
+                                            required 
+                                        />
                                         
                                         <div className="p-2 bg-stone-900/50 border border-stone-800">
                                             <div className="text-[9px] text-stone-500 mb-1 uppercase font-bold">Advanced Config (Optional - Pre-filled)</div>

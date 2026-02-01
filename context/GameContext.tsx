@@ -40,7 +40,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initCloud = async () => {
             // 1. Check URL Params for magic link (?room=XYZ)
             const params = new URLSearchParams(window.location.search);
-            const urlRoom = params.get('room');
+            // Normalize ID to uppercase
+            const urlRoom = params.get('room')?.toUpperCase();
             
             // 2. Check LocalStorage
             const savedRoom = localStorage.getItem('ECLIPSE_ROOM_ID');
