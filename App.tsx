@@ -13,7 +13,7 @@ import { AuditModal } from './components/ui/AuditModal';
 import { SettingsModal } from './components/ui/SettingsModal';
 import { DiplomacyMap } from './components/ui/DiplomacyMap';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Sparkles } from 'lucide-react';
 
 const GameContainer = () => {
     const { state, toggleProfile } = useGame();
@@ -53,23 +53,61 @@ const EmergencyReset = () => {
     return (
         <button 
             onClick={handleReset}
-            className="fixed bottom-2 left-2 z-[9999] opacity-50 hover:opacity-100 bg-red-900/50 text-red-200 text-[10px] p-2 border border-red-500 rounded flex items-center gap-2 cursor-pointer font-sans"
-            title="Click if screen is black/stuck"
+            className="fixed bottom-2 left-2 z-[9999] opacity-30 hover:opacity-100 bg-red-950/20 text-red-500 text-[9px] px-2 py-1 border border-red-900/50 rounded flex items-center gap-2 cursor-pointer font-mono hover:scale-105 transition-all"
+            title="Wipe Save Data (Debug)"
         >
-            <AlertTriangle size={12} />
-            EMERGENCY RESET
+            <AlertTriangle size={10} />
+            RESET_TIMELINE
         </button>
     )
 }
+
+const LoadingScreen = () => {
+    const [step, setStep] = useState(0);
+    const messages = [
+        "INITIALIZING NEURAL LINK...",
+        "SUMMONING THE CITADEL...",
+        "OBSERVING THE VOID...",
+        "MANIFESTING..."
+    ];
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setStep(s => s < messages.length ? s + 1 : s);
+        }, 800);
+        return () => clearInterval(timer);
+    }, []);
+
+    return (
+        <div className="w-full h-screen bg-[#050202] flex flex-col items-center justify-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-stone-900/20 via-black to-black"></div>
+            <div className="z-10 flex flex-col items-center gap-4">
+                <Sparkles size={48} className="text-yellow-600 animate-pulse" />
+                <h1 className="text-3xl font-serif text-stone-200 tracking-[0.3em] font-bold">PROJECT ECLIPSE</h1>
+                <div className="h-0.5 w-64 bg-stone-900 rounded-full overflow-hidden mt-4">
+                    <div 
+                        className="h-full bg-yellow-600 transition-all duration-500 ease-out" 
+                        style={{ width: `${Math.min(100, (step + 1) * 25)}%` }}
+                    ></div>
+                </div>
+                <div className="text-[10px] font-mono text-stone-500 uppercase tracking-widest animate-pulse mt-2">
+                    {messages[Math.min(step, messages.length - 1)]}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const App: React.FC = () => {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    // Add a slight delay to allow the loading screen to be appreciated
+    const t = setTimeout(() => setMounted(true), 3000);
+    return () => clearTimeout(t);
   }, []);
 
-  if (!mounted) return <div className="text-stone-500 p-4 font-mono">Initializing Neural Link...</div>;
+  if (!mounted) return <LoadingScreen />;
 
   return (
     <ErrorBoundary>
