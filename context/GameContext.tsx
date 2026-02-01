@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualEffect, FirebaseConfig, MapEventType, ShopItem, EnemyEntity, GameSettings, FactionKey, MinionEntity, WeatherType } from '../types';
+import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualEffect, FirebaseConfig, MapEventType, ShopItem, EnemyEntity, GameSettings, FactionKey, MinionEntity, WeatherType, TaskUpdateData, HistoryLog } from '../types';
 import { loadGame, saveGame } from '../utils/saveSystem';
 import { generateId, generateNemesis, generateSpawnPosition, getSageWisdom, getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateHeroEquipment, generateLoot } from '../utils/generators';
 import { simulateReactiveTurn, initializePopulation, updateRealmStats } from '../utils/worldSim';
@@ -31,7 +31,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // IDLE SYSTEM REFS
     const lastInteractionTime = useRef<number>(Date.now());
-    const idleStage = useRef<number>(0); // 0 = Active, 1 = Warning (45s), 2 = Punish (120s)
+    const idleStage = useRef<number>(0); 
 
     const cloudUnsubRef = useRef<(() => void) | null>(null);
 
@@ -40,7 +40,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastInteractionTime.current = Date.now();
         if (idleStage.current !== 0) {
             idleStage.current = 0;
-            // Clear Vazaroth's taunt when user returns
             setState(p => ({ ...p, activeMapEvent: 'NONE', vazarothMessage: getVazarothLine('IDLE') }));
         }
     }, []);
@@ -65,33 +64,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const now = Date.now();
             setLastTick(now);
             
-            // IDLE CHECK
+            // IDLE CHECK logic...
             const idleTime = now - lastInteractionTime.current;
-            
-            // Only punish idle if no modal is open (user might be reading)
             const isSafe = state.isGrimoireOpen || state.isProfileOpen || state.isSettingsOpen;
             
             if (!isSafe) {
-                // Stage 1: PEASANT RAID (Humiliation) (> 45s)
                 if (idleTime > 45000 && idleStage.current === 0) {
                     idleStage.current = 1;
-                    setState(p => ({ 
-                        ...p, 
-                        vazarothMessage: "My peasants mock your silence.",
-                        activeMapEvent: 'PEASANT_RAID' // Vazaroth sends the plebs
-                    }));
+                    setState(p => ({ ...p, vazarothMessage: "My peasants mock your silence.", activeMapEvent: 'PEASANT_RAID' }));
                     playSfx('ERROR'); 
                 }
-                // Stage 2: Manifestation (> 2m)
                 if (idleTime > 120000 && idleStage.current === 1) {
                     idleStage.current = 2;
-                    const eventType = Math.random() > 0.5 ? 'TREMOR' : 'VOID_STORM';
-                    setState(p => ({ 
-                        ...p, 
-                        activeMapEvent: eventType as MapEventType,
-                        vazarothMessage: "I am taking this world while you sleep.",
-                        effects: [...p.effects, { id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:5, z:0}, text: "WAKE UP", timestamp: now }]
-                    }));
+                    setState(p => ({ ...p, activeMapEvent: 'VOID_STORM', vazarothMessage: "I am taking this world while you sleep.", effects: [...p.effects, { id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:5, z:0}, text: "WAKE UP", timestamp: now }] }));
                     playSfx('FAILURE');
                 }
             }
@@ -103,10 +88,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 // REGEN MANA
                 if (newState.mana < newState.maxMana) {
-                    newState.mana = Math.min(newState.maxMana, newState.mana + 0.05); // Slow trickle
+                    newState.mana = Math.min(newState.maxMana, newState.mana + 0.05);
                 }
                 
-                // MINION LOGIC (The Army)
+                // MINION LOGIC
                 let remainingEnemies = [...prev.enemies];
                 let remainingMinions: MinionEntity[] = [];
 
@@ -157,7 +142,49 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     newState.effects = [...newState.effects, ...effects];
                 }
 
-                // 1. Check Deadlines
+                // --- DEADLINE MARCH LOGIC ---
+                // Enemies physically move towards base [0,0,0] as deadline approaches
+                const updatedEnemies = newState.enemies.map(enemy => {
+                    const task = newState.tasks.find(t => t.id === enemy.taskId);
+                    if (!task) return enemy; // Orphaned enemy, likely dying soon
+
+                    const totalDuration = task.deadline - task.createdAt;
+                    const timeLeft = task.deadline - now;
+                    const elapsed = now - task.createdAt;
+                    
+                    // Progress 0 (Start) -> 1 (Deadline)
+                    let progress = Math.max(0, Math.min(1, elapsed / totalDuration));
+                    
+                    // If deadline passed, stay at base
+                    if (timeLeft <= 0) progress = 1;
+
+                    // Interpolate Position
+                    // From initialPosition (e.g. radius 60) to Target (Radius 6 - edge of base)
+                    if (enemy.initialPosition) {
+                        const startX = enemy.initialPosition.x;
+                        const startZ = enemy.initialPosition.z;
+                        const targetRadius = 6; // Don't clip inside base
+                        
+                        // Vector to center
+                        const angle = Math.atan2(startZ, startX);
+                        const targetX = Math.cos(angle) * targetRadius;
+                        const targetZ = Math.sin(angle) * targetRadius;
+
+                        return {
+                            ...enemy,
+                            position: {
+                                x: startX + (targetX - startX) * progress,
+                                y: 0,
+                                z: startZ + (targetZ - startZ) * progress
+                            }
+                        };
+                    }
+                    return enemy;
+                });
+                newState.enemies = updatedEnemies;
+
+
+                // 1. Check Deadlines & Failures
                 newState.tasks.forEach(task => {
                     if (task.completed || task.failed) return;
                     
@@ -170,10 +197,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         newState.sageMessage = getSageWisdom("FAIL");
                         playSfx('FAILURE');
                         
-                        const enemy = newState.enemies.find(e => e.taskId === task.id);
+                        const enemy = newState.enemies.find(e => e.taskId === task.id && !e.subtaskId);
                         let graveyardUpdate = prev.nemesisGraveyard || [];
                         if (enemy) {
-                             // Fix: Explicitly cast killer to 'TIME' | 'HERO' or use 'as const' to prevent type widening
                              graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: now, killer: 'TIME' as const }].slice(-10);
                         }
 
@@ -181,14 +207,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         newState.population = sim.newPopulation;
                         newState.history = [...sim.logs, ...newState.history];
                         newState.realmStats = sim.newStats;
-                        newState.factions = sim.newFactions;
                         
-                        if (sim.spawnedEnemies && sim.spawnedEnemies.length > 0) {
-                            newState.enemies = [...newState.enemies, ...sim.spawnedEnemies];
-                            playSfx('ERROR'); 
-                        }
-                        newState.nemesisGraveyard = graveyardUpdate;
+                        // Kill all associated enemies (main + minions)
                         newState.enemies = newState.enemies.filter(e => e.taskId !== task.id); 
+                        newState.nemesisGraveyard = graveyardUpdate;
                         needsSave = true;
                     } 
                     else if (!task.crisisTriggered) {
@@ -269,6 +291,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetIdleTimer();
         playSfx('UI_CLICK');
         const taskId = generateId();
+        const subtaskObjects = subtasks.map(s => ({ id: generateId(), title: s, completed: false }));
+        
         const newTask: Task = {
             id: taskId,
             title,
@@ -276,7 +300,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             estimatedDuration: durationMinutes,
             createdAt: Date.now(),
             priority,
-            subtasks: subtasks.map(s => ({ id: generateId(), title: s, completed: false })),
+            subtasks: subtaskObjects,
             completed: false,
             failed: false,
             crisisTriggered: false,
@@ -285,19 +309,115 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             parentId
         };
 
-        const newEnemy: EnemyEntity = generateNemesis(taskId, priority, state.nemesisGraveyard || [], state.winStreak);
+        // Spawn Main Enemy (Overlord)
+        const mainEnemy: EnemyEntity = generateNemesis(taskId, priority, state.nemesisGraveyard || [], state.winStreak, undefined, undefined, durationMinutes);
+        
+        // Spawn Subtask Enemies (Lieutenants/Minions) - Smaller, attached to same task
+        const subtaskEnemies = subtaskObjects.map(st => 
+            generateNemesis(taskId, TaskPriority.LOW, [], 0, st.id, st.title, 30)
+        );
+
         const sageLine = getSageWisdom('GENERAL');
 
         setState(prev => {
             const next = {
                 ...prev,
                 tasks: [...prev.tasks, newTask],
-                enemies: [...prev.enemies, newEnemy],
+                enemies: [...prev.enemies, mainEnemy, ...subtaskEnemies],
                 sageMessage: sageLine,
                 vazarothMessage: getVazarothLine("IDLE") // Reset Vazaroth
             };
             saveGame(next);
             return next;
+        });
+    };
+
+    // --- NEW EDIT TASK FUNCTION ---
+    const editTask = (taskId: string, data: TaskUpdateData) => {
+        ensureAudio();
+        resetIdleTimer();
+        playSfx('UI_CLICK');
+
+        setState(prev => {
+            const existingTask = prev.tasks.find(t => t.id === taskId);
+            if (!existingTask) return prev;
+
+            // Handle Subtasks: Identify new ones to spawn enemies
+            let updatedSubtasks = existingTask.subtasks;
+            let newEnemiesToSpawn: EnemyEntity[] = [];
+
+            if (data.subtasks) {
+                // Determine which are brand new
+                const existingTitles = new Set(existingTask.subtasks.map(s => s.title));
+                
+                updatedSubtasks = data.subtasks.map(title => {
+                    const existingSub = existingTask.subtasks.find(s => s.title === title);
+                    if (existingSub) return existingSub;
+                    
+                    // New Subtask created via edit
+                    const newSubId = generateId();
+                    const subMinion = generateNemesis(taskId, TaskPriority.LOW, [], 0, newSubId, title, 30);
+                    newEnemiesToSpawn.push(subMinion);
+                    
+                    return { id: newSubId, title, completed: false };
+                });
+            }
+
+            const updatedTask: Task = {
+                ...existingTask,
+                title: data.title || existingTask.title,
+                deadline: data.deadline || existingTask.deadline,
+                priority: data.priority || existingTask.priority,
+                estimatedDuration: data.estimatedDuration || existingTask.estimatedDuration,
+                description: data.description || existingTask.description,
+                parentId: data.parentId !== undefined ? data.parentId : existingTask.parentId,
+                subtasks: updatedSubtasks
+            };
+
+            // Update Existing Enemies (Rescale main enemy if duration/priority changed)
+            let updatedEnemies = prev.enemies;
+            
+            if (data.title || data.priority || data.estimatedDuration) {
+                updatedEnemies = prev.enemies.map(e => {
+                    if (e.taskId === taskId && !e.subtaskId) {
+                        // Recalculate Main Enemy Stats
+                        const newPriority = data.priority || e.priority;
+                        const newDuration = data.estimatedDuration || existingTask.estimatedDuration;
+                        
+                        // Recalculate Scale dynamically
+                        const newScale = 0.8 + (newPriority * 0.15) + ((newDuration / 60) * 0.1);
+
+                        return {
+                            ...e,
+                            priority: newPriority,
+                            maxHp: newPriority * 100,
+                            hp: (e.hp / e.maxHp) * (newPriority * 100),
+                            scale: newScale,
+                            // Optional: Update title if main title changed? Keep random name for flavor.
+                        }
+                    }
+                    return e;
+                });
+            }
+
+            // Combine
+            updatedEnemies = [...updatedEnemies, ...newEnemiesToSpawn];
+
+            const nextState: GameState = {
+                ...prev,
+                tasks: prev.tasks.map(t => t.id === taskId ? updatedTask : t),
+                enemies: updatedEnemies,
+                history: [{ 
+                    id: generateId(), 
+                    type: 'MAGIC', 
+                    timestamp: Date.now(), 
+                    message: "Fate Rewritten", 
+                    details: `Modified ${updatedTask.title}` 
+                } as HistoryLog, ...prev.history]
+            };
+            
+            saveGame(nextState);
+            return nextState;
         });
     };
 
@@ -313,17 +433,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const goldGain = 50 * task.priority;
             const nextLevel = Math.floor((prev.xp + xpGain) / 1000) + 1;
             const didLevelUp = nextLevel > prev.playerLevel;
-            const enemy = prev.enemies.find(e => e.taskId === taskId);
+            const mainEnemy = prev.enemies.find(e => e.taskId === taskId && !e.subtaskId);
             
             let graveyardUpdate = prev.nemesisGraveyard || [];
-            // Fix: Explicitly cast killer to 'HERO' as const
-            if (enemy) graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'HERO' as const }].slice(-10);
+            if (mainEnemy) graveyardUpdate = [...graveyardUpdate, { name: mainEnemy.name, clan: mainEnemy.clan, deathTime: Date.now(), killer: 'HERO' as const }].slice(-10);
 
             const effects: VisualEffect[] = [];
-            if (enemy) {
-                effects.push({ id: generateId(), type: 'EXPLOSION', position: enemy.position, timestamp: Date.now() });
-                effects.push({ id: generateId(), type: 'TEXT_XP', position: { ...enemy.position, y: 3 }, text: `+${xpGain} XP`, timestamp: Date.now() });
-            }
+            // Explosion on main enemy location, or generic if missing
+            const pos = mainEnemy ? mainEnemy.position : { x: 0, y: 0, z: 0 };
+            effects.push({ id: generateId(), type: 'EXPLOSION', position: pos, timestamp: Date.now() });
+            effects.push({ id: generateId(), type: 'TEXT_XP', position: { ...pos, y: 3 }, text: `+${xpGain} XP`, timestamp: Date.now() });
 
             let newEquipment = { ...prev.heroEquipment };
             const loot = generateLoot(nextLevel);
@@ -353,6 +472,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 era: newEra,
                 maxBaseHp: ERA_CONFIG[newEra].maxBaseHp + (prev.structures.wallsLevel * 50),
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
+                // Remove ALL enemies associated with this task (main + subtasks)
                 enemies: prev.enemies.filter(e => e.taskId !== taskId),
                 minions: [...(prev.minions || []), newMinion], 
                 effects: [...prev.effects, ...effects],
@@ -363,7 +483,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 factions: sim.newFactions,
                 nemesisGraveyard: graveyardUpdate,
                 heroEquipment: newEquipment,
-                history: [{ id: generateId(), type: loot ? 'LOOT' : 'VICTORY', timestamp: Date.now(), message: `Vanquished ${task.title}`, details: "Glory to the realm." }, ...sim.logs, ...prev.history],
+                history: [{ 
+                    id: generateId(), 
+                    type: loot ? 'LOOT' : 'VICTORY', 
+                    timestamp: Date.now(), 
+                    message: `Vanquished ${task.title}`, 
+                    details: "Glory to the realm." 
+                } as HistoryLog, ...sim.logs, ...prev.history],
                 selectedEnemyId: null,
                 isProfileOpen: false 
             };
@@ -378,9 +504,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         playSfx('FAILURE');
         setState(prev => {
             const sim = simulateReactiveTurn(prev, 'DEFEAT');
-            const enemy = prev.enemies.find(e => e.taskId === taskId);
+            const enemy = prev.enemies.find(e => e.taskId === taskId && !e.subtaskId);
             let graveyardUpdate = prev.nemesisGraveyard || [];
-            // Fix: Explicitly cast killer to 'TIME' as const
             if (enemy) graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'TIME' as const }].slice(-10);
 
             const next: GameState = {
@@ -396,7 +521,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 realmStats: sim.newStats,
                 factions: sim.newFactions,
                 nemesisGraveyard: graveyardUpdate,
-                history: [{ id: generateId(), type: 'DEFEAT', timestamp: Date.now(), message: `Failed to stop the enemy.`, details: `The realm shudders in fear.` }, ...sim.logs, ...prev.history],
+                history: [{ 
+                    id: generateId(), 
+                    type: 'DEFEAT', 
+                    timestamp: Date.now(), 
+                    message: `Failed to stop the enemy.`, 
+                    details: `The realm shudders in fear.` 
+                } as HistoryLog, ...sim.logs, ...prev.history],
                 selectedEnemyId: null
             };
             saveGame(next);
@@ -411,22 +542,42 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(prev => {
             const task = prev.tasks.find(t => t.id === taskId);
             if (!task) return prev;
-            const enemy = prev.enemies.find(e => e.taskId === taskId);
+            
+            // Find the specific enemy representing this subtask
+            const subtaskEnemy = prev.enemies.find(e => e.subtaskId === subtaskId);
+            const mainEnemy = prev.enemies.find(e => e.taskId === taskId && !e.subtaskId);
+
             const effects: VisualEffect[] = [];
-            if (enemy) {
-                const dmg = 10 + (prev.structures.forgeLevel * 2);
-                enemy.hp = Math.max(0, enemy.hp - dmg);
-                effects.push({ id: generateId(), type: 'TEXT_DAMAGE', position: { ...enemy.position, y: 2 }, text: `-${dmg}`, timestamp: Date.now() });
+            
+            // Kill the subtask minion visually
+            if (subtaskEnemy) {
+                effects.push({ id: generateId(), type: 'EXPLOSION', position: subtaskEnemy.position, timestamp: Date.now() });
+                effects.push({ id: generateId(), type: 'TEXT_DAMAGE', position: { ...subtaskEnemy.position, y: 2 }, text: "SLAIN", timestamp: Date.now() });
             }
+
+            // Damage the main boss too? Optional. Let's just damage boss slightly.
+            let updatedEnemies = prev.enemies.filter(e => e.subtaskId !== subtaskId);
+            
+            if (mainEnemy) {
+                updatedEnemies = updatedEnemies.map(e => {
+                    if (e.id === mainEnemy.id) {
+                        return { ...e, hp: Math.max(0, e.hp - 10) };
+                    }
+                    return e;
+                });
+                effects.push({ id: generateId(), type: 'TEXT_DAMAGE', position: { ...mainEnemy.position, y: 3 }, text: "-10", timestamp: Date.now() });
+            }
+
             return {
                 ...prev,
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, completed: true } : s) } : t),
-                enemies: prev.enemies.map(e => e.taskId === taskId ? { ...e, hp: Math.max(0, e.hp - 10) } : e),
+                enemies: updatedEnemies,
                 effects: [...prev.effects, ...effects]
             };
         });
     };
 
+    // ... (rest of the file remains unchanged: interactWithFaction, buyItem, castSpell, etc.)
     const interactWithFaction = (factionId: FactionKey, action: 'GIFT' | 'TRADE' | 'INSULT' | 'PROPAGANDA') => {
         ensureAudio();
         resetIdleTimer();
@@ -453,8 +604,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const newStats = { ...prev.realmStats };
             if (action === 'PROPAGANDA') { newStats.hope = Math.min(100, newStats.hope + 10); newStats.order = Math.min(100, newStats.order + 5); }
 
-            saveGame({ ...prev, gold: prev.gold - cost, factions: newFactions, realmStats: newStats, history: [{ id: generateId(), timestamp: Date.now(), type: 'DIPLOMACY', message: msg, details: `Reputation changed by ${repChange}.` }, ...prev.history] });
-            return { ...prev, gold: prev.gold - cost, factions: newFactions, realmStats: newStats, history: [{ id: generateId(), timestamp: Date.now(), type: 'DIPLOMACY', message: msg, details: `Reputation changed by ${repChange}.` }, ...prev.history] };
+            const next = { 
+                ...prev, 
+                gold: prev.gold - cost, 
+                factions: newFactions, 
+                realmStats: newStats, 
+                history: [{ 
+                    id: generateId(), 
+                    timestamp: Date.now(), 
+                    type: 'DIPLOMACY', 
+                    message: msg, 
+                    details: `Reputation changed by ${repChange}.` 
+                } as HistoryLog, ...prev.history] 
+            };
+            saveGame(next);
+            return next;
         });
     };
 
@@ -477,8 +641,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (item.type === 'MERCENARY') { const target = prev.tasks.find(t => t.priority === TaskPriority.LOW && !t.completed && !t.failed); if (target) setTimeout(() => completeTask(target.id), 500); }
             updates.structures = newStructs;
             const next = { ...prev, ...updates, vazarothMessage: getVazarothLine('MARKET') };
-            saveGame(next);
-            return next;
+            saveGame(next as GameState);
+            return next as GameState;
         });
     };
 
@@ -525,16 +689,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         else if (spell.id === 'HEAL') {
             const heal = 30;
             const newHp = Math.min(state.maxHeroHp, state.heroHp + heal);
-            // Must actually heal something to spend mana? No, mana is spent on cast attempted usually.
-            // But let's allow it.
             setState(p => ({ ...p, heroHp: newHp }));
             effects.push({ id: generateId(), type: 'TEXT_GOLD', position: { x: 4, y: 3, z: 4 }, text: `+${heal} HP`, timestamp: Date.now() });
             success = true;
             msg = "Mended flesh.";
         }
         else if (spell.id === 'RAGE') {
-            // Not implemented fully yet, maybe adds a buff state?
-            // For now, let's make it grant XP
             setState(p => ({ ...p, xp: p.xp + 50 }));
              effects.push({ id: generateId(), type: 'TEXT_XP', position: { x: 4, y: 3, z: 4 }, text: `+50 XP`, timestamp: Date.now() });
             success = true;
@@ -542,14 +702,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (success) {
-            playSfx('UI_CLICK'); // Magic sound later
+            playSfx('UI_CLICK'); 
             setState(prev => ({
                 ...prev,
                 mana: prev.mana - spell.cost,
                 enemies: newEnemies,
                 tasks: newTasks,
                 effects: [...prev.effects, ...effects],
-                history: [{ id: generateId(), timestamp: Date.now(), type: 'MAGIC', message: msg, details: spell.desc }, ...prev.history]
+                history: [{ 
+                    id: generateId(), 
+                    timestamp: Date.now(), 
+                    type: 'MAGIC', 
+                    message: msg, 
+                    details: spell.desc 
+                } as HistoryLog, ...prev.history]
             }));
         }
     }
@@ -570,17 +736,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const triggerEvent = (type: MapEventType) => {
         setState(prev => {
             if (type === 'VISION_RITUAL') {
-                // PASS CUSTOM SHEET ID OR DIRECT URL
                 fetchMotivationVideos(prev.settings?.googleSheetId, prev.settings?.directVisionUrl).then(videos => {
-                    // videos is now array of objects { embed: string, original: string }
                     if (videos.length > 0) {
                         const vid = videos[Math.floor(Math.random() * videos.length)];
-                        // Store it as a stringified object to pass both URLs through the single string state field
-                        // This avoids breaking the GameState type definition which expects a string or null
                         const payload = JSON.stringify(vid);
                         setState(curr => ({ ...curr, activeVisionVideo: payload }));
                     } else {
-                        // fallback
                         setState(curr => ({ ...curr, activeVisionVideo: "NO_SIGNAL" }));
                     }
                 });
@@ -613,6 +774,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const contextValue: GameContextType = {
         state,
         addTask,
+        editTask,
         moveTask: (id, time) => wrapUi(() => setState(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, deadline: time } : t) }))),
         completeTask,
         completeSubtask,
@@ -630,7 +792,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         ...prev,
                         activeAlert: AlertType.NONE,
                         tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: [...t.subtasks, ...newSubs], deadline: t.deadline + (60 * 60 * 1000) } : t),
-                        history: [{ id: generateId(), timestamp: Date.now(), type: 'VICTORY', message: "Aeon Defeated", details: "Task broken down successfully." }, ...prev.history]
+                        history: [{ 
+                            id: generateId(), 
+                            timestamp: Date.now(), 
+                            type: 'VICTORY', 
+                            message: "Aeon Defeated", 
+                            details: "Task broken down successfully." 
+                        } as HistoryLog, ...prev.history]
                     };
                 } else {
                     playSfx('FAILURE');
@@ -638,7 +806,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         ...prev,
                         activeAlert: AlertType.NONE,
                         heroHp: Math.max(0, prev.heroHp - 30),
-                        history: [{ id: generateId(), timestamp: Date.now(), type: 'DEFEAT', message: "Crushed by Aeon", details: "Failed to break down the task." }, ...prev.history]
+                        history: [{ 
+                            id: generateId(), 
+                            timestamp: Date.now(), 
+                            type: 'DEFEAT', 
+                            message: "Crushed by Aeon", 
+                            details: "Failed to break down the task." 
+                        } as HistoryLog, ...prev.history]
                     }
                 }
             })

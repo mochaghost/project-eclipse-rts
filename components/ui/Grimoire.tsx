@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType } from '../../types';
-import { X, ChevronLeft, ChevronRight, Clock, ShieldAlert, Users, Scroll, Calendar as CalIcon, Plus, Trash2, Layout, LayoutGrid, List, CalendarDays, Eye, Skull, Link as LinkIcon } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Clock, ShieldAlert, Users, Scroll, Calendar as CalIcon, Plus, Trash2, Layout, LayoutGrid, List, CalendarDays, Eye, Skull, Link as LinkIcon, Edit3, Save } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -11,7 +11,7 @@ const HOURS = Array.from({length: 24}, (_, i) => i);
 type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
 export const Grimoire: React.FC = () => {
-  const { state, toggleGrimoire, addTask, completeRitual } = useGame();
+  const { state, toggleGrimoire, addTask, editTask, completeRitual } = useGame();
   
   // Navigation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -19,6 +19,7 @@ export const Grimoire: React.FC = () => {
   const [showRealNames, setShowRealNames] = useState(false); // Toggle between Task Name and Enemy Name
   
   // Form State
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null); // NULL = CREATE MODE
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
@@ -51,10 +52,36 @@ export const Grimoire: React.FC = () => {
   };
 
   const handleSelectSlot = (date: Date, hour?: number) => {
+      // If we are editing, only update the date/time, don't clear the form
       setSelectedDate(date);
       if (hour !== undefined) {
           setTime(`${hour < 10 ? '0'+hour : hour}:00`);
       }
+      // If not editing, this is fine as just picking a slot
+  };
+
+  const handleEditTask = (task: Task) => {
+      setEditingTaskId(task.id);
+      setTitle(task.title);
+      setNotes(task.description || '');
+      setDuration(task.estimatedDuration);
+      setPriority(task.priority);
+      setSubtasks(task.subtasks.map(s => s.title));
+      setParentId(task.parentId || '');
+      
+      const d = new Date(task.deadline);
+      setSelectedDate(d);
+      setTime(d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: false}));
+  };
+
+  const resetForm = () => {
+      setEditingTaskId(null);
+      setTitle(''); 
+      setNotes(''); 
+      setSubtasks([]); 
+      setNewSubtask(''); 
+      setParentId('');
+      // Keep date/time as is for convenience
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -68,10 +95,23 @@ export const Grimoire: React.FC = () => {
     const finalSubtasks = [...subtasks];
     if(newSubtask.trim()) finalSubtasks.push(newSubtask.trim());
 
-    // Pass parentId (empty string if none selected)
-    addTask(title, deadlineDate.getTime(), priority, finalSubtasks, duration, notes, parentId || undefined);
-    
-    setTitle(''); setNotes(''); setSubtasks([]); setNewSubtask(''); setParentId('');
+    if (editingTaskId) {
+        // UPDATE EXISTING
+        editTask(editingTaskId, {
+            title,
+            description: notes,
+            deadline: deadlineDate.getTime(),
+            priority,
+            subtasks: finalSubtasks,
+            estimatedDuration: duration,
+            parentId: parentId || undefined
+        });
+        resetForm();
+    } else {
+        // CREATE NEW
+        addTask(title, deadlineDate.getTime(), priority, finalSubtasks, duration, notes, parentId || undefined);
+        resetForm();
+    }
   };
 
   const handleAddSubtask = (e?: React.FormEvent) => {
@@ -111,7 +151,11 @@ export const Grimoire: React.FC = () => {
                   <div className={`text-xs font-serif ${isToday ? 'text-yellow-500 font-bold' : 'text-stone-500'}`}>{d}</div>
                   <div className="mt-2 space-y-1">
                       {tasks.map(t => (
-                          <div key={t.id} className={`text-[9px] px-1 truncate rounded ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}>
+                          <div 
+                            key={t.id} 
+                            onClick={(e) => { e.stopPropagation(); handleEditTask(t); }}
+                            className={`text-[9px] px-1 truncate rounded cursor-pointer hover:brightness-125 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}
+                          >
                               {getTaskDisplayTitle(t)}
                           </div>
                       ))}
@@ -171,8 +215,9 @@ export const Grimoire: React.FC = () => {
                           
                           return (
                               <div 
-                                key={t.id} 
-                                className={`absolute left-2 right-2 rounded border overflow-hidden p-2 text-xs flex flex-col pointer-events-none 
+                                key={t.id}
+                                onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
+                                className={`absolute left-2 right-2 rounded border overflow-hidden p-2 text-xs flex flex-col cursor-pointer pointer-events-auto shadow-md hover:scale-[1.01] transition-transform
                                     ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : 
                                       t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 
                                       'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`}
@@ -248,7 +293,8 @@ export const Grimoire: React.FC = () => {
                                   return (
                                       <div 
                                         key={t.id} 
-                                        className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col pointer-events-none 
+                                        onClick={(e) => { e.stopPropagation(); handleEditTask(t); }}
+                                        className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-pointer pointer-events-auto hover:scale-[1.02] transition-transform
                                             ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : 
                                               t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 
                                               'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`}
@@ -289,6 +335,8 @@ export const Grimoire: React.FC = () => {
           </div>
       );
   };
+
+  const isEditing = !!editingTaskId;
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
@@ -345,18 +393,18 @@ export const Grimoire: React.FC = () => {
         </div>
 
         {/* RIGHT PANEL: SUMMONING FORM (Fixed Width) */}
-        <div className="w-full md:w-1/4 bg-[#0c0a09] flex flex-col relative z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.5)]">
-            <div className="h-16 flex items-center justify-center border-b border-[#292524] bg-[#0c0a09]">
-                <div className="flex items-center gap-2 text-yellow-700 font-serif text-lg tracking-[0.2em] font-bold">
-                    <Scroll size={16} className="rotate-45" />
-                    <span>SUMMONING</span>
+        <div className={`w-full md:w-1/4 bg-[#0c0a09] flex flex-col relative z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] transition-colors duration-500 ${isEditing ? 'border-l-2 border-blue-900' : ''}`}>
+            <div className={`h-16 flex items-center justify-center border-b border-[#292524] ${isEditing ? 'bg-blue-950/20' : 'bg-[#0c0a09]'}`}>
+                <div className={`flex items-center gap-2 font-serif text-lg tracking-[0.2em] font-bold ${isEditing ? 'text-blue-400' : 'text-yellow-700'}`}>
+                    {isEditing ? <Edit3 size={16} /> : <Scroll size={16} className="rotate-45" />}
+                    <span>{isEditing ? 'EDITING FATE' : 'SUMMONING'}</span>
                 </div>
             </div>
 
             <form onSubmit={handleSubmit} className="flex-1 p-6 overflow-y-auto space-y-5 custom-scrollbar">
                 
                 {/* Date/Time Readout */}
-                <div className="bg-[#151210] border border-[#292524] p-4 text-center">
+                <div className={`bg-[#151210] border p-4 text-center ${isEditing ? 'border-blue-900/30' : 'border-[#292524]'}`}>
                     <div className="text-xs text-stone-500 uppercase tracking-widest mb-1">Target Convergence</div>
                     <div className="text-lg font-serif font-bold text-stone-200">
                         {DAYS[selectedDate.getDay()]}, {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]}
@@ -379,7 +427,7 @@ export const Grimoire: React.FC = () => {
                         onChange={(e) => setTitle(e.target.value)} 
                         className="w-full bg-[#151210] border-b border-[#292524] p-3 text-stone-200 focus:border-yellow-900 outline-none font-serif text-lg placeholder:text-stone-800 placeholder:italic transition-colors"
                         placeholder="e.g., The Tax Beast"
-                        autoFocus
+                        autoFocus={!isEditing}
                     />
                 </div>
 
@@ -405,7 +453,7 @@ export const Grimoire: React.FC = () => {
                     >
                         <option value="">-- No Parent (Independent) --</option>
                         {state.tasks
-                            .filter(t => !t.completed && !t.failed)
+                            .filter(t => !t.completed && !t.failed && t.id !== editingTaskId)
                             .map(t => (
                                 <option key={t.id} value={t.id}>
                                     {t.title}
@@ -478,14 +526,33 @@ export const Grimoire: React.FC = () => {
 
             </form>
 
-            <div className="p-4 border-t border-[#292524] bg-[#0c0a09]">
-                <button 
-                    onClick={handleSubmit} 
-                    className="w-full bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-[#5c3a22] hover:text-white transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
-                >
-                    Manifest Enemy
-                </button>
-                {isRitual && (
+            <div className={`p-4 border-t ${isEditing ? 'border-blue-900/30 bg-blue-950/10' : 'border-[#292524] bg-[#0c0a09]'}`}>
+                {isEditing ? (
+                    <div className="flex gap-2">
+                         <button 
+                            onClick={handleSubmit} 
+                            className="flex-1 bg-blue-900/30 text-blue-300 border border-blue-800 py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-blue-900/50 hover:text-white transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Save size={16} /> Rewrite Fate
+                        </button>
+                         <button 
+                            onClick={resetForm} 
+                            className="px-4 bg-stone-900 text-stone-400 border border-stone-700 font-bold hover:bg-stone-800"
+                            title="Cancel Edit"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={handleSubmit} 
+                        className="w-full bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-[#5c3a22] hover:text-white transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+                    >
+                        Manifest Enemy
+                    </button>
+                )}
+                
+                {isRitual && !isEditing && (
                      <button type="button" onClick={completeRitual} className="w-full mt-2 text-[10px] text-indigo-400 uppercase tracking-widest hover:text-indigo-300">
                         Seal Pact (End Ritual)
                     </button>

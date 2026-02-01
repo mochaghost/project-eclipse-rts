@@ -78,7 +78,9 @@ export interface EnemyEntity {
   
   // Render Props
   position: Vector3;
+  initialPosition: Vector3; // Added for Deadline March calculation
   taskId: string; 
+  subtaskId?: string; // If this enemy represents a subtask
   scale: number; 
 }
 
@@ -263,17 +265,28 @@ export interface GameState {
   settings: GameSettings;
 }
 
+export interface TaskUpdateData {
+    title?: string;
+    deadline?: number;
+    priority?: TaskPriority;
+    subtasks?: string[];
+    description?: string;
+    estimatedDuration?: number;
+    parentId?: string;
+}
+
 export interface GameContextType {
   state: GameState;
   addTask: (title: string, deadline: number, priority: TaskPriority, subtasks: string[], durationMinutes: number, description?: string, parentId?: string) => void;
+  editTask: (taskId: string, data: TaskUpdateData) => void; 
   moveTask: (taskId: string, newDeadline: number) => void;
   completeTask: (taskId: string) => void;
   completeSubtask: (taskId: string, subtaskId: string) => void;
   failTask: (taskId: string) => void;
   selectEnemy: (enemyId: string | null) => void;
   resolveCrisisHubris: (taskId: string) => void;
-  resolveCrisisHumility: (taskId: string) => void; // Trigger Aeon
-  resolveAeonBattle: (taskId: string, newSubtasks: string[], success: boolean) => void; // End Aeon
+  resolveCrisisHumility: (taskId: string) => void; 
+  resolveAeonBattle: (taskId: string, newSubtasks: string[], success: boolean) => void; 
   triggerRitual: (type: AlertType) => void;
   triggerEvent: (type: MapEventType) => void; 
   completeRitual: () => void;
@@ -295,5 +308,5 @@ export interface GameContextType {
   rerollVision: () => void; 
   interactWithNPC: (npcId: string) => void; 
   updateSettings: (settings: Partial<GameSettings>) => void;
-  castSpell: (spellId: string) => void; // New Magic Action
+  castSpell: (spellId: string) => void; 
 }

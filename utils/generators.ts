@@ -67,7 +67,7 @@ const generateName = (race: RaceType): string => {
     return pool.FIRST[Math.floor(Math.random() * pool.FIRST.length)] + " " + pool.LAST[Math.floor(Math.random() * pool.LAST.length)];
 };
 
-export const generateNemesis = (taskId: string, priority: TaskPriority, graveyard: {name: string, clan: string}[], previousWinStreak: number): EnemyEntity => {
+export const generateNemesis = (taskId: string, priority: TaskPriority, graveyard: {name: string, clan: string}[], previousWinStreak: number, subtaskId?: string, subtaskName?: string, durationMinutes: number = 60): EnemyEntity => {
     const factionKeys = Object.keys(FACTIONS) as FactionKey[];
     const factionKey = factionKeys[Math.floor(Math.random() * factionKeys.length)];
     const factionData = FACTIONS[factionKey];
@@ -75,32 +75,70 @@ export const generateNemesis = (taskId: string, priority: TaskPriority, graveyar
     const race = factionData.race as RaceType;
     const name = generateName(race);
     const personality = PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)];
-    const rank = Math.min(10, priority + Math.floor(previousWinStreak / 3));
+    
+    // Subtask Logic: Smaller, Rank 1
+    const isSubtask = !!subtaskId;
+    const rank = isSubtask ? 1 : Math.min(10, priority + Math.floor(previousWinStreak / 3));
     
     const titles = TITLES_BY_FACTION[factionKey];
     const baseTitle = titles[Math.floor(Math.random() * titles.length)];
+    
     let title = `${baseTitle} ${name}`;
-    if (rank > 5) title = `Grand ${baseTitle} ${name}`;
+    if (rank > 5 && !isSubtask) title = `Grand ${baseTitle} ${name}`;
+    if (isSubtask) title = `Lieutenant ${subtaskName || 'Minion'}`;
 
     let lineage = `Sworn to the ${factionData.name}.`;
     let memories: string[] = [`I serve the ${factionData.name}.`];
     
     const clan = ENEMY_CLANS[Math.floor(Math.random() * ENEMY_CLANS.length)];
-    const deadKin = graveyard.find(d => d.clan === clan.name);
-    if (deadKin && Math.random() > 0.5) {
-        lineage = `Avenging kin of ${deadKin.name}`;
-        memories.push(`You slaughtered ${deadKin.name} of ${clan.name}. The ${factionData.name} demands justice.`);
-        title = `${name} the Avenger`;
+    
+    // Graveyard logic only for Main Tasks
+    if (!isSubtask) {
+        const deadKin = graveyard.find(d => d.clan === clan.name);
+        if (deadKin && Math.random() > 0.5) {
+            lineage = `Avenging kin of ${deadKin.name}`;
+            memories.push(`You slaughtered ${deadKin.name} of ${clan.name}. The ${factionData.name} demands justice.`);
+            title = `${name} the Avenger`;
+        }
     }
 
     let lore = factionKey === 'VAZAROTH' ? `A corrupted human noble seeking to offer your time to the Void Emperor.` : 
                factionKey === 'SOL' ? `A zealous knight who believes your procrastination is a sin against Order.` : 
                `${factionData.desc} (${personality.toLowerCase()})`;
 
+    // Scale Logic: 
+    // Subtask = 0.6 fixed
+    // Main Task = Base 0.8 + Priority (0.1 per level) + Duration (0.1 per hour)
+    let scale = 0.6;
+    if (!isSubtask) {
+        scale = 0.8 + (priority * 0.15) + ((durationMinutes / 60) * 0.1); 
+    }
+
+    // Position logic: Spawn far away. Movement logic handles approach.
+    // If subtask, spawn slightly offset from main logic (handled later or grouped)
+    // Here we just give a generic spawn.
+    const spawnPos = generateSpawnPosition(45, 60); // Start far away (45-60 units)
+
     return {
-        id: generateId(), taskId, name, title, race, factionId: factionKey, clan: clan.name, personality,
-        rank, lore, memories, lineage, hp: 100 * rank, maxHp: 100 * rank, priority,
-        position: generateSpawnPosition(15, 45), scale: 0.5 + (rank * 0.1)
+        id: generateId(), 
+        taskId, 
+        subtaskId,
+        name, 
+        title, 
+        race, 
+        factionId: factionKey, 
+        clan: clan.name, 
+        personality,
+        rank, 
+        lore, 
+        memories, 
+        lineage, 
+        hp: 100 * rank, 
+        maxHp: 100 * rank, 
+        priority,
+        position: spawnPos, 
+        initialPosition: spawnPos,
+        scale
     };
 };
 
@@ -273,15 +311,11 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
 };
 
 export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
-    // 1. Direct URL has ABSOLUTE priority.
-    // If user provided a link, we attempt to use it, even if it's broken text.
-    // We only skip this if the string is empty.
     if (directUrl && directUrl.trim().length > 0) {
         const result = convertToEmbedUrl(directUrl);
         if (result) return [result];
     }
 
-    // 2. Resolve the Google Sheet URL
     let fetchUrl = "";
     const sheetInput = customSheetId || DEFAULT_SHEET_ID;
 
@@ -325,7 +359,6 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
         console.warn("[Vision] Network error", e); 
     }
 
-    // Fallback defaults ONLY if Google Sheet fails AND no direct URL was provided.
     return VOID_LIBRARY_DEFAULTS.map(url => ({ 
         type: 'VIDEO', 
         embedUrl: url, 
