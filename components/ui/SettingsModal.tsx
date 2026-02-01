@@ -139,7 +139,7 @@ export const SettingsModal: React.FC = () => {
                                                 <div className="bg-blue-900/20 p-2 border border-blue-900/50 rounded mb-2">
                                                     <p className="text-[10px] text-blue-200 font-bold mb-1">PRO TIP FOR PINTEREST:</p>
                                                     <ul className="text-[9px] text-stone-400 list-disc pl-4 space-y-1">
-                                                        <li><strong>For Image Mode:</strong> Right-Click the image -> "Copy Image Address" (ends in .jpg/.png).</li>
+                                                        <li><strong>For Image Mode:</strong> Right-Click the image -&gt; "Copy Image Address" (ends in .jpg/.png).</li>
                                                         <li><strong>For Portal Mode:</strong> Copy the URL from the browser bar.</li>
                                                     </ul>
                                                 </div>
@@ -170,7 +170,7 @@ export const SettingsModal: React.FC = () => {
                                                     className="w-full bg-black border border-stone-700 p-3 text-white text-xs font-mono focus:border-purple-500 outline-none"
                                                 />
                                                 <div className="text-[10px] text-stone-600 italic">
-                                                    * Ensure the sheet is published via File {'>'} Share {'>'} Publish to web.
+                                                    * Ensure the sheet is published via File &gt; Share &gt; Publish to web.
                                                 </div>
                                             </div>
                                         )}

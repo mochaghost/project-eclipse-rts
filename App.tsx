@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import { Scene } from './components/3d/Scene';
 import { HUD } from './components/ui/HUD';
@@ -15,6 +15,48 @@ import { DiplomacyMap } from './components/ui/DiplomacyMap';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 
+const UIEmbers = () => {
+    // Generate random particles that float up
+    const particles = useMemo(() => Array.from({length: 20}).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        delay: Math.random() * 5,
+        duration: 3 + Math.random() * 4,
+        size: 2 + Math.random() * 3
+    })), []);
+
+    return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-[5]">
+            {particles.map(p => (
+                <div 
+                    key={p.id}
+                    className="absolute bottom-0 bg-orange-500/30 rounded-full animate-rise"
+                    style={{
+                        left: `${p.left}%`,
+                        width: `${p.size}px`,
+                        height: `${p.size}px`,
+                        animationDuration: `${p.duration}s`,
+                        animationDelay: `${p.delay}s`,
+                        boxShadow: `0 0 ${p.size * 2}px rgba(234, 88, 12, 0.4)`
+                    }}
+                />
+            ))}
+            <style>{`
+                @keyframes rise {
+                    0% { transform: translateY(10vh) translateX(0); opacity: 0; }
+                    20% { opacity: 0.6; }
+                    100% { transform: translateY(-110vh) translateX(${Math.random() * 20 - 10}vw); opacity: 0; }
+                }
+                .animate-rise {
+                    animation-name: rise;
+                    animation-timing-function: linear;
+                    animation-iteration-count: infinite;
+                }
+            `}</style>
+        </div>
+    )
+}
+
 const GameContainer = () => {
     const { state, toggleProfile } = useGame();
     return (
@@ -23,6 +65,9 @@ const GameContainer = () => {
             <div className="absolute inset-0 z-0">
                 <Scene />
             </div>
+
+            {/* Atmosphere Layer */}
+            <UIEmbers />
 
             {/* UI Layer */}
             <HUD />
