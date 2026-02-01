@@ -1,18 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy, Smartphone, Move } from 'lucide-react';
 import { convertToEmbedUrl } from '../../utils/generators';
+import { DEFAULT_FIREBASE_CONFIG } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
     const { state, toggleSettings, exportSave, importSave, clearSave, connectToCloud, disconnectCloud, updateSettings, triggerEvent } = useGame();
     const [tab, setTab] = useState<'GENERAL' | 'CLOUD'>('GENERAL');
     const [importData, setImportData] = useState('');
     const [roomId, setRoomId] = useState('');
-    const [config, setConfig] = useState({ apiKey: '', projectId: '', appId: '', authDomain: '', databaseURL: '', storageBucket: '', messagingSenderId: '' });
+    
+    // Config state - prefill with defaults if empty
+    const [config, setConfig] = useState(DEFAULT_FIREBASE_CONFIG);
     const [jsonPaste, setJsonPaste] = useState('');
 
-    // Restored UI State for Vision
     const [visionMode, setVisionMode] = useState<'DIRECT' | 'SHEET'>('DIRECT');
 
     // Load saved config from local storage on mount
@@ -22,14 +24,19 @@ export const SettingsModal: React.FC = () => {
         if (savedConfig) {
             try {
                 setConfig(JSON.parse(savedConfig));
-            } catch (e) { console.error("Config parse error", e); }
+            } catch (e) { 
+                // If parse fails, use default
+                setConfig(DEFAULT_FIREBASE_CONFIG);
+            }
+        } else {
+            // Ensure default is set if nothing in local storage
+            setConfig(DEFAULT_FIREBASE_CONFIG);
         }
         if (savedRoom) setRoomId(savedRoom);
     }, []);
 
     const parseConfig = () => {
         try {
-            // Attempt to clean the string if user pasted "const firebaseConfig = { ... }"
             let clean = jsonPaste.trim();
             if (clean.includes("=")) {
                 clean = clean.substring(clean.indexOf("=") + 1);
@@ -37,10 +44,6 @@ export const SettingsModal: React.FC = () => {
             if (clean.endsWith(";")) {
                 clean = clean.slice(0, -1);
             }
-            
-            // Relaxed JSON parsing (handles unquoted keys if basic)
-            // Note: In a real app we'd use a safer parser, but for this hack:
-            // Let's try standard JSON parse first
             try {
                 const parsed = JSON.parse(clean);
                 setConfig({ ...config, ...parsed });
@@ -48,9 +51,6 @@ export const SettingsModal: React.FC = () => {
                 alert("Config Auto-Filled!");
                 return;
             } catch (e) {
-                // If strict JSON fails, try to eval (dangerous in prod, acceptable for this local-first context tool)
-                // Or simply instruct user to paste pure JSON.
-                // Let's try to fix quotes on keys
                 const fixed = clean.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2": ').replace(/'/g, '"');
                 const parsed = JSON.parse(fixed);
                 setConfig({ ...config, ...parsed });
@@ -58,7 +58,7 @@ export const SettingsModal: React.FC = () => {
                 alert("Config Auto-Filled!");
             }
         } catch (e) {
-            alert("Could not parse config. Please ensure it is valid JSON or the object from Firebase Console.");
+            alert("Could not parse config.");
         }
     };
 
@@ -66,19 +66,26 @@ export const SettingsModal: React.FC = () => {
 
     const handleConnect = async (e: React.FormEvent) => {
         e.preventDefault();
-        const success = await connectToCloud(config, roomId);
+        
+        // Use default config if fields are empty (though they shouldn't be due to init)
+        const finalConfig = {
+            ...config,
+            apiKey: config.apiKey || DEFAULT_FIREBASE_CONFIG.apiKey,
+            projectId: config.projectId || DEFAULT_FIREBASE_CONFIG.projectId
+        };
+
+        const success = await connectToCloud(finalConfig, roomId);
         if (success) {
-            // Save to local storage for convenience next time
-            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(config));
+            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(finalConfig));
             localStorage.setItem('ECLIPSE_ROOM_ID', roomId);
         }
     };
 
-    const settings = state.settings || { masterVolume: 0.2, graphicsQuality: 'HIGH' };
+    const settings = state.settings || { masterVolume: 0.2, graphicsQuality: 'HIGH', uiScale: 1, safeAreaPadding: 0 };
     const directUrlValid = settings.directVisionUrl ? !!convertToEmbedUrl(settings.directVisionUrl) : false;
 
     return (
-        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 pointer-events-auto">
             <div className="relative w-full max-w-2xl bg-[#0c0a09] border-2 border-stone-700 h-[85vh] flex flex-col shadow-2xl">
                 <div className="flex justify-between items-center p-6 border-b border-stone-800 bg-[#1c1917]">
                     <h2 className="text-2xl text-stone-200 font-serif font-bold tracking-widest flex items-center gap-2">
@@ -118,6 +125,46 @@ export const SettingsModal: React.FC = () => {
                                         className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-yellow-600 mb-2"
                                     />
                                     <p className="text-[10px] text-stone-600">Controls ambient drone, interface sounds, and music.</p>
+                                </div>
+                             </div>
+
+                             {/* INTERFACE ADJUSTMENTS */}
+                             <div>
+                                <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-4 flex items-center gap-2 border-b border-stone-800 pb-2">
+                                    <Smartphone size={14} /> Interface Adjustments
+                                </h3>
+                                <div className="bg-[#151210] p-5 border border-stone-800 space-y-6">
+                                    {/* UI SCALE */}
+                                    <div>
+                                        <div className="flex justify-between text-stone-300 text-sm mb-2 font-mono">
+                                            <span>UI Scale</span>
+                                            <span>{Math.round((settings.uiScale || 1) * 100)}%</span>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min="0.5" max="1.2" step="0.05" 
+                                            value={settings.uiScale || 1} 
+                                            onChange={(e) => updateSettings({ uiScale: parseFloat(e.target.value) })}
+                                            className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
+                                        />
+                                        <p className="text-[10px] text-stone-600">Shrink UI for small screens if elements overlap.</p>
+                                    </div>
+
+                                    {/* SAFE AREA */}
+                                    <div>
+                                        <div className="flex justify-between text-stone-300 text-sm mb-2 font-mono">
+                                            <span>Safe Area Padding</span>
+                                            <span>{settings.safeAreaPadding || 0}px</span>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min="0" max="100" step="5" 
+                                            value={settings.safeAreaPadding || 0} 
+                                            onChange={(e) => updateSettings({ safeAreaPadding: parseInt(e.target.value) })}
+                                            className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
+                                        />
+                                        <p className="text-[10px] text-stone-600">Add empty space around edges (useful for notches/rounded corners).</p>
+                                    </div>
                                 </div>
                              </div>
 
@@ -227,9 +274,8 @@ export const SettingsModal: React.FC = () => {
                         // Cloud / Data Tab
                         state.syncConfig?.isConnected ? (
                             <div className="text-center py-10">
-                                <div className="text-green-500 text-xl font-bold mb-4 font-serif tracking-widest flex items-center justify-center gap-2">
-                                    <Cloud size={24} /> CONNECTED TO VOID NET
-                                </div>
+                                <div className="text-green-500 text-xl font-bold mb-4 font-serif tracking-widest">CONNECTED TO VOID NET</div>
+                                <div className="text-xs font-mono text-stone-500 mb-8 p-2 bg-black inline-block border border-stone-800">Room: {state.syncConfig.roomId}</div>
                                 
                                 <div className="max-w-xs mx-auto mb-8 text-left">
                                     <p className="text-[10px] text-stone-500 mb-2 uppercase font-bold text-center">Your Room ID</p>
@@ -243,7 +289,7 @@ export const SettingsModal: React.FC = () => {
                                         </button>
                                     </div>
                                     <p className="text-[9px] text-stone-600 mt-2 text-center">
-                                        Enter this <strong>exact ID</strong> and the same Config on your mobile device to view this timeline.
+                                        Enter this <strong>exact ID</strong> on your other device to sync.
                                     </p>
                                 </div>
 
@@ -256,32 +302,19 @@ export const SettingsModal: React.FC = () => {
                                 <div className="bg-[#151210] p-6 border border-stone-800">
                                     <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest"><Cloud size={14}/> Firebase Sync</h4>
                                     <p className="text-[10px] text-stone-500 mb-4 leading-relaxed">
-                                        Syncs game state across devices sharing the same Room ID. 
-                                        <br/><strong>Setup:</strong> Create a Project at <em>console.firebase.google.com</em>, enable Realtime Database (Test Mode), and paste the config object below.
+                                        Enter a unique <strong>Room ID</strong> to sync across devices. 
+                                        <br/>The configuration keys are pre-loaded.
                                     </p>
                                     
-                                    {/* Smart Paste Area */}
-                                    <div className="mb-4">
-                                        <div className="text-[10px] text-blue-300 mb-1 flex items-center gap-2"><FileJson size={10} /> Smart Config Paste</div>
-                                        <div className="flex gap-2">
-                                            <textarea 
-                                                value={jsonPaste} 
-                                                onChange={e => setJsonPaste(e.target.value)} 
-                                                placeholder='Paste the full "const firebaseConfig = {...}" or JSON here...'
-                                                className="flex-1 h-12 bg-black border border-stone-700 p-2 text-[10px] font-mono text-stone-400 outline-none focus:border-blue-500"
-                                            />
-                                            <button onClick={parseConfig} className="bg-stone-800 text-stone-200 border border-stone-600 px-3 hover:bg-stone-700 text-[10px] font-bold">AUTO FILL</button>
-                                        </div>
-                                    </div>
-
                                     <form onSubmit={handleConnect} className="space-y-3">
                                         <input type="text" placeholder="Unique Room ID (e.g. MySecretRoom)" value={roomId} onChange={e => setRoomId(e.target.value)} className="w-full bg-black border border-stone-700 p-3 text-white text-xs outline-none focus:border-blue-500" required />
                                         
-                                        <div className="grid grid-cols-2 gap-2 opacity-80 hover:opacity-100 transition-opacity">
-                                            <input type="text" placeholder="API Key" value={config.apiKey} onChange={e => setConfig({...config, apiKey: e.target.value})} className="w-full bg-black border border-stone-700 p-2 text-white text-[10px] outline-none focus:border-blue-500" required />
-                                            <input type="text" placeholder="Project ID" value={config.projectId} onChange={e => setConfig({...config, projectId: e.target.value})} className="w-full bg-black border border-stone-700 p-2 text-white text-[10px] outline-none focus:border-blue-500" required />
-                                            <input type="text" placeholder="App ID" value={config.appId} onChange={e => setConfig({...config, appId: e.target.value})} className="w-full bg-black border border-stone-700 p-2 text-white text-[10px] outline-none focus:border-blue-500" required />
-                                            <input type="text" placeholder="Database URL" value={config.databaseURL} onChange={e => setConfig({...config, databaseURL: e.target.value})} className="w-full bg-black border border-stone-700 p-2 text-white text-[10px] outline-none focus:border-blue-500" required />
+                                        <div className="p-2 bg-stone-900/50 border border-stone-800">
+                                            <div className="text-[9px] text-stone-500 mb-1 uppercase font-bold">Advanced Config (Optional - Pre-filled)</div>
+                                            <div className="grid grid-cols-2 gap-2 opacity-60 hover:opacity-100 transition-opacity">
+                                                <input type="text" placeholder="API Key" value={config.apiKey} onChange={e => setConfig({...config, apiKey: e.target.value})} className="w-full bg-black border border-stone-700 p-2 text-white text-[10px] outline-none focus:border-blue-500" />
+                                                <input type="text" placeholder="Project ID" value={config.projectId} onChange={e => setConfig({...config, projectId: e.target.value})} className="w-full bg-black border border-stone-700 p-2 text-white text-[10px] outline-none focus:border-blue-500" />
+                                            </div>
                                         </div>
                                         
                                         <button type="submit" className="w-full bg-blue-900/50 text-blue-200 hover:bg-blue-800 border border-blue-700 py-3 font-bold text-xs tracking-widest mt-2 uppercase transition-colors">Initialize Uplink</button>

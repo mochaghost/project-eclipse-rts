@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import { Scene } from './components/3d/Scene';
 import { HUD } from './components/ui/HUD';
@@ -59,9 +59,45 @@ const UIEmbers = () => {
 
 const GameContainer = () => {
     const { state, toggleProfile } = useGame();
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // KEYBOARD/MOBILE LAYOUT FIX
+    useEffect(() => {
+        const handleResize = () => {
+            if (containerRef.current) {
+                // Force reset scroll to avoid layout shift when keyboard closes
+                window.scrollTo(0, 0);
+                // On some mobile browsers, window.innerHeight changes when keyboard opens
+                containerRef.current.style.height = `${window.innerHeight}px`;
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('blur', () => window.scrollTo(0, 0)); 
+        
+        // Initial set
+        handleResize();
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('blur', () => window.scrollTo(0, 0));
+        };
+    }, []);
+
+    // Apply UI Scaling and Safe Area from settings
+    const uiStyle = {
+        transform: `scale(${state.settings?.uiScale || 1})`,
+        transformOrigin: 'center center',
+        padding: `${state.settings?.safeAreaPadding || 0}px`
+    };
+
     return (
-        <main className="relative w-full h-screen overflow-hidden bg-[#050202]">
-            {/* 3D Layer */}
+        <main 
+            ref={containerRef}
+            className="relative w-full overflow-hidden bg-[#050202]"
+            style={{ height: '100dvh' }} // Fallback to dvh for modern browsers
+        >
+            {/* 3D Layer - Always Full Screen, No Padding */}
             <div className="absolute inset-0 z-0">
                 <Scene />
             </div>
@@ -69,21 +105,26 @@ const GameContainer = () => {
             {/* Atmosphere Layer */}
             <UIEmbers />
 
-            {/* UI Layer */}
-            <HUD />
-            <Grimoire />
-            <HeroProfile isOpen={state.isProfileOpen} onClose={toggleProfile} level={state.playerLevel} />
-            <MarketModal />
-            <AuditModal />
-            <SettingsModal />
-            <DiplomacyMap />
-            
-            {/* Entity Modals */}
-            <EnemyProfile />
+            {/* UI Layer - Scaled and Padded */}
+            <div className="absolute inset-0 z-10 pointer-events-none" style={uiStyle}>
+                {/* Repass pointer-events-auto to children in their specific components */}
+                <div className="w-full h-full relative">
+                    <HUD />
+                    <Grimoire />
+                    <HeroProfile isOpen={state.isProfileOpen} onClose={toggleProfile} level={state.playerLevel} />
+                    <MarketModal />
+                    <AuditModal />
+                    <SettingsModal />
+                    <DiplomacyMap />
+                    
+                    {/* Entity Modals */}
+                    <EnemyProfile />
 
-            {/* Interruption Modals */}
-            <CrisisIntervention />
-            <RitualModal />
+                    {/* Interruption Modals */}
+                    <CrisisIntervention />
+                    <RitualModal />
+                </div>
+            </div>
         </main>
     )
 }
@@ -147,7 +188,7 @@ const App: React.FC = () => {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 100); // Almost instant load for debug
+    const t = setTimeout(() => setMounted(true), 100); 
     return () => clearTimeout(t);
   }, []);
 

@@ -10,7 +10,7 @@ let app: any = null;
 let db: any = null;
 let currentUnsubscribe: any = null;
 
-// User provided default config
+// User provided default config - HARDCODED FOR CONVENIENCE
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   apiKey: "AIzaSyAC0BL8gZCzOZeHuSBXTljs2Zs0v4MA070",
   authDomain: "project-eclipse-fa3c3.firebaseapp.com",
@@ -18,7 +18,8 @@ export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   projectId: "project-eclipse-fa3c3",
   storageBucket: "project-eclipse-fa3c3.firebasestorage.app",
   messagingSenderId: "288248063684",
-  appId: "1:288248063684:web:a59717db1d5995be8c0b91"
+  appId: "1:288248063684:web:a59717db1d5995be8c0b91",
+  measurementId: "G-SH8WKF3ZGH"
 };
 
 export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) => {

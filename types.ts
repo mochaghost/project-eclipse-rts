@@ -192,6 +192,7 @@ export interface FirebaseConfig {
     messagingSenderId?: string;
     appId: string;
     databaseURL: string;
+    measurementId?: string;
 }
 
 export interface GameSettings {
@@ -199,6 +200,8 @@ export interface GameSettings {
     graphicsQuality: 'LOW' | 'HIGH';
     googleSheetId?: string; // Custom sheet for Vision Mirror
     directVisionUrl?: string; // New field for single direct link
+    uiScale?: number; // 0.8 to 1.2
+    safeAreaPadding?: number; // 0 to 50px
 }
 
 export interface RealmStats {
