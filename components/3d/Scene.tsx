@@ -1,3 +1,4 @@
+
 import React, { useMemo, Suspense, useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { MapControls, Stars, PerspectiveCamera, Ring, Sparkles, Instances, Instance, Html, Float } from '@react-three/drei';
@@ -104,7 +105,7 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
                 <planeGeometry args={[500, 500, 64, 64]} />
                 <meshStandardMaterial 
-                    color="#0c0a09" 
+                    color={groundColor}
                     roughness={1} 
                     metalness={0.0}
                 />
@@ -167,32 +168,96 @@ const WeatherSystem = ({ type }: { type: WeatherType }) => {
 
 const GlobalSceneController = () => {
     const { state } = useGame();
-    
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
+
     const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
     const weather = state.weather || 'CLEAR';
     
-    // --- GRIM DARK LIGHTING ---
-    // Darker ambient, specific rim lights
-    const fogColor = isRitual ? '#2e1065' : '#050202';
-    const fogDensity = weather === 'VOID_MIST' ? 0.08 : 0.04;
+    // --- REAL TIME CALCULATIONS ---
+    const hours = currentTime.getHours() + currentTime.getMinutes() / 60;
+    const sunAngle = ((hours - 6) / 24) * Math.PI * 2; 
+    
+    const sunRadius = 100;
+    const sunX = Math.cos(sunAngle) * sunRadius;
+    const sunY = Math.sin(sunAngle) * sunRadius;
+    const sunZ = 20; 
+
+    // --- DAY / NIGHT LOGIC ---
+    // Make Night viewable (Moonlight) instead of pitch black
+    const isNight = hours < 6 || hours > 18;
+    const isDawn = hours >= 5 && hours < 8;
+    const isDusk = hours >= 17 && hours < 20;
+
+    let sunColor = '#fbbf24'; 
+    let skyColor = '#38bdf8'; 
+    let fogColor = '#bae6fd'; 
+    let intensity = 2.0; 
+    let ambientIntensity = 0.5; 
+    let groundColor = '#292524';
+
+    if (isDawn) {
+        sunColor = '#f97316'; 
+        skyColor = '#fdba74';
+        fogColor = '#fed7aa';
+        intensity = 1.2;
+        ambientIntensity = 0.4;
+        groundColor = '#451a03';
+    } else if (isDusk) {
+        sunColor = '#ef4444'; 
+        skyColor = '#c084fc';
+        fogColor = '#4c1d95';
+        intensity = 1.0;
+        ambientIntensity = 0.3;
+        groundColor = '#2e1065';
+    } else if (isNight) {
+        // Night Mode: Cold Blue/Silver light to ensure visibility
+        sunColor = '#93c5fd'; // Moon color
+        skyColor = '#0f172a'; 
+        fogColor = '#1e1b4b'; // Deep blue fog, NOT black
+        intensity = 0.6; 
+        ambientIntensity = 0.6; // Boost ambient to 0.6 so map isn't black
+        groundColor = '#0f172a'; 
+    }
+
+    if (isRitual) {
+        sunColor = '#a855f7'; 
+        fogColor = '#2e1065';
+        intensity = 0.8;
+        ambientIntensity = 0.5;
+    }
+
+    // Dynamic Fog Density based on weather
+    const fogDensity = weather === 'VOID_MIST' ? 0.06 : isNight ? 0.015 : 0.015;
 
     return (
         <>
-            <color attach="background" args={['#050202']} />
+            <color attach="background" args={[fogColor]} />
             <fogExp2 attach="fog" args={[fogColor, fogDensity]} />
             
             <WeatherSystem type={weather} />
             
-            {/* Moonlight (Blue/Cold) */}
-            <directionalLight position={[50, 50, 20]} intensity={0.5} color="#60a5fa" castShadow shadow-mapSize={[2048, 2048]} />
+            {/* Sun / Moon Light */}
+            <directionalLight 
+                position={[sunX, Math.max(10, sunY), sunZ]} 
+                intensity={intensity} 
+                castShadow 
+                shadow-mapSize={[2048, 2048]} 
+                color={sunColor} 
+                shadow-bias={-0.0005} 
+            />
             
-            {/* Ambient (Very Low) */}
-            <ambientLight intensity={0.1} color="#4c1d95" />
+            {/* Ambient Light (Base visibility) */}
+            <ambientLight intensity={ambientIntensity} color={skyColor} />
             
-            {/* Rim Light (Dramatic) */}
+            {/* Rim Light for drama */}
             <spotLight position={[-30, 10, -30]} angle={0.5} intensity={2} color="#c084fc" />
 
-            <ProceduralMap level={state.playerLevel} era={state.era} groundColor="#0c0a09" />
+            <ProceduralMap level={state.playerLevel} era={state.era} groundColor={groundColor} />
         </>
     )
 }
@@ -382,7 +447,7 @@ export const Scene: React.FC = () => {
           {isHighQuality && (
               <EffectComposer>
                   <Bloom luminanceThreshold={1.5} mipmapBlur intensity={1.5} radius={0.6} />
-                  <Vignette eskil={false} offset={0.1} darkness={1.1} />
+                  <Vignette eskil={false} offset={0.1} darkness={0.6} />
                   <Noise opacity={0.05} />
               </EffectComposer>
           )}
