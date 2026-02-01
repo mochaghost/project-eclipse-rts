@@ -1,7 +1,7 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 import { SPELLS } from '../../constants';
@@ -114,7 +114,27 @@ const RealmStatusWidget: React.FC = () => {
     );
 };
 
-// --- NEW COMPONENT: SPELL BAR ---
+const RealTimeClock: React.FC = () => {
+    const [time, setTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    return (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center">
+            <div className="bg-[#0c0a09]/90 border border-stone-700 px-4 py-2 flex items-center gap-3 rounded-sm shadow-lg">
+                <Clock size={16} className="text-stone-400" />
+                <span className="text-xl font-mono font-bold text-stone-200 tracking-widest">
+                    {time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}
+                </span>
+            </div>
+            <div className="text-[10px] text-stone-500 uppercase tracking-[0.3em] mt-1 bg-black/50 px-2">Local Time</div>
+        </div>
+    )
+}
+
 const SpellBar: React.FC = () => {
     const { state, castSpell } = useGame();
     const manaPercent = (state.mana / state.maxMana) * 100;
@@ -153,7 +173,6 @@ const SpellBar: React.FC = () => {
                         >
                             <Icon size={20} />
                             <div className="absolute bottom-0.5 right-1 text-[8px] font-mono">{spell.cost}</div>
-                            {/* Cooldown overlay could go here */}
                         </button>
                     )
                 })}
@@ -192,6 +211,7 @@ export const HUD: React.FC = () => {
       <VazarothHUD />
       <WorldRumorHUD />
       <RealmStatusWidget />
+      <RealTimeClock />
       <EventTicker />
       <SplatterOverlay />
       <SpellBar />

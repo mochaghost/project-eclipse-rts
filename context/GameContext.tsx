@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualEffect, FirebaseConfig, MapEventType, ShopItem, EnemyEntity, GameSettings, FactionKey, MinionEntity, WeatherType, TaskUpdateData, HistoryLog } from '../types';
+import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualEffect, FirebaseConfig, MapEventType, ShopItem, EnemyEntity, GameSettings, FactionKey, MinionEntity, WeatherType, TaskUpdateData, HistoryLog, SubtaskDraft } from '../types';
 import { loadGame, saveGame } from '../utils/saveSystem';
 import { generateId, generateNemesis, generateSpawnPosition, getSageWisdom, getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateHeroEquipment, generateLoot } from '../utils/generators';
 import { simulateReactiveTurn, initializePopulation, updateRealmStats } from '../utils/worldSim';
@@ -145,21 +145,36 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // --- DEADLINE MARCH LOGIC ---
                 // Enemies physically move towards base [0,0,0] as deadline approaches
                 const updatedEnemies = newState.enemies.map(enemy => {
+                    // Logic based on Enemy Type (Main or Subtask)
                     const task = newState.tasks.find(t => t.id === enemy.taskId);
-                    if (!task) return enemy; // Orphaned enemy, likely dying soon
+                    if (!task) return enemy; 
 
-                    const totalDuration = task.deadline - task.createdAt;
-                    const timeLeft = task.deadline - now;
-                    const elapsed = now - task.createdAt;
+                    let startTime = task.startTime;
+                    let deadline = task.deadline;
+
+                    // If it's a subtask, see if it has overrides
+                    if (enemy.subtaskId) {
+                        const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
+                        if (sub) {
+                            if (sub.startTime) startTime = sub.startTime;
+                            if (sub.deadline) deadline = sub.deadline;
+                        }
+                    }
+
+                    // Don't move if it hasn't started yet
+                    if (now < startTime) return enemy;
+
+                    const totalDuration = deadline - startTime;
+                    const timeLeft = deadline - now;
+                    const elapsed = now - startTime;
                     
                     // Progress 0 (Start) -> 1 (Deadline)
-                    let progress = Math.max(0, Math.min(1, elapsed / totalDuration));
+                    let progress = totalDuration > 0 ? Math.max(0, Math.min(1, elapsed / totalDuration)) : 1;
                     
                     // If deadline passed, stay at base
                     if (timeLeft <= 0) progress = 1;
 
                     // Interpolate Position
-                    // From initialPosition (e.g. radius 60) to Target (Radius 6 - edge of base)
                     if (enemy.initialPosition) {
                         const startX = enemy.initialPosition.x;
                         const startZ = enemy.initialPosition.z;
@@ -214,8 +229,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         needsSave = true;
                     } 
                     else if (!task.crisisTriggered) {
-                        const totalTime = task.deadline - task.createdAt;
-                        const elapsed = now - task.createdAt;
+                        const totalTime = task.deadline - task.startTime;
+                        const elapsed = now - task.startTime;
                         if (elapsed / totalTime > 0.75) {
                             task.crisisTriggered = true;
                             if (prev.activeAlert === AlertType.NONE) {
@@ -286,16 +301,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    const addTask = (title: string, deadline: number, priority: TaskPriority, subtasks: string[], durationMinutes: number, description?: string, parentId?: string) => {
+    const addTask = (title: string, startTime: number, deadline: number, priority: TaskPriority, subtasks: SubtaskDraft[], durationMinutes: number, description?: string, parentId?: string) => {
         ensureAudio();
         resetIdleTimer();
         playSfx('UI_CLICK');
         const taskId = generateId();
-        const subtaskObjects = subtasks.map(s => ({ id: generateId(), title: s, completed: false }));
+        const subtaskObjects = subtasks.map(s => ({ 
+            id: generateId(), 
+            title: s.title, 
+            completed: false, 
+            startTime: s.startTime, 
+            deadline: s.deadline 
+        }));
         
         const newTask: Task = {
             id: taskId,
             title,
+            startTime,
             deadline,
             estimatedDuration: durationMinutes,
             createdAt: Date.now(),
@@ -312,7 +334,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Spawn Main Enemy (Overlord)
         const mainEnemy: EnemyEntity = generateNemesis(taskId, priority, state.nemesisGraveyard || [], state.winStreak, undefined, undefined, durationMinutes);
         
-        // Spawn Subtask Enemies (Lieutenants/Minions) - Smaller, attached to same task
+        // Spawn Subtask Enemies (Lieutenants/Minions)
         const subtaskEnemies = subtaskObjects.map(st => 
             generateNemesis(taskId, TaskPriority.LOW, [], 0, st.id, st.title, 30)
         );
@@ -332,7 +354,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // --- NEW EDIT TASK FUNCTION ---
     const editTask = (taskId: string, data: TaskUpdateData) => {
         ensureAudio();
         resetIdleTimer();
@@ -347,25 +368,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             let newEnemiesToSpawn: EnemyEntity[] = [];
 
             if (data.subtasks) {
-                // Determine which are brand new
-                const existingTitles = new Set(existingTask.subtasks.map(s => s.title));
-                
-                updatedSubtasks = data.subtasks.map(title => {
-                    const existingSub = existingTask.subtasks.find(s => s.title === title);
-                    if (existingSub) return existingSub;
+                updatedSubtasks = data.subtasks.map(draft => {
+                    const existingSub = existingTask.subtasks.find(s => s.title === draft.title); // Match by title if ID unknown
+                    if (existingSub) {
+                        return { ...existingSub, deadline: draft.deadline || existingSub.deadline, startTime: draft.startTime || existingSub.startTime };
+                    }
                     
                     // New Subtask created via edit
                     const newSubId = generateId();
-                    const subMinion = generateNemesis(taskId, TaskPriority.LOW, [], 0, newSubId, title, 30);
+                    const subMinion = generateNemesis(taskId, TaskPriority.LOW, [], 0, newSubId, draft.title, 30);
                     newEnemiesToSpawn.push(subMinion);
                     
-                    return { id: newSubId, title, completed: false };
+                    return { id: newSubId, title: draft.title, completed: false, startTime: draft.startTime, deadline: draft.deadline };
                 });
             }
 
             const updatedTask: Task = {
                 ...existingTask,
                 title: data.title || existingTask.title,
+                startTime: data.startTime || existingTask.startTime,
                 deadline: data.deadline || existingTask.deadline,
                 priority: data.priority || existingTask.priority,
                 estimatedDuration: data.estimatedDuration || existingTask.estimatedDuration,
@@ -380,27 +401,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (data.title || data.priority || data.estimatedDuration) {
                 updatedEnemies = prev.enemies.map(e => {
                     if (e.taskId === taskId && !e.subtaskId) {
-                        // Recalculate Main Enemy Stats
                         const newPriority = data.priority || e.priority;
                         const newDuration = data.estimatedDuration || existingTask.estimatedDuration;
-                        
-                        // Recalculate Scale dynamically
-                        const newScale = 0.8 + (newPriority * 0.15) + ((newDuration / 60) * 0.1);
-
+                        // Recalculate Scale
+                        const newScale = 1.0 + ((newPriority - 1) * 1.5) + (newDuration / 60);
                         return {
                             ...e,
                             priority: newPriority,
                             maxHp: newPriority * 100,
                             hp: (e.hp / e.maxHp) * (newPriority * 100),
-                            scale: newScale,
-                            // Optional: Update title if main title changed? Keep random name for flavor.
+                            scale: Math.min(15, newScale),
                         }
                     }
                     return e;
                 });
             }
 
-            // Combine
             updatedEnemies = [...updatedEnemies, ...newEnemiesToSpawn];
 
             const nextState: GameState = {
@@ -421,6 +437,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    // ... (keep existing completeTask, failTask, completeSubtask, etc.)
     const completeTask = (taskId: string) => {
         ensureAudio();
         resetIdleTimer();
@@ -439,7 +456,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (mainEnemy) graveyardUpdate = [...graveyardUpdate, { name: mainEnemy.name, clan: mainEnemy.clan, deathTime: Date.now(), killer: 'HERO' as const }].slice(-10);
 
             const effects: VisualEffect[] = [];
-            // Explosion on main enemy location, or generic if missing
             const pos = mainEnemy ? mainEnemy.position : { x: 0, y: 0, z: 0 };
             effects.push({ id: generateId(), type: 'EXPLOSION', position: pos, timestamp: Date.now() });
             effects.push({ id: generateId(), type: 'TEXT_XP', position: { ...pos, y: 3 }, text: `+${xpGain} XP`, timestamp: Date.now() });
@@ -472,7 +488,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 era: newEra,
                 maxBaseHp: ERA_CONFIG[newEra].maxBaseHp + (prev.structures.wallsLevel * 50),
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
-                // Remove ALL enemies associated with this task (main + subtasks)
                 enemies: prev.enemies.filter(e => e.taskId !== taskId),
                 minions: [...(prev.minions || []), newMinion], 
                 effects: [...prev.effects, ...effects],
@@ -543,19 +558,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const task = prev.tasks.find(t => t.id === taskId);
             if (!task) return prev;
             
-            // Find the specific enemy representing this subtask
             const subtaskEnemy = prev.enemies.find(e => e.subtaskId === subtaskId);
             const mainEnemy = prev.enemies.find(e => e.taskId === taskId && !e.subtaskId);
 
             const effects: VisualEffect[] = [];
             
-            // Kill the subtask minion visually
             if (subtaskEnemy) {
                 effects.push({ id: generateId(), type: 'EXPLOSION', position: subtaskEnemy.position, timestamp: Date.now() });
                 effects.push({ id: generateId(), type: 'TEXT_DAMAGE', position: { ...subtaskEnemy.position, y: 2 }, text: "SLAIN", timestamp: Date.now() });
             }
 
-            // Damage the main boss too? Optional. Let's just damage boss slightly.
             let updatedEnemies = prev.enemies.filter(e => e.subtaskId !== subtaskId);
             
             if (mainEnemy) {
@@ -577,7 +589,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // ... (rest of the file remains unchanged: interactWithFaction, buyItem, castSpell, etc.)
     const interactWithFaction = (factionId: FactionKey, action: 'GIFT' | 'TRADE' | 'INSULT' | 'PROPAGANDA') => {
         ensureAudio();
         resetIdleTimer();
@@ -654,7 +665,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (state.mana < spell.cost) { playSfx('ERROR'); return; }
         
-        // Target Logic
         let success = false;
         let msg = "";
         let newEnemies = [...state.enemies];

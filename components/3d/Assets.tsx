@@ -517,32 +517,48 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
     if (race === 'DWARF') color = '#93c5fd';
     if (race === 'CONSTRUCT') color = '#0ea5e9';
     if (race === 'HUMAN') color = priority === TaskPriority.HIGH ? '#fca5a5' : '#fbbf24';
+    
+    // VISUAL DISTINCTION FOR RACES (Geometry)
+    // Construct = Blocky
+    // Demon = Spiky
+    // Human/Elf = Round/Cone
+    const isConstruct = race === 'CONSTRUCT';
+    const isDemon = race === 'DEMON';
+
     const [hovered, setHover] = useState(false);
     return (
         <group>
-            {/* INVISIBLE HITBOX for easier hovering */}
+            {/* INVISIBLE HITBOX for easier hovering - Scaled to match the giant size */}
             <mesh 
                 visible={false} 
                 onClick={(e) => { e.stopPropagation(); onClick && onClick(); }} 
                 onPointerOver={(e) => { e.stopPropagation(); setHover(true); }} 
                 onPointerOut={() => setHover(false)}
             >
-                <cylinderGeometry args={[1 * finalScale, 1 * finalScale, 3 * finalScale]} />
+                <cylinderGeometry args={[2 * finalScale, 2 * finalScale, 6 * finalScale]} />
                 <meshBasicMaterial transparent opacity={0} />
             </mesh>
 
-            <group position={[0, 0, 0]} scale={[finalScale, finalScale, finalScale]}>
-                <mesh position={[0, 0.8, 0]} castShadow><dodecahedronGeometry args={[0.5, 0]} /><meshStandardMaterial color="#0f0f0f" roughness={0.9} /></mesh>
+            <group position={[0, finalScale - 1, 0]} scale={[finalScale, finalScale, finalScale]}>
+                {/* BASE BODY */}
+                <mesh position={[0, 0.8, 0]} castShadow>
+                    {isConstruct ? <boxGeometry args={[0.8, 0.8, 0.8]} /> : isDemon ? <octahedronGeometry args={[0.5]} /> : <dodecahedronGeometry args={[0.5, 0]} />}
+                    <meshStandardMaterial color="#0f0f0f" roughness={0.9} />
+                </mesh>
+                
+                {/* LIMBS / FEATURES */}
                 <mesh position={[0.3, 1, 0]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} /></mesh>
                 <mesh position={[-0.3, 0.6, 0.2]} rotation={[0,0,0.5]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} /></mesh>
+                
+                {/* Selection Ring */}
                 {isSelected && <mesh position={[0, 0.1, 0]} rotation={[-Math.PI/2, 0, 0]}><ringGeometry args={[0.8, 0.9, 32]} /><meshBasicMaterial color="#ef4444" /></mesh>}
             </group>
             
-            {/* NAME TAG */}
+            {/* NAME TAG - Lifted higher based on scale */}
              <Html 
-                position={[0, finalScale * 2.5 + 0.5, 0]} 
+                position={[0, finalScale * 3.5, 0]} 
                 center 
-                distanceFactor={15} 
+                distanceFactor={20} 
                 style={{pointerEvents: 'none'}}
             >
                 <div className={`

@@ -106,18 +106,28 @@ export const generateNemesis = (taskId: string, priority: TaskPriority, graveyar
                factionKey === 'SOL' ? `A zealous knight who believes your procrastination is a sin against Order.` : 
                `${factionData.desc} (${personality.toLowerCase()})`;
 
-    // Scale Logic: 
-    // Subtask = 0.6 fixed
-    // Main Task = Base 0.8 + Priority (0.1 per level) + Duration (0.1 per hour)
+    // --- MASSIVE SCALE LOGIC ---
     let scale = 0.6;
     if (!isSubtask) {
-        scale = 0.8 + (priority * 0.15) + ((durationMinutes / 60) * 0.1); 
+        // Base scale starts at 1
+        // Priority adds massive bulk: LOW=0, MED=1.5, HIGH=3.0
+        const priorityBonus = (priority - 1) * 1.5;
+        
+        // Duration adds exponential bulk: 
+        // 60m = +1
+        // 180m (3h) = +3
+        // 300m (5h) = +5
+        const timeBonus = durationMinutes / 60;
+
+        scale = 1.0 + priorityBonus + timeBonus;
+        
+        // Cap for sanity, but keep it huge. A 3 hour high priority task = 1 + 3 + 3 = 7.0 scale.
+        // A standard villager is scale 1. This is a TITAN.
+        scale = Math.min(15, scale); 
     }
 
     // Position logic: Spawn far away. Movement logic handles approach.
-    // If subtask, spawn slightly offset from main logic (handled later or grouped)
-    // Here we just give a generic spawn.
-    const spawnPos = generateSpawnPosition(45, 60); // Start far away (45-60 units)
+    const spawnPos = generateSpawnPosition(45, 60); 
 
     return {
         id: generateId(), 
@@ -259,14 +269,10 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
         const urlObj = new URL(clean);
         const lowerUrl = clean.toLowerCase();
 
-        // 1. DIRECT IMAGE CHECK (Absolute Priority)
-        // If it looks like an image, treat it as an image immediately.
         if (lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/)) {
              return { type: 'IMAGE', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
         }
 
-        // 2. YOUTUBE (Whitelisted as VIDEO)
-        // Only YouTube is trusted to be embeddable via iframe cleanly
         if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
             let id = '';
             if (urlObj.pathname.includes('/shorts/')) {
@@ -287,9 +293,6 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
             }
         }
 
-        // 3. SOCIAL / PORTAL FALLBACK
-        // EVERYTHING ELSE defaults to a Social Card. 
-        // We do NOT attempt to iframe Instagram, Pinterest, TikTok, etc. directly.
         let platform: any = 'OTHER';
         if (urlObj.hostname.includes('instagram')) platform = 'INSTAGRAM';
         else if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) platform = 'PINTEREST';
@@ -298,14 +301,12 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
 
         return {
             type: 'SOCIAL',
-            embedUrl: clean, // We store the link to open it in a new tab
+            embedUrl: clean, 
             originalUrl: clean,
             platform: platform
         };
 
     } catch (e) { 
-        // If URL parsing fails, we still return a generic social card with the raw text
-        // This ensures we never fallback to default YouTube videos if the user provided SOMETHING.
         return { type: 'SOCIAL', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
     }
 };
@@ -341,7 +342,6 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
         if (response.ok) {
             const text = await response.text();
             
-            // Regex to find http/https links
             const urlRegex = /(https?:\/\/[^\s",]+)/g;
             const allMatches = text.match(urlRegex);
             const validItems: VisionContent[] = [];

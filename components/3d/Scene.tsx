@@ -1,7 +1,7 @@
 
 import React, { useMemo, Suspense, useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { MapControls, Stars, PerspectiveCamera, Ring, Sparkles, Instances, Instance, Html } from '@react-three/drei';
+import { MapControls, Stars, PerspectiveCamera, Ring, Sparkles, Instances, Instance, Html, Float } from '@react-three/drei';
 import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
 import { VisualEffectsRenderer } from './VisualEffects';
@@ -96,7 +96,7 @@ const VegetationSystem = () => {
     );
 };
 
-const ProceduralMap = ({ level, era }: { level: number, era: Era }) => {
+const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, groundColor: string }) => {
     // Visibility Radius based on Level. 
     const viewRadius = 40 + (level * 2);
     
@@ -138,11 +138,11 @@ const ProceduralMap = ({ level, era }: { level: number, era: Era }) => {
 
     return (
         <group>
-            {/* Infinite Floor Plane - Darker, richer ground */}
+            {/* Infinite Floor Plane - DYNAMIC COLOR */}
              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
                 <planeGeometry args={[400, 400, 128, 128]} />
                 <meshStandardMaterial 
-                    color={era === Era.KING ? '#0a0505' : '#1c1917'} 
+                    color={groundColor} 
                     roughness={1} 
                     metalness={0.1}
                 />
@@ -218,11 +218,10 @@ const WeatherSystem = ({ type }: { type: WeatherType }) => {
     return null;
 }
 
-const AtmosphericController = () => {
+const GlobalSceneController = () => {
     const { state } = useGame();
     const [currentTime, setCurrentTime] = useState(new Date());
 
-    // Update time every minute
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
         return () => clearInterval(timer);
@@ -247,78 +246,65 @@ const AtmosphericController = () => {
     const isDusk = hours >= 17 && hours < 19;
 
     // --- COLOR PALETTES & INTENSITIES ---
-    // Default: BRIGHT DAY (e.g. 9:47 AM)
-    let sunColor = '#fbbf24'; // Warm Sunlight
-    let skyColor = '#7dd3fc'; // Bright Sky Blue
-    let fogColor = '#bae6fd'; // Light Blue Fog
-    let intensity = 2.5; // Very bright sun
-    let ambientIntensity = 0.8; // Bright shadows
-    let bgColor = '#38bdf8'; // Blue Background
+    let sunColor = '#fbbf24'; 
+    let skyColor = '#7dd3fc'; 
+    let fogColor = '#bae6fd'; 
+    let intensity = 4.0; 
+    let ambientIntensity = 1.0; 
+    let bgColor = '#38bdf8'; 
+    let groundColor = '#78716c'; 
 
     if (isDawn) {
-        sunColor = '#f97316'; // Orange
+        sunColor = '#f97316'; 
         skyColor = '#fdba74';
         fogColor = '#fed7aa';
         bgColor = '#ffedd5';
-        intensity = 1.5;
-        ambientIntensity = 0.5;
+        intensity = 2.0;
+        ambientIntensity = 0.6;
+        groundColor = '#a8a29e';
     } else if (isDusk) {
-        sunColor = '#ef4444'; // Red/Pink
+        sunColor = '#ef4444'; 
         skyColor = '#c084fc';
         fogColor = '#4c1d95';
         bgColor = '#581c87';
-        intensity = 1.2;
-        ambientIntensity = 0.4;
+        intensity = 1.5;
+        ambientIntensity = 0.5;
+        groundColor = '#57534e';
     } else if (isNight) {
-        sunColor = '#bfdbfe'; // Moon
+        sunColor = '#bfdbfe'; 
         skyColor = '#1e3a8a'; 
         fogColor = '#0f172a'; 
         bgColor = '#050202';
-        intensity = 1.0; 
+        intensity = 0.5; 
         ambientIntensity = 0.2; 
+        groundColor = '#1c1917'; 
     }
 
-    // --- OVERRIDES (Magic takes precedence over Time) ---
     if (isRitual) {
         sunColor = '#a855f7'; 
         fogColor = '#2e1065';
         bgColor = '#2e1065';
-        intensity = 0.5;
+        intensity = 0.8;
+        groundColor = '#2e1065';
     } else if (isEclipse) {
         sunColor = '#ff0000'; 
         fogColor = '#110000';
         bgColor = '#000000';
-        intensity = 0.1; // Dark sun
+        intensity = 0.2; 
+        groundColor = '#000000';
     }
 
-    const fogDist = 40 + (state.playerLevel * 4);
+    const fogDist = 30 + (state.playerLevel * 2); 
 
     return (
         <>
             <color attach="background" args={[bgColor]} />
-            
             <WeatherSystem type={weather} />
-            
             {weather === 'CLEAR' && <fog attach="fog" args={[fogColor, 10, isNight ? fogDist * 1.5 : fogDist]} />}
-            
-            <hemisphereLight 
-                intensity={ambientIntensity} 
-                color={skyColor} 
-                groundColor={isNight ? '#334155' : '#78716c'} 
-            />
-            
-            <directionalLight 
-                position={[sunX, sunY, sunZ]} 
-                intensity={intensity} 
-                castShadow 
-                shadow-mapSize={[2048, 2048]} 
-                color={sunColor} 
-                shadow-bias={-0.0005}
-            />
-            
-            {isEclipse && (
-                 <pointLight position={[0, 20, 0]} intensity={2} color="#ff0000" distance={100} decay={2} />
-            )}
+            <hemisphereLight intensity={ambientIntensity} color={skyColor} groundColor={isNight ? '#334155' : '#78716c'} />
+            <directionalLight position={[sunX, sunY, sunZ]} intensity={intensity} castShadow shadow-mapSize={[2048, 2048]} color={sunColor} shadow-bias={-0.0005} />
+            {isEclipse && <pointLight position={[0, 20, 0]} intensity={2} color="#ff0000" distance={100} decay={2} />}
+            <ProceduralMap level={state.playerLevel} era={state.era} groundColor={groundColor} />
         </>
     )
 }
@@ -331,12 +317,26 @@ const RitualCircle = () => {
 
     return (
         <group ref={ref} position={[0, 0.1, 0]}>
-            <Ring args={[8, 8.5, 64]} rotation={[-Math.PI/2, 0, 0]}>
-                <meshStandardMaterial color="#c084fc" emissive="#7e22ce" emissiveIntensity={2} transparent opacity={0.6} side={THREE.DoubleSide} />
-            </Ring>
-             <Ring args={[12, 12.2, 64]} rotation={[-Math.PI/2, 0, 0]}>
-                <meshStandardMaterial color="#4c1d95" emissive="#4c1d95" emissiveIntensity={1} transparent opacity={0.4} side={THREE.DoubleSide} />
-            </Ring>
+            <Ring args={[8, 8.5, 64]} rotation={[-Math.PI/2, 0, 0]}><meshStandardMaterial color="#c084fc" emissive="#7e22ce" emissiveIntensity={2} transparent opacity={0.6} side={THREE.DoubleSide} /></Ring>
+             <Ring args={[12, 12.2, 64]} rotation={[-Math.PI/2, 0, 0]}><meshStandardMaterial color="#4c1d95" emissive="#4c1d95" emissiveIntensity={1} transparent opacity={0.4} side={THREE.DoubleSide} /></Ring>
+        </group>
+    )
+}
+
+// Visual for FUTURE enemies
+const PortalRift = ({ position }: { position: {x:number, y:number, z:number} }) => {
+    return (
+        <group position={[position.x, 1, position.z]}>
+            <Float speed={4} rotationIntensity={0.5} floatIntensity={0.5}>
+                <mesh rotation={[0,0,Math.PI/4]}>
+                    <ringGeometry args={[1, 1.2, 3]} />
+                    <meshStandardMaterial color="#000" emissive="#4c1d95" emissiveIntensity={2} />
+                </mesh>
+            </Float>
+            <Sparkles count={20} scale={3} size={2} color="#a855f7" />
+            <Html position={[0, 2, 0]} center distanceFactor={10}>
+                <div className="text-[10px] text-purple-300 font-mono bg-black/50 px-2 rounded border border-purple-900">MANIFESTING...</div>
+            </Html>
         </group>
     )
 }
@@ -352,6 +352,13 @@ const LoaderFallback = () => (
 
 export const Scene: React.FC = () => {
   const { state, selectEnemy, interactWithNPC } = useGame();
+  const [now, setNow] = useState(Date.now());
+
+  // Update local time for portal logic
+  useEffect(() => {
+      const t = setInterval(() => setNow(Date.now()), 1000);
+      return () => clearInterval(t);
+  }, []);
   
   if (!state) return null;
 
@@ -364,19 +371,13 @@ export const Scene: React.FC = () => {
 
   return (
     <Canvas shadows={false} dpr={[1, 1.5]} gl={{ antialias: true }} camera={{ position: [15, 15, 15], fov: 45 }}>
-      {/* Dynamic background controlled by AtmosphericController, no static color here */}
-      
-      {/* Backup Lights - Guarantees scene visibility even if Atmos fails */}
       <ambientLight intensity={0.2} />
-      <pointLight position={[10, 20, 10]} intensity={0.5} />
       
       <Suspense fallback={<LoaderFallback />}>
-          <AtmosphericController />
+          <GlobalSceneController />
           {isHighQuality && <Stars radius={200} depth={50} count={5000} factor={4} saturation={0} fade speed={0.5} />}
           
           <VazarothTitan />
-          
-          <ProceduralMap level={state.playerLevel} era={state.era} />
           {isRitual && <RitualCircle />}
 
           <EntityRenderer 
@@ -404,6 +405,19 @@ export const Scene: React.FC = () => {
 
           {enemies.map(enemy => {
             const task = state.tasks.find(t => t.id === enemy.taskId);
+            
+            // Check Start Time logic
+            let startTime = task ? task.startTime : 0;
+            if (enemy.subtaskId && task) {
+                const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
+                if (sub && sub.startTime) startTime = sub.startTime;
+            }
+
+            // If not yet started, show Portal instead of Enemy
+            if (now < startTime) {
+                return <PortalRift key={enemy.id} position={enemy.position} />;
+            }
+
             const activeSubtasks = task ? task.subtasks.filter(s => !s.completed).length : 0;
             return (
                 <EntityRenderer
@@ -423,7 +437,6 @@ export const Scene: React.FC = () => {
           })}
 
           {population.map((npc, i) => {
-              // Initial scattering, EntityRenderer will handle wandering from here
               const angle = (i * 137.5) * (Math.PI / 180);
               const r = 6 + (i % 5); 
               const x = Math.cos(angle)*r;
@@ -442,7 +455,6 @@ export const Scene: React.FC = () => {
               );
           })}
 
-          {/* Add some ambient animals */}
           {Array.from({length: 5}).map((_, i) => (
               <EntityRenderer 
                 key={`stag-${i}`}

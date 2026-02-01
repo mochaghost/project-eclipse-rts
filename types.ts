@@ -96,12 +96,15 @@ export interface Subtask {
   id: string;
   title: string;
   completed: boolean;
+  startTime?: number; // New: When this specific minion appears
+  deadline?: number; // New: When this specific minion must die
 }
 
 export interface Task {
   id: string;
   title: string;
   description?: string; 
+  startTime: number; // New: When the main enemy spawns
   deadline: number;
   estimatedDuration: number;
   createdAt: number;
@@ -265,11 +268,19 @@ export interface GameState {
   settings: GameSettings;
 }
 
+// Helper type for subtask creation
+export interface SubtaskDraft {
+    title: string;
+    startTime?: number;
+    deadline?: number;
+}
+
 export interface TaskUpdateData {
     title?: string;
+    startTime?: number;
     deadline?: number;
     priority?: TaskPriority;
-    subtasks?: string[];
+    subtasks?: SubtaskDraft[];
     description?: string;
     estimatedDuration?: number;
     parentId?: string;
@@ -277,7 +288,7 @@ export interface TaskUpdateData {
 
 export interface GameContextType {
   state: GameState;
-  addTask: (title: string, deadline: number, priority: TaskPriority, subtasks: string[], durationMinutes: number, description?: string, parentId?: string) => void;
+  addTask: (title: string, startTime: number, deadline: number, priority: TaskPriority, subtasks: SubtaskDraft[], durationMinutes: number, description?: string, parentId?: string) => void;
   editTask: (taskId: string, data: TaskUpdateData) => void; 
   moveTask: (taskId: string, newDeadline: number) => void;
   completeTask: (taskId: string) => void;
