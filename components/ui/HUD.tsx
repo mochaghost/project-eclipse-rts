@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2 } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 
@@ -114,10 +114,28 @@ const RealmStatusWidget: React.FC = () => {
 
 export const HUD: React.FC = () => {
   const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, toggleDiplomacy } = useGame();
+  const [cinematic, setCinematic] = useState(false);
   
   const isConnected = state.syncConfig?.isConnected;
   const hpPercent = (state.heroHp / state.maxHeroHp) * 100;
   const basePercent = (state.baseHp / state.maxBaseHp) * 100;
+
+  if (cinematic) {
+      return (
+          <div className="absolute inset-0 pointer-events-none z-50">
+               <button onClick={() => setCinematic(false)} className="absolute bottom-6 right-6 pointer-events-auto text-stone-500 hover:text-white bg-black/50 p-2 rounded-full border border-stone-700">
+                   <Minimize2 size={24} />
+               </button>
+               {state.activeMapEvent === 'VISION_RITUAL' && (
+                <div className="absolute top-24 right-6 z-50 pointer-events-auto">
+                    <button onClick={closeVision} className="bg-purple-900 text-white border border-purple-400 px-4 py-2 rounded shadow-lg flex items-center gap-2">
+                        <Eye size={16} /> Exit Vision
+                    </button>
+                </div>
+              )}
+          </div>
+      )
+  }
 
   return (
     <div className="absolute inset-0 pointer-events-none p-4 md:p-6 flex flex-col justify-between z-10">
@@ -143,11 +161,12 @@ export const HUD: React.FC = () => {
              <span>LVL {state.playerLevel}</span>
              <span className="text-[#fbbf24] flex items-center gap-1 font-bold"><Coins size={12} /> {state.gold}g</span>
              {isConnected && <span className="text-green-500 flex items-center gap-1 animate-pulse"><Cloud size={12} /> SYNC</span>}
-             <span className="text-stone-600">v0.0.2</span>
+             <span className="text-stone-600">v0.0.3</span>
           </div>
         </div>
         
         <div className="flex gap-2">
+             <button onClick={() => setCinematic(true)} className="bg-stone-950 border border-stone-800 text-stone-500 p-2 md:p-3 hover:bg-stone-900 hover:text-white" title="Cinematic Mode"><Maximize2 size={20} /></button>
              <button onClick={toggleSettings} className="bg-stone-900 border border-stone-600 text-stone-400 p-2 md:p-3 hover:bg-stone-800" title="Settings"><Settings size={20} /></button>
              <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Audit"><PieChart size={20} /></button>
              <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Map & Diplomacy"><MapIcon size={20} /></button>
