@@ -235,7 +235,11 @@ export const HUD: React.FC = () => {
              <span>ERA: <span className="text-yellow-500">{state.era}</span></span>
              <span>LVL {state.playerLevel}</span>
              <span className="text-[#fbbf24] flex items-center gap-1 font-bold"><Coins size={10} /> {state.gold}g</span>
-             {isConnected && <span className="text-green-500 flex items-center gap-1 animate-pulse"><Cloud size={10} /> SYNC</span>}
+             {isConnected && (
+                 <span className="text-green-500 flex items-center gap-1 animate-pulse border border-green-900/50 px-2 bg-green-950/20 rounded">
+                     <Cloud size={10} /> {state.syncConfig?.roomId}
+                 </span>
+             )}
           </div>
         </div>
         

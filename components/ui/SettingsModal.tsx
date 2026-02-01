@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy, Smartphone, Move, Share2 } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy, Smartphone, Move, Share2, UploadCloud, DownloadCloud, AlertTriangle } from 'lucide-react';
 import { convertToEmbedUrl } from '../../utils/generators';
-import { DEFAULT_FIREBASE_CONFIG } from '../../services/firebase';
+import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase'; // Added pushToCloud import
 
 export const SettingsModal: React.FC = () => {
     const { state, toggleSettings, exportSave, importSave, clearSave, connectToCloud, disconnectCloud, updateSettings, triggerEvent } = useGame();
@@ -35,37 +35,19 @@ export const SettingsModal: React.FC = () => {
         if (savedRoom) setRoomId(savedRoom);
     }, []);
 
-    const parseConfig = () => {
-        try {
-            let clean = jsonPaste.trim();
-            if (clean.includes("=")) {
-                clean = clean.substring(clean.indexOf("=") + 1);
-            }
-            if (clean.endsWith(";")) {
-                clean = clean.slice(0, -1);
-            }
-            try {
-                const parsed = JSON.parse(clean);
-                setConfig({ ...config, ...parsed });
-                setJsonPaste('');
-                alert("Config Auto-Filled!");
-                return;
-            } catch (e) {
-                const fixed = clean.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2": ').replace(/'/g, '"');
-                const parsed = JSON.parse(fixed);
-                setConfig({ ...config, ...parsed });
-                setJsonPaste('');
-                alert("Config Auto-Filled!");
-            }
-        } catch (e) {
-            alert("Could not parse config.");
-        }
-    };
-
     const copySyncLink = () => {
         const url = `${window.location.origin}${window.location.pathname}?room=${state.syncConfig?.roomId}`;
         navigator.clipboard.writeText(url);
         alert("Magic Link copied! Open this on your iPad to auto-sync.");
+    };
+
+    // MANUAL SYNC HANDLERS
+    const handleForcePush = () => {
+        if (!state.syncConfig?.roomId) return;
+        if (confirm("FORCE UPLOAD: This will overwrite the Cloud data with the data on THIS device. Are you sure?")) {
+            pushToCloud(state.syncConfig.roomId, state);
+            alert("Data pushed to Cloud. Other devices should update shortly.");
+        }
     };
 
     if (!state.isSettingsOpen) return null;
@@ -279,7 +261,7 @@ export const SettingsModal: React.FC = () => {
                     ) : (
                         // Cloud / Data Tab
                         state.syncConfig?.isConnected ? (
-                            <div className="text-center py-10">
+                            <div className="text-center py-6">
                                 <div className="text-green-500 text-xl font-bold mb-4 font-serif tracking-widest">CONNECTED TO VOID NET</div>
                                 <div className="text-xs font-mono text-stone-500 mb-8 p-2 bg-black inline-block border border-stone-800">Room: {state.syncConfig.roomId}</div>
                                 
@@ -305,9 +287,23 @@ export const SettingsModal: React.FC = () => {
                                     >
                                         <Share2 size={16} /> COPY MAGIC LINK
                                     </button>
-                                    <p className="text-[9px] text-emerald-600/70 text-center">
-                                        Send this link to your iPad/Mobile to auto-connect instantly.
-                                    </p>
+
+                                    {/* MANUAL SYNC ACTIONS */}
+                                    <div className="bg-[#151210] p-4 border border-stone-800 space-y-3">
+                                        <p className="text-[9px] text-stone-500 uppercase font-bold text-center mb-2 flex items-center justify-center gap-2">
+                                            <AlertTriangle size={10} className="text-yellow-600"/> Force Sync Actions
+                                        </p>
+                                        
+                                        <button 
+                                            onClick={handleForcePush}
+                                            className="w-full bg-blue-900/30 border border-blue-800 text-blue-300 py-2 text-xs font-bold hover:bg-blue-900/50 flex items-center justify-center gap-2"
+                                        >
+                                            <UploadCloud size={14} /> PUSH LOCAL TO CLOUD
+                                        </button>
+                                        <p className="text-[9px] text-stone-600 text-center leading-tight">
+                                            Use this on the device that has the correct data (e.g., your PC).
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div>
