@@ -1,4 +1,5 @@
 
+
 export const PALETTE = {
   VOID: "#050202",
   GRASS_DARK: "#142808",
@@ -40,6 +41,14 @@ export const LEVEL_THRESHOLDS = {
   KING: 60,
   GOD: 80
 };
+
+// --- SPELLS ---
+export const SPELLS = [
+  { id: 'SMITE', name: 'Void Smite', cost: 25, cooldown: 5000, icon: 'Zap', desc: 'Deals 50 damage to target.', targetReq: true },
+  { id: 'HEAL', name: 'Mend Flesh', cost: 40, cooldown: 10000, icon: 'Heart', desc: 'Restores 30 HP to Hero.', targetReq: false },
+  { id: 'FREEZE', name: 'Chronos Lock', cost: 60, cooldown: 60000, icon: 'Snowflake', desc: 'Adds 30 mins to target task.', targetReq: true },
+  { id: 'RAGE', name: 'Titan Strength', cost: 80, cooldown: 30000, icon: 'Sword', desc: 'Next completed task gives 2x XP.', targetReq: false }
+];
 
 // --- DARK SOULS STYLE ITEM LORE (TIERS 1-8) ---
 export const EQUIPMENT_LORE = {

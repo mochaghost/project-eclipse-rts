@@ -1,10 +1,11 @@
+
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualEffect, FirebaseConfig, MapEventType, ShopItem, EnemyEntity, GameSettings, FactionKey, MinionEntity, WeatherType } from '../types';
 import { loadGame, saveGame } from '../utils/saveSystem';
 import { generateId, generateNemesis, generateSpawnPosition, getSageWisdom, getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateHeroEquipment, generateLoot } from '../utils/generators';
 import { simulateReactiveTurn, initializePopulation, updateRealmStats } from '../utils/worldSim';
 import { initFirebase, pushToCloud, subscribeToCloud, disconnect } from '../services/firebase';
-import { ERA_CONFIG, LEVEL_THRESHOLDS } from '../constants';
+import { ERA_CONFIG, LEVEL_THRESHOLDS, SPELLS } from '../constants';
 import { playSfx, initAudio, startAmbientDrone, setVolume } from '../utils/audio';
 
 export const SHOP_ITEMS: ShopItem[] = [
@@ -99,6 +100,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 let newState = { ...prev };
                 let needsSave = false;
                 const effects: VisualEffect[] = [...prev.effects];
+
+                // REGEN MANA
+                if (newState.mana < newState.maxMana) {
+                    newState.mana = Math.min(newState.maxMana, newState.mana + 0.05); // Slow trickle
+                }
                 
                 // MINION LOGIC (The Army)
                 let remainingEnemies = [...prev.enemies];
@@ -476,6 +482,78 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    const castSpell = (spellId: string) => {
+        ensureAudio();
+        resetIdleTimer();
+        const spell = SPELLS.find(s => s.id === spellId);
+        if (!spell) return;
+        
+        if (state.mana < spell.cost) { playSfx('ERROR'); return; }
+        
+        // Target Logic
+        let success = false;
+        let msg = "";
+        let newEnemies = [...state.enemies];
+        let newTasks = [...state.tasks];
+        const effects: VisualEffect[] = [];
+        
+        if (spell.id === 'SMITE') {
+            if (!state.selectedEnemyId) { playSfx('ERROR'); return; }
+            const enemy = newEnemies.find(e => e.id === state.selectedEnemyId);
+            if (enemy) {
+                const dmg = 50;
+                enemy.hp = Math.max(0, enemy.hp - dmg);
+                effects.push({ id: generateId(), type: 'TEXT_DAMAGE', position: { ...enemy.position, y: 3 }, text: `-${dmg} (VOID)`, timestamp: Date.now() });
+                effects.push({ id: generateId(), type: 'EXPLOSION', position: enemy.position, timestamp: Date.now() });
+                success = true;
+                msg = `Cast Smite on ${enemy.name}.`;
+            }
+        }
+        else if (spell.id === 'FREEZE') {
+             if (!state.selectedEnemyId) { playSfx('ERROR'); return; }
+             const enemy = newEnemies.find(e => e.id === state.selectedEnemyId);
+             if (enemy) {
+                 const task = newTasks.find(t => t.id === enemy.taskId);
+                 if (task) {
+                     task.deadline += 30 * 60 * 1000; // +30 mins
+                     effects.push({ id: generateId(), type: 'TEXT_LOOT', position: { ...enemy.position, y: 3 }, text: "TIME EXTENDED", timestamp: Date.now() });
+                     success = true;
+                     msg = `Froze time for ${task.title}.`;
+                 }
+             }
+        }
+        else if (spell.id === 'HEAL') {
+            const heal = 30;
+            const newHp = Math.min(state.maxHeroHp, state.heroHp + heal);
+            // Must actually heal something to spend mana? No, mana is spent on cast attempted usually.
+            // But let's allow it.
+            setState(p => ({ ...p, heroHp: newHp }));
+            effects.push({ id: generateId(), type: 'TEXT_GOLD', position: { x: 4, y: 3, z: 4 }, text: `+${heal} HP`, timestamp: Date.now() });
+            success = true;
+            msg = "Mended flesh.";
+        }
+        else if (spell.id === 'RAGE') {
+            // Not implemented fully yet, maybe adds a buff state?
+            // For now, let's make it grant XP
+            setState(p => ({ ...p, xp: p.xp + 50 }));
+             effects.push({ id: generateId(), type: 'TEXT_XP', position: { x: 4, y: 3, z: 4 }, text: `+50 XP`, timestamp: Date.now() });
+            success = true;
+            msg = "Titan Strength channeled.";
+        }
+
+        if (success) {
+            playSfx('UI_CLICK'); // Magic sound later
+            setState(prev => ({
+                ...prev,
+                mana: prev.mana - spell.cost,
+                enemies: newEnemies,
+                tasks: newTasks,
+                effects: [...prev.effects, ...effects],
+                history: [{ id: generateId(), timestamp: Date.now(), type: 'MAGIC', message: msg, details: spell.desc }, ...prev.history]
+            }));
+        }
+    }
+
     const connectToCloud = async (config: FirebaseConfig, roomId: string) => {
         ensureAudio();
         resetIdleTimer();
@@ -585,7 +663,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         closeVision: () => setState(p => ({ ...p, activeMapEvent: 'NONE', activeVisionVideo: null })),
         rerollVision: () => triggerEvent('VISION_RITUAL'),
         interactWithNPC: (id) => { ensureAudio(); playSfx('UI_HOVER'); },
-        updateSettings
+        updateSettings,
+        castSpell
     };
 
     return <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>;

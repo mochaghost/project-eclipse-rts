@@ -119,7 +119,7 @@ const LoadingScreen = () => {
     useEffect(() => {
         const timer = setInterval(() => {
             setStep(s => s < messages.length ? s + 1 : s);
-        }, 800);
+        }, 150); // Speed up loading
         return () => clearInterval(timer);
     }, []);
 
@@ -147,8 +147,7 @@ const App: React.FC = () => {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Add a slight delay to allow the loading screen to be appreciated
-    const t = setTimeout(() => setMounted(true), 3000);
+    const t = setTimeout(() => setMounted(true), 100); // Almost instant load for debug
     return () => clearTimeout(t);
   }, []);
 

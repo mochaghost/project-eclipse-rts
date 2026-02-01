@@ -1,7 +1,7 @@
+
 import React, { useMemo, Suspense, useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { MapControls, Stars, PerspectiveCamera, Ring, Sparkles, Instances, Instance, Html } from '@react-three/drei';
-import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
 import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
 import { VisualEffectsRenderer } from './VisualEffects';
@@ -342,20 +342,6 @@ const LoaderFallback = () => (
     </Html>
 )
 
-const PostProcessingEffects = () => {
-    const { state } = useGame();
-    const isLowQual = state.settings?.graphicsQuality === 'LOW';
-    if(isLowQual) return null;
-
-    return (
-        <EffectComposer enableNormalPass={false}>
-            <Bloom luminanceThreshold={1} mipmapBlur intensity={1.5} radius={0.4} />
-            <Noise opacity={0.05} />
-            <Vignette eskil={false} offset={0.1} darkness={1.1} />
-        </EffectComposer>
-    )
-}
-
 export const Scene: React.FC = () => {
   const { state, selectEnemy, interactWithNPC } = useGame();
   
@@ -369,9 +355,12 @@ export const Scene: React.FC = () => {
   const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
 
   return (
-    <Canvas shadows={isHighQuality} dpr={[1, isHighQuality ? 1.5 : 1]} gl={{ antialias: false, stencil: false, depth: true }}>
+    <Canvas shadows={false} dpr={[1, 1.5]} gl={{ antialias: true }} camera={{ position: [15, 15, 15], fov: 45 }}>
       <color attach="background" args={['#050202']} />
-      <PerspectiveCamera makeDefault position={[20, 20, 20]} fov={35} onUpdate={c => c.lookAt(0, 0, 0)} />
+      
+      {/* Backup Lights - Guarantees scene visibility even if Atmos fails */}
+      <ambientLight intensity={0.2} />
+      <pointLight position={[10, 20, 10]} intensity={0.5} />
       
       <Suspense fallback={<LoaderFallback />}>
           <AtmosphericController />
@@ -458,14 +447,7 @@ export const Scene: React.FC = () => {
           <VisualEffectsRenderer />
           <VazarothEffects />
           
-          <MapControls 
-            enableDamping 
-            dampingFactor={0.05} 
-            minDistance={10} 
-            maxDistance={50 + (state.playerLevel * 5)} 
-            maxPolarAngle={Math.PI / 2.1} 
-          />
-          <PostProcessingEffects />
+          <MapControls makeDefault maxPolarAngle={Math.PI / 2.2} />
       </Suspense>
     </Canvas>
   );

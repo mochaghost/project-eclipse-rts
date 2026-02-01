@@ -4,7 +4,7 @@ import { generateId } from './generators';
 import { FACTIONS } from '../constants';
 
 const SAVE_KEY = 'PROJECT_ECLIPSE_SAVE_V1';
-const CURRENT_VERSION = 7; // Increment for Minions & Ritual Update
+const CURRENT_VERSION = 8; // Increment for Magic System
 
 interface SaveFile {
     version: number;
@@ -20,6 +20,8 @@ const DEFAULT_STATE: GameState = {
   maxHeroHp: 100,
   baseHp: 50,
   maxBaseHp: 50,
+  mana: 100,
+  maxMana: 100,
   tasks: [],
   enemies: [],
   minions: [],
@@ -156,6 +158,10 @@ const performMigration = (state: any, fromVersion: number): GameState => {
     }
     if (fromVersion < 7) {
         migrated.minions = [];
+    }
+    if (fromVersion < 8) {
+        migrated.mana = 100;
+        migrated.maxMana = 100;
     }
     return migrated;
 };

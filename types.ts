@@ -1,10 +1,5 @@
-import { ThreeElements } from '@react-three/fiber';
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
-  }
-}
+import { ThreeElements } from '@react-three/fiber';
 
 export enum Era {
   RUIN = 'RUIN',
@@ -50,7 +45,7 @@ export interface Vector3 {
 
 export interface VisualEffect {
   id: string;
-  type: 'TEXT_XP' | 'TEXT_DAMAGE' | 'TEXT_GOLD' | 'EXPLOSION' | 'TEXT_LOOT' | 'SPLAT_TOMATO' | 'SPLAT_MUD';
+  type: 'TEXT_XP' | 'TEXT_DAMAGE' | 'TEXT_GOLD' | 'EXPLOSION' | 'TEXT_LOOT' | 'SPLAT_TOMATO' | 'SPLAT_MUD' | 'SPELL_CAST';
   position: Vector3;
   text?: string;
   timestamp: number;
@@ -120,7 +115,7 @@ export interface Task {
 export interface HistoryLog {
     id: string;
     timestamp: number;
-    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT';
+    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC';
     message: string;
     details?: string; 
 }
@@ -215,6 +210,11 @@ export interface GameState {
   maxHeroHp: number;
   baseHp: number;
   maxBaseHp: number;
+  
+  // Magic System
+  mana: number;
+  maxMana: number;
+  
   tasks: Task[];
   enemies: EnemyEntity[];
   minions: MinionEntity[];
@@ -295,4 +295,5 @@ export interface GameContextType {
   rerollVision: () => void; 
   interactWithNPC: (npcId: string) => void; 
   updateSettings: (settings: Partial<GameSettings>) => void;
+  castSpell: (spellId: string) => void; // New Magic Action
 }

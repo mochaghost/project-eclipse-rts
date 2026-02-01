@@ -1,9 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2 } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
+import { SPELLS } from '../../constants';
 
 const SplatterOverlay = () => {
     const { state } = useGame();
@@ -76,6 +77,7 @@ const EventTicker: React.FC = () => {
                     if (log.type === 'WORLD_EVENT') color = 'text-blue-300 italic';
                     if (log.type === 'DEFEAT') color = 'text-red-500';
                     if (log.type === 'VICTORY') color = 'text-green-400';
+                    if (log.type === 'MAGIC') color = 'text-purple-400';
 
                     return (
                         <div key={log.id} className={`text-xs font-serif bg-black/60 px-2 py-1 border-l-2 border-stone-800 ${color} animate-pulse-slow`}>
@@ -112,6 +114,54 @@ const RealmStatusWidget: React.FC = () => {
     );
 };
 
+// --- NEW COMPONENT: SPELL BAR ---
+const SpellBar: React.FC = () => {
+    const { state, castSpell } = useGame();
+    const manaPercent = (state.mana / state.maxMana) * 100;
+
+    return (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex flex-col items-center gap-2">
+            {/* Mana Bar */}
+            <div className="w-64 h-2 bg-stone-900 border border-stone-700 relative overflow-hidden rounded-full">
+                <div className="absolute inset-0 bg-blue-900/50"></div>
+                <div className="absolute inset-0 bg-blue-500 transition-all duration-300" style={{ width: `${manaPercent}%` }}></div>
+            </div>
+            <div className="text-[10px] text-blue-300 font-bold tracking-widest uppercase">Mana: {Math.floor(state.mana)}</div>
+
+            {/* Spells */}
+            <div className="flex gap-2 p-2 bg-black/80 border border-stone-800 rounded-lg">
+                {SPELLS.map(spell => {
+                    const canAfford = state.mana >= spell.cost;
+                    const needsTarget = spell.targetReq && !state.selectedEnemyId;
+                    const disabled = !canAfford || needsTarget;
+                    
+                    let Icon = Zap;
+                    if (spell.icon === 'Heart') Icon = Heart;
+                    if (spell.icon === 'Snowflake') Icon = Snowflake;
+                    if (spell.icon === 'Sword') Icon = Sword;
+
+                    return (
+                        <button 
+                            key={spell.id}
+                            onClick={() => castSpell(spell.id)}
+                            disabled={disabled}
+                            className={`
+                                relative w-12 h-12 flex items-center justify-center border transition-all group
+                                ${disabled ? 'border-stone-800 text-stone-700 bg-stone-950 cursor-not-allowed' : 'border-blue-800 text-blue-400 bg-blue-950/30 hover:bg-blue-900/50 hover:border-blue-400 hover:scale-105 hover:shadow-[0_0_10px_rgba(59,130,246,0.5)]'}
+                            `}
+                            title={`${spell.name} (${spell.cost} Mana) - ${spell.desc}`}
+                        >
+                            <Icon size={20} />
+                            <div className="absolute bottom-0.5 right-1 text-[8px] font-mono">{spell.cost}</div>
+                            {/* Cooldown overlay could go here */}
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
 export const HUD: React.FC = () => {
   const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, toggleDiplomacy } = useGame();
   const [cinematic, setCinematic] = useState(false);
@@ -144,6 +194,7 @@ export const HUD: React.FC = () => {
       <RealmStatusWidget />
       <EventTicker />
       <SplatterOverlay />
+      <SpellBar />
 
       {state.activeMapEvent === 'VISION_RITUAL' && (
         <div className="absolute top-24 right-6 z-50 pointer-events-auto">
