@@ -32,13 +32,14 @@ export const Grimoire: React.FC = () => {
   const [newSubtaskDeadlineStr, setNewSubtaskDeadlineStr] = useState('');
   const [parentId, setParentId] = useState<string>(''); 
 
-  if (!state.isGrimoireOpen) return null;
-  const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
-
   // Potential Parents (Any active main task except the one we are editing)
+  // MOVED BEFORE RETURN TO FIX HOOK ERROR
   const potentialParents = useMemo(() => {
       return state.tasks.filter(t => !t.completed && !t.failed && t.id !== editingTaskId && !t.parentId);
   }, [state.tasks, editingTaskId]);
+
+  if (!state.isGrimoireOpen) return null;
+  const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
 
   // --- HELPER: GET NAME ---
   const getTaskDisplayTitle = (t: Task) => {
