@@ -221,7 +221,7 @@ export const Grimoire: React.FC = () => {
             <div className="h-14 flex items-center justify-between px-2 md:px-6 border-b border-[#292524] bg-[#0c0a09]">
                 <div className="flex items-center gap-2 md:gap-4">
                     {!isRitual && (
-                         <button onClick={toggleGrimoire} className="md:hidden text-stone-400 p-2"><X size={20} /></button>
+                         <button onClick={toggleGrimoire} className="md:hidden text-stone-400 p-2 border border-stone-800 bg-stone-950 rounded"><X size={20} /></button>
                     )}
                     <div className="flex border border-[#292524] rounded overflow-hidden">
                         <button onClick={() => handleNav(-1)} className="p-1 md:p-2 hover:bg-[#1c1917] text-stone-400"><ChevronLeft size={16}/></button>

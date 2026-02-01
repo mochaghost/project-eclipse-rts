@@ -206,8 +206,11 @@ export const HUD: React.FC = () => {
       )
   }
 
+  // Ensure visibility even if a modal was previously open
+  const containerClass = "absolute inset-0 pointer-events-none p-4 md:p-6 flex flex-col justify-between z-40";
+
   return (
-    <div className="absolute inset-0 pointer-events-none p-4 md:p-6 flex flex-col justify-between z-10">
+    <div className={containerClass}>
       <VazarothHUD />
       <WorldRumorHUD />
       <RealmStatusWidget />
@@ -244,8 +247,7 @@ export const HUD: React.FC = () => {
              <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Map & Diplomacy"><MapIcon size={16} /></button>
              <button onClick={toggleMarket} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Market"><ShoppingBag size={16} /></button>
              <button onClick={toggleProfile} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Hero"><User size={16} /></button>
-            <button onClick={toggleGrimoire} className="bg-stone-900 border border-stone-600 text-stone-200 px-3 py-2 md:px-4 md:py-2 font-serif hover:bg-stone-800 uppercase tracking-widest text-xs md:text-sm flex items-center gap-2">
-                <BookOpen size={16} className="md:hidden" />
+            <button onClick={toggleGrimoire} className="hidden md:flex bg-stone-900 border border-stone-600 text-stone-200 px-3 py-2 md:px-4 md:py-2 font-serif hover:bg-stone-800 uppercase tracking-widest text-xs md:text-sm items-center gap-2">
                 <span className="hidden md:inline">Grimoire</span>
             </button>
         </div>
@@ -272,6 +274,16 @@ export const HUD: React.FC = () => {
              <div className="w-full h-1.5 bg-stone-800"><div className={`h-full transition-all ${basePercent < 30 ? 'bg-red-600' : 'bg-stone-500'}`} style={{ width: `${basePercent}%` }}></div></div>
            </div>
         </div>
+      </div>
+
+      {/* MOBILE FAB FOR GRIMOIRE */}
+      <div className="absolute bottom-28 right-0 z-50 pointer-events-auto md:hidden">
+          <button 
+            onClick={toggleGrimoire} 
+            className="w-16 h-16 rounded-full bg-yellow-900/90 border-2 border-yellow-500 shadow-2xl flex items-center justify-center text-yellow-100 hover:scale-110 active:scale-95 transition-transform"
+          >
+              <BookOpen size={28} />
+          </button>
       </div>
     </div>
   );

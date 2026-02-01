@@ -16,19 +16,20 @@ import * as THREE from 'three';
 const noise = (x: number, z: number) => Math.sin(x * 0.05) * Math.cos(z * 0.05) + Math.sin(x * 0.1 + z * 0.1) * 0.5;
 
 const VegetationSystem = () => {
-    // 1. DENSE GRASS (The Carpet)
+    // OPTIMIZATION: Reduced from 10,000 to 3,500 to prevent crashing on iPhone/Low VRAM
+    // Scaled up slightly (0.8 -> 1.2) to maintain density visually
     const grass = useMemo(() => {
         const temp = [];
-        const count = 8000; // Reduced slightly for better performance with PP
+        const count = 3500; 
         for (let i = 0; i < count; i++) { 
-            const x = (Math.random() - 0.5) * 250;
-            const z = (Math.random() - 0.5) * 250;
+            const x = (Math.random() - 0.5) * 200;
+            const z = (Math.random() - 0.5) * 200;
             // Clear spawn area slightly
             if (Math.abs(x) < 8 && Math.abs(z) < 8) continue; 
             
             const n = noise(x * 2, z * 2);
             if (n > -0.4) { 
-                temp.push({ position: [x, 0, z], rotation: [0, Math.random() * Math.PI, 0], scale: 0.6 + Math.random() * 0.8 });
+                temp.push({ position: [x, 0, z], rotation: [0, Math.random() * Math.PI, 0], scale: 0.8 + Math.random() * 1.2 });
             }
         }
         return temp;
@@ -37,11 +38,11 @@ const VegetationSystem = () => {
     // 2. GROUND CLUTTER (Rocks/Debris)
     const rocks = useMemo(() => {
         const temp = [];
-        for (let i = 0; i < 600; i++) {
-            const x = (Math.random() - 0.5) * 200;
-            const z = (Math.random() - 0.5) * 200;
+        for (let i = 0; i < 400; i++) {
+            const x = (Math.random() - 0.5) * 150;
+            const z = (Math.random() - 0.5) * 150;
             if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
-            temp.push({ position: [x, 0, z], scale: 0.3 + Math.random() * 0.5, rotation: [Math.random(), Math.random(), Math.random()] });
+            temp.push({ position: [x, 0, z], scale: 0.4 + Math.random() * 0.6, rotation: [Math.random(), Math.random(), Math.random()] });
         }
         return temp;
     }, []);
@@ -49,7 +50,7 @@ const VegetationSystem = () => {
     return (
         <group>
             {/* ROCKS */}
-            <Instances range={1000}>
+            <Instances range={400}>
                 <dodecahedronGeometry args={[0.8, 0]} />
                 <meshStandardMaterial color="#1c1917" roughness={0.8} />
                 {rocks.map((data, i) => (
@@ -58,7 +59,7 @@ const VegetationSystem = () => {
             </Instances>
 
             {/* GRASS BLADES (Simple Planes for Performance) */}
-            <Instances range={10000}>
+            <Instances range={3500}>
                 <planeGeometry args={[0.15, 0.8]} />
                 <meshStandardMaterial color="#1a2e10" side={THREE.DoubleSide} />
                 {grass.map((data, i) => (
@@ -75,7 +76,7 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
     // Decoration Distributions
     const decorations = useMemo(() => {
         const items: {x: number, z: number, type: string, scale?: number, rotation?: number}[] = [];
-        for(let i=0; i<250; i++) { 
+        for(let i=0; i<150; i++) { 
              const angle = Math.random() * Math.PI * 2;
              const dist = 15 + (Math.random() * 120); 
              const x = Math.cos(angle) * dist;

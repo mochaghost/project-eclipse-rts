@@ -4,7 +4,7 @@ import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualE
 import { loadGame, saveGame } from '../utils/saveSystem';
 import { generateId, generateNemesis, generateSpawnPosition, getSageWisdom, getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateHeroEquipment, generateLoot } from '../utils/generators';
 import { simulateReactiveTurn, initializePopulation, updateRealmStats } from '../utils/worldSim';
-import { initFirebase, pushToCloud, subscribeToCloud, disconnect } from '../services/firebase';
+import { initFirebase, pushToCloud, subscribeToCloud, disconnect, DEFAULT_FIREBASE_CONFIG } from '../services/firebase';
 import { ERA_CONFIG, LEVEL_THRESHOLDS, SPELLS } from '../constants';
 import { playSfx, initAudio, startAmbientDrone, setVolume } from '../utils/audio';
 
@@ -34,6 +34,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const idleStage = useRef<number>(0); 
 
     const cloudUnsubRef = useRef<(() => void) | null>(null);
+
+    // --- AUTO CONNECT CLOUD ---
+    useEffect(() => {
+        // Automatically try to connect if we have a room ID saved, OR if it's the first run with defaults
+        const savedRoom = localStorage.getItem('ECLIPSE_ROOM_ID');
+        if (savedRoom && !state.syncConfig?.isConnected) {
+            console.log("[AutoConnect] Attempting to reconnect to room:", savedRoom);
+            connectToCloud(DEFAULT_FIREBASE_CONFIG, savedRoom);
+        }
+    }, []);
 
     // --- IDLE DETECTION ---
     const resetIdleTimer = useCallback(() => {
