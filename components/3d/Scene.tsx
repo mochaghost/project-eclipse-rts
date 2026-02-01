@@ -246,42 +246,48 @@ const AtmosphericController = () => {
     const isDawn = hours >= 5 && hours < 7;
     const isDusk = hours >= 17 && hours < 19;
 
-    // --- COLOR PALETTES ---
-    let sunColor = '#fbbf24'; // Noon Yellow
-    let skyColor = '#38bdf8'; // Noon Blue
-    let fogColor = '#e0f2fe'; // Noon Fog
-    let intensity = 1.5;
-    let ambientIntensity = 0.5;
+    // --- COLOR PALETTES & INTENSITIES ---
+    // Default: BRIGHT DAY (e.g. 9:47 AM)
+    let sunColor = '#fbbf24'; // Warm Sunlight
+    let skyColor = '#7dd3fc'; // Bright Sky Blue
+    let fogColor = '#bae6fd'; // Light Blue Fog
+    let intensity = 2.5; // Very bright sun
+    let ambientIntensity = 0.8; // Bright shadows
+    let bgColor = '#38bdf8'; // Blue Background
 
     if (isDawn) {
         sunColor = '#f97316'; // Orange
         skyColor = '#fdba74';
         fogColor = '#fed7aa';
-        intensity = 1.0;
-        ambientIntensity = 0.4;
+        bgColor = '#ffedd5';
+        intensity = 1.5;
+        ambientIntensity = 0.5;
     } else if (isDusk) {
         sunColor = '#ef4444'; // Red/Pink
         skyColor = '#c084fc';
         fogColor = '#4c1d95';
-        intensity = 0.8;
+        bgColor = '#581c87';
+        intensity = 1.2;
         ambientIntensity = 0.4;
     } else if (isNight) {
-        // RTS "Bright Night" Style
-        sunColor = '#bfdbfe'; // Very Bright Blue-White Moon
-        skyColor = '#1e3a8a'; // Deep Blue Sky
-        fogColor = '#0f172a'; // Navy Fog
-        intensity = 2.5; // Strong Moon Directional Light (Casts shadows)
-        ambientIntensity = 1.0; // High Ambient so ground isn't black
+        sunColor = '#bfdbfe'; // Moon
+        skyColor = '#1e3a8a'; 
+        fogColor = '#0f172a'; 
+        bgColor = '#050202';
+        intensity = 1.0; 
+        ambientIntensity = 0.2; 
     }
 
     // --- OVERRIDES (Magic takes precedence over Time) ---
     if (isRitual) {
         sunColor = '#a855f7'; 
         fogColor = '#2e1065';
+        bgColor = '#2e1065';
         intensity = 0.5;
     } else if (isEclipse) {
         sunColor = '#ff0000'; 
         fogColor = '#110000';
+        bgColor = '#000000';
         intensity = 0.1; // Dark sun
     }
 
@@ -289,6 +295,8 @@ const AtmosphericController = () => {
 
     return (
         <>
+            <color attach="background" args={[bgColor]} />
+            
             <WeatherSystem type={weather} />
             
             {weather === 'CLEAR' && <fog attach="fog" args={[fogColor, 10, isNight ? fogDist * 1.5 : fogDist]} />}
@@ -296,7 +304,7 @@ const AtmosphericController = () => {
             <hemisphereLight 
                 intensity={ambientIntensity} 
                 color={skyColor} 
-                groundColor={isNight ? '#334155' : '#292524'} // Ground is slate blue at night, not black
+                groundColor={isNight ? '#334155' : '#78716c'} 
             />
             
             <directionalLight 
@@ -356,7 +364,7 @@ export const Scene: React.FC = () => {
 
   return (
     <Canvas shadows={false} dpr={[1, 1.5]} gl={{ antialias: true }} camera={{ position: [15, 15, 15], fov: 45 }}>
-      <color attach="background" args={['#050202']} />
+      {/* Dynamic background controlled by AtmosphericController, no static color here */}
       
       {/* Backup Lights - Guarantees scene visibility even if Atmos fails */}
       <ambientLight intensity={0.2} />

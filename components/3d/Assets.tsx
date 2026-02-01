@@ -18,7 +18,7 @@ export const InteractiveStructure = ({ name, position = [0,0,0], rotation = [0,0
             {children}
             {hovered && (
                 <Html position={[0, heightOffset, 0]} center distanceFactor={20} zIndexRange={[100, 0]}>
-                    <div className="bg-[#0c0a09]/95 border border-[#fbbf24] text-[#fbbf24] px-2 py-1 text-xs font-serif uppercase backdrop-blur-sm shadow-xl tracking-widest">
+                    <div className="bg-[#0c0a09]/95 border border-[#fbbf24] text-[#fbbf24] px-2 py-1 text-xs font-serif uppercase backdrop-blur-sm shadow-xl tracking-widest whitespace-nowrap">
                         {name}
                     </div>
                 </Html>
@@ -520,13 +520,38 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
     const [hovered, setHover] = useState(false);
     return (
         <group>
-            <group position={[0, 0, 0]} scale={[finalScale, finalScale, finalScale]} onClick={(e) => { e.stopPropagation(); onClick && onClick(); }} onPointerOver={(e) => { e.stopPropagation(); setHover(true); }} onPointerOut={() => setHover(false)}>
+            {/* INVISIBLE HITBOX for easier hovering */}
+            <mesh 
+                visible={false} 
+                onClick={(e) => { e.stopPropagation(); onClick && onClick(); }} 
+                onPointerOver={(e) => { e.stopPropagation(); setHover(true); }} 
+                onPointerOut={() => setHover(false)}
+            >
+                <cylinderGeometry args={[1 * finalScale, 1 * finalScale, 3 * finalScale]} />
+                <meshBasicMaterial transparent opacity={0} />
+            </mesh>
+
+            <group position={[0, 0, 0]} scale={[finalScale, finalScale, finalScale]}>
                 <mesh position={[0, 0.8, 0]} castShadow><dodecahedronGeometry args={[0.5, 0]} /><meshStandardMaterial color="#0f0f0f" roughness={0.9} /></mesh>
                 <mesh position={[0.3, 1, 0]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} /></mesh>
                 <mesh position={[-0.3, 0.6, 0.2]} rotation={[0,0,0.5]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} /></mesh>
                 {isSelected && <mesh position={[0, 0.1, 0]} rotation={[-Math.PI/2, 0, 0]}><ringGeometry args={[0.8, 0.9, 32]} /><meshBasicMaterial color="#ef4444" /></mesh>}
             </group>
-             <Html position={[0, finalScale * 2.5, 0]} center distanceFactor={15} style={{pointerEvents: 'none'}}><div className={`text-[8px] uppercase tracking-widest font-bold px-2 py-0.5 border transition-all duration-300 ${(hovered || isSelected) ? 'bg-red-950/80 border-red-500 text-red-200 opacity-100' : 'bg-black/50 border-transparent text-red-900/50 opacity-0'}`}>{name}</div></Html>
+            
+            {/* NAME TAG */}
+             <Html 
+                position={[0, finalScale * 2.5 + 0.5, 0]} 
+                center 
+                distanceFactor={15} 
+                style={{pointerEvents: 'none'}}
+            >
+                <div className={`
+                    text-[10px] uppercase tracking-widest font-bold px-3 py-1 border transition-all duration-300 whitespace-nowrap
+                    ${(hovered || isSelected) ? 'bg-red-950/90 border-red-500 text-red-100 scale-110 opacity-100 shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'bg-black/40 border-transparent text-white/70 opacity-70'}
+                `}>
+                    {name}
+                </div>
+            </Html>
         </group>
     )
 }
