@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 import { SPELLS } from '../../constants';
@@ -68,7 +68,7 @@ const EventTicker: React.FC = () => {
     }, [state.history]);
 
     return (
-        <div className="absolute bottom-24 left-6 z-20 pointer-events-none max-w-sm">
+        <div className="absolute bottom-24 left-6 z-20 pointer-events-none max-w-sm hidden md:block">
             <h3 className="text-[10px] text-stone-500 font-bold uppercase tracking-widest mb-2 flex items-center gap-1"><ScrollText size={12}/> The Chronicle</h3>
             <div className="flex flex-col gap-1">
                 {logs.map((log) => {
@@ -105,7 +105,7 @@ const RealmStatusWidget: React.FC = () => {
     else if (stats.order < 30) { statusText = "ANARCHY"; statusColor = "text-orange-500"; }
 
     return (
-        <div className="absolute top-24 left-6 pointer-events-none z-20 flex items-center gap-3">
+        <div className="absolute top-20 md:top-24 left-4 md:left-6 pointer-events-none z-20 flex items-center gap-3">
             <div className={`flex items-center gap-2 px-3 py-1 border bg-black/80 ${statusColor} border-current`}>
                 {icon}
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{statusText}</span>
@@ -124,13 +124,13 @@ const RealTimeClock: React.FC = () => {
 
     return (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center">
-            <div className="bg-[#0c0a09]/90 border border-stone-700 px-4 py-2 flex items-center gap-3 rounded-sm shadow-lg">
-                <Clock size={16} className="text-stone-400" />
-                <span className="text-xl font-mono font-bold text-stone-200 tracking-widest">
+            <div className="bg-[#0c0a09]/90 border border-stone-700 px-3 py-1 md:px-4 md:py-2 flex items-center gap-3 rounded-sm shadow-lg">
+                <Clock size={14} className="text-stone-400" />
+                <span className="text-sm md:text-xl font-mono font-bold text-stone-200 tracking-widest">
                     {time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}
                 </span>
             </div>
-            <div className="text-[10px] text-stone-500 uppercase tracking-[0.3em] mt-1 bg-black/50 px-2">Local Time</div>
+            <div className="hidden md:block text-[10px] text-stone-500 uppercase tracking-[0.3em] mt-1 bg-black/50 px-2">Local Time</div>
         </div>
     )
 }
@@ -142,14 +142,14 @@ const SpellBar: React.FC = () => {
     return (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex flex-col items-center gap-2">
             {/* Mana Bar */}
-            <div className="w-64 h-2 bg-stone-900 border border-stone-700 relative overflow-hidden rounded-full">
+            <div className="w-48 md:w-64 h-2 bg-stone-900 border border-stone-700 relative overflow-hidden rounded-full">
                 <div className="absolute inset-0 bg-blue-900/50"></div>
                 <div className="absolute inset-0 bg-blue-500 transition-all duration-300" style={{ width: `${manaPercent}%` }}></div>
             </div>
-            <div className="text-[10px] text-blue-300 font-bold tracking-widest uppercase">Mana: {Math.floor(state.mana)}</div>
+            <div className="text-[8px] md:text-[10px] text-blue-300 font-bold tracking-widest uppercase">Mana: {Math.floor(state.mana)}</div>
 
             {/* Spells */}
-            <div className="flex gap-2 p-2 bg-black/80 border border-stone-800 rounded-lg">
+            <div className="flex gap-2 p-1 md:p-2 bg-black/80 border border-stone-800 rounded-lg scale-90 md:scale-100 origin-bottom">
                 {SPELLS.map(spell => {
                     const canAfford = state.mana >= spell.cost;
                     const needsTarget = spell.targetReq && !state.selectedEnemyId;
@@ -166,12 +166,12 @@ const SpellBar: React.FC = () => {
                             onClick={() => castSpell(spell.id)}
                             disabled={disabled}
                             className={`
-                                relative w-12 h-12 flex items-center justify-center border transition-all group
+                                relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center border transition-all group
                                 ${disabled ? 'border-stone-800 text-stone-700 bg-stone-950 cursor-not-allowed' : 'border-blue-800 text-blue-400 bg-blue-950/30 hover:bg-blue-900/50 hover:border-blue-400 hover:scale-105 hover:shadow-[0_0_10px_rgba(59,130,246,0.5)]'}
                             `}
                             title={`${spell.name} (${spell.cost} Mana) - ${spell.desc}`}
                         >
-                            <Icon size={20} />
+                            <Icon size={18} />
                             <div className="absolute bottom-0.5 right-1 text-[8px] font-mono">{spell.cost}</div>
                         </button>
                     )
@@ -224,26 +224,30 @@ export const HUD: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-wrap justify-between items-start pointer-events-auto gap-4 relative z-20">
+      {/* HEADER BAR (Stats & Tools) */}
+      <div className="flex flex-wrap justify-between items-start pointer-events-auto gap-2 md:gap-4 relative z-20">
         <div>
-          <h1 className="text-xl md:text-3xl font-serif tracking-widest text-white drop-shadow-lg">PROJECT ECLIPSE</h1>
-          <div className="flex flex-wrap gap-3 mt-1 text-xs md:text-sm text-stone-400 font-serif tracking-widest">
+          <h1 className="text-lg md:text-3xl font-serif tracking-widest text-white drop-shadow-lg">PROJECT ECLIPSE</h1>
+          <div className="flex flex-wrap gap-2 md:gap-3 mt-1 text-[10px] md:text-sm text-stone-400 font-serif tracking-widest">
              <span>ERA: <span className="text-yellow-500">{state.era}</span></span>
              <span>LVL {state.playerLevel}</span>
-             <span className="text-[#fbbf24] flex items-center gap-1 font-bold"><Coins size={12} /> {state.gold}g</span>
-             {isConnected && <span className="text-green-500 flex items-center gap-1 animate-pulse"><Cloud size={12} /> SYNC</span>}
-             <span className="text-stone-600">v0.0.3</span>
+             <span className="text-[#fbbf24] flex items-center gap-1 font-bold"><Coins size={10} /> {state.gold}g</span>
+             {isConnected && <span className="text-green-500 flex items-center gap-1 animate-pulse"><Cloud size={10} /> SYNC</span>}
           </div>
         </div>
         
-        <div className="flex gap-2">
-             <button onClick={() => setCinematic(true)} className="bg-stone-950 border border-stone-800 text-stone-500 p-2 md:p-3 hover:bg-stone-900 hover:text-white" title="Cinematic Mode"><Maximize2 size={20} /></button>
-             <button onClick={toggleSettings} className="bg-stone-900 border border-stone-600 text-stone-400 p-2 md:p-3 hover:bg-stone-800" title="Settings"><Settings size={20} /></button>
-             <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Audit"><PieChart size={20} /></button>
-             <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Map & Diplomacy"><MapIcon size={20} /></button>
-             <button onClick={toggleMarket} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Market"><ShoppingBag size={20} /></button>
-             <button onClick={toggleProfile} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Hero"><User size={20} /></button>
-            <button onClick={toggleGrimoire} className="bg-stone-900 border border-stone-600 text-stone-200 px-4 py-2 font-serif hover:bg-stone-800 uppercase tracking-widest text-xs md:text-sm">Grimoire</button>
+        {/* TOOLBAR */}
+        <div className="flex gap-1 md:gap-2">
+             <button onClick={() => setCinematic(true)} className="bg-stone-950 border border-stone-800 text-stone-500 p-2 md:p-3 hover:bg-stone-900 hover:text-white" title="Cinematic Mode"><Maximize2 size={16} /></button>
+             <button onClick={toggleSettings} className="bg-stone-900 border border-stone-600 text-stone-400 p-2 md:p-3 hover:bg-stone-800" title="Settings"><Settings size={16} /></button>
+             <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Audit"><PieChart size={16} /></button>
+             <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Map & Diplomacy"><MapIcon size={16} /></button>
+             <button onClick={toggleMarket} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Market"><ShoppingBag size={16} /></button>
+             <button onClick={toggleProfile} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Hero"><User size={16} /></button>
+            <button onClick={toggleGrimoire} className="bg-stone-900 border border-stone-600 text-stone-200 px-3 py-2 md:px-4 md:py-2 font-serif hover:bg-stone-800 uppercase tracking-widest text-xs md:text-sm flex items-center gap-2">
+                <BookOpen size={16} className="md:hidden" />
+                <span className="hidden md:inline">Grimoire</span>
+            </button>
         </div>
       </div>
 
@@ -252,7 +256,7 @@ export const HUD: React.FC = () => {
            <p className="text-stone-200 font-serif italic text-sm leading-relaxed">"{state.sageMessage}"</p>
         </div>
 
-        <div className="w-full md:w-64 space-y-2 bg-black/80 p-3 border border-stone-800">
+        <div className="w-48 md:w-64 space-y-2 bg-black/80 p-2 md:p-3 border border-stone-800">
            <div>
              <div className="flex justify-between text-[10px] text-stone-400 mb-1">
                <span className="flex items-center gap-1"><Zap size={10}/> HERO</span>

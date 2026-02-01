@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -33,7 +33,6 @@ export const Grimoire: React.FC = () => {
   const [parentId, setParentId] = useState<string>(''); 
 
   // Potential Parents (Any active main task except the one we are editing)
-  // MOVED BEFORE RETURN TO FIX HOOK ERROR
   const potentialParents = useMemo(() => {
       return state.tasks.filter(t => !t.completed && !t.failed && t.id !== editingTaskId && !t.parentId);
   }, [state.tasks, editingTaskId]);
@@ -49,7 +48,6 @@ export const Grimoire: React.FC = () => {
   };
 
   // --- NAVIGATION HELPERS ---
-  
   const handleNav = (dir: -1 | 1) => {
       const newDate = new Date(currentDate);
       if (viewMode === 'DAY') newDate.setDate(newDate.getDate() + dir);
@@ -162,18 +160,18 @@ export const Grimoire: React.FC = () => {
       const startDay = firstDay.getDay();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const grid = [];
-      for (let i=0; i<startDay; i++) grid.push(<div key={`empty-${i}`} className="bg-[#050202] border border-[#1c1917] min-h-[100px]"></div>);
+      for (let i=0; i<startDay; i++) grid.push(<div key={`empty-${i}`} className="bg-[#050202] border border-[#1c1917] min-h-[60px] md:min-h-[100px]"></div>);
       for (let d=1; d<=daysInMonth; d++) {
           const date = new Date(year, month, d);
           const isToday = new Date().toDateString() === date.toDateString();
           const isSelected = selectedDate.toDateString() === date.toDateString();
           const tasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === date.toDateString());
           grid.push(
-              <div key={d} onClick={() => handleSelectSlot(date)} className={`border border-[#1c1917] p-2 min-h-[100px] hover:bg-[#151210] cursor-pointer relative ${isSelected ? 'bg-[#1a1512]' : 'bg-[#050202]'}`}>
-                  <div className={`text-xs font-serif ${isToday ? 'text-yellow-500 font-bold' : 'text-stone-500'}`}>{d}</div>
-                  <div className="mt-2 space-y-1">
+              <div key={d} onClick={() => handleSelectSlot(date)} className={`border border-[#1c1917] p-1 md:p-2 min-h-[60px] md:min-h-[100px] hover:bg-[#151210] cursor-pointer relative ${isSelected ? 'bg-[#1a1512]' : 'bg-[#050202]'}`}>
+                  <div className={`text-[10px] md:text-xs font-serif ${isToday ? 'text-yellow-500 font-bold' : 'text-stone-500'}`}>{d}</div>
+                  <div className="mt-1 md:mt-2 space-y-1">
                       {tasks.map(t => (
-                          <div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`text-[9px] px-1 truncate rounded cursor-pointer hover:brightness-125 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}>
+                          <div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`text-[8px] md:text-[9px] px-1 truncate rounded cursor-pointer hover:brightness-125 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}>
                               {getTaskDisplayTitle(t)}
                           </div>
                       ))}
@@ -182,7 +180,7 @@ export const Grimoire: React.FC = () => {
               </div>
           );
       }
-      return <div className="grid grid-cols-7 gap-0 h-full overflow-y-auto">{DAYS.map(d => <div key={d} className="text-center text-[10px] uppercase text-stone-600 py-2 bg-[#0c0a09] border-b border-[#292524]">{d}</div>)}{grid}</div>;
+      return <div className="grid grid-cols-7 gap-0 h-full overflow-y-auto custom-scrollbar">{DAYS.map(d => <div key={d} className="text-center text-[8px] md:text-[10px] uppercase text-stone-600 py-2 bg-[#0c0a09] border-b border-[#292524]">{d}</div>)}{grid}</div>;
   };
 
   const renderDayView = () => {
@@ -202,7 +200,7 @@ export const Grimoire: React.FC = () => {
       const startOfWeek = new Date(currentDate); startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
       const weekDays = Array.from({length: 7}, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
       return (
-          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">{HOURS.map(h => (<div key={h} onClick={() => handleSelectSlot(d, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>))}{dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-pointer pointer-events-auto hover:scale-[1.02] transition-transform ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
+          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[9px] md:text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-xs md:text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">{HOURS.map(h => (<div key={h} onClick={() => handleSelectSlot(d, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>))}{dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div key={t.id} onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-pointer pointer-events-auto hover:scale-[1.02] transition-transform ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-10'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
       );
   };
 
@@ -215,42 +213,44 @@ export const Grimoire: React.FC = () => {
   const isEditing = !!editingTaskId;
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
-      <div className="relative w-full max-w-[95vw] h-[90vh] bg-[#0c0a09] border border-[#44403c] flex flex-col md:flex-row shadow-2xl overflow-hidden">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md md:p-4">
+      <div className="relative w-full h-full md:max-w-[95vw] md:h-[85vh] bg-[#0c0a09] border border-[#44403c] flex flex-col md:flex-row shadow-2xl overflow-hidden">
         
-        {!isRitual && (
-            <button onClick={toggleGrimoire} className="absolute top-4 right-4 text-stone-600 hover:text-stone-300 z-50 transition-colors">
-                <X size={24} />
-            </button>
-        )}
-
         {/* LEFT PANEL: CALENDAR VISUALIZER */}
-        <div className="w-full md:w-3/4 flex flex-col border-r border-[#292524] bg-[#050202]">
-            <div className="h-16 flex items-center justify-between px-6 border-b border-[#292524] bg-[#0c0a09]">
-                <div className="flex items-center gap-4">
+        <div className="w-full md:w-3/4 flex flex-col border-r border-[#292524] bg-[#050202] h-[50%] md:h-full">
+            <div className="h-14 flex items-center justify-between px-2 md:px-6 border-b border-[#292524] bg-[#0c0a09]">
+                <div className="flex items-center gap-2 md:gap-4">
+                    {!isRitual && (
+                         <button onClick={toggleGrimoire} className="md:hidden text-stone-400 p-2"><X size={20} /></button>
+                    )}
                     <div className="flex border border-[#292524] rounded overflow-hidden">
-                        <button onClick={() => handleNav(-1)} className="p-2 hover:bg-[#1c1917] text-stone-400"><ChevronLeft size={18}/></button>
-                        <button onClick={() => setCurrentDate(new Date())} className="px-4 text-xs font-bold text-stone-300 hover:bg-[#1c1917]">TODAY</button>
-                        <button onClick={() => handleNav(1)} className="p-2 hover:bg-[#1c1917] text-stone-400"><ChevronRight size={18}/></button>
+                        <button onClick={() => handleNav(-1)} className="p-1 md:p-2 hover:bg-[#1c1917] text-stone-400"><ChevronLeft size={16}/></button>
+                        <button onClick={() => setCurrentDate(new Date())} className="px-2 md:px-4 text-[10px] md:text-xs font-bold text-stone-300 hover:bg-[#1c1917]">TODAY</button>
+                        <button onClick={() => handleNav(1)} className="p-1 md:p-2 hover:bg-[#1c1917] text-stone-400"><ChevronRight size={16}/></button>
                     </div>
-                    <h2 className="font-serif text-xl text-stone-200 tracking-widest uppercase">
+                    <h2 className="font-serif text-sm md:text-xl text-stone-200 tracking-widest uppercase hidden md:block">
                         {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
                     </h2>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    {!isRitual && (
+                        <button onClick={toggleGrimoire} className="hidden md:block text-stone-600 hover:text-stone-300 transition-colors mr-2">
+                            <X size={24} />
+                        </button>
+                    )}
+                    
                     <button 
                         onClick={() => setShowRealNames(!showRealNames)} 
-                        className={`flex items-center gap-2 px-3 py-2 border rounded transition-all ${showRealNames ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-red-900/30 border-red-500 text-red-400'}`}
+                        className={`flex items-center gap-2 px-2 py-1 md:px-3 md:py-2 border rounded transition-all ${showRealNames ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-red-900/30 border-red-500 text-red-400'}`}
                     >
-                        {showRealNames ? <Eye size={16} /> : <Skull size={16} />}
-                        <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline">{showRealNames ? "True Sight" : "Void Sight"}</span>
+                        {showRealNames ? <Eye size={14} /> : <Skull size={14} />}
                     </button>
 
                     <div className="flex border border-[#292524] rounded overflow-hidden">
-                        <button onClick={() => setViewMode('DAY')} className={`px-3 py-2 text-xs font-bold ${viewMode === 'DAY' ? 'bg-yellow-900/30 text-yellow-500' : 'text-stone-500 hover:bg-[#1c1917]'}`}>DAY</button>
-                        <button onClick={() => setViewMode('WEEK')} className={`px-3 py-2 text-xs font-bold ${viewMode === 'WEEK' ? 'bg-yellow-900/30 text-yellow-500' : 'text-stone-500 hover:bg-[#1c1917]'}`}>WEEK</button>
-                        <button onClick={() => setViewMode('MONTH')} className={`px-3 py-2 text-xs font-bold ${viewMode === 'MONTH' ? 'bg-yellow-900/30 text-yellow-500' : 'text-stone-500 hover:bg-[#1c1917]'}`}>MONTH</button>
+                        <button onClick={() => setViewMode('DAY')} className={`px-2 py-1 md:px-3 md:py-2 text-[10px] md:text-xs font-bold ${viewMode === 'DAY' ? 'bg-yellow-900/30 text-yellow-500' : 'text-stone-500 hover:bg-[#1c1917]'}`}>D</button>
+                        <button onClick={() => setViewMode('WEEK')} className={`px-2 py-1 md:px-3 md:py-2 text-[10px] md:text-xs font-bold ${viewMode === 'WEEK' ? 'bg-yellow-900/30 text-yellow-500' : 'text-stone-500 hover:bg-[#1c1917]'}`}>W</button>
+                        <button onClick={() => setViewMode('MONTH')} className={`px-2 py-1 md:px-3 md:py-2 text-[10px] md:text-xs font-bold ${viewMode === 'MONTH' ? 'bg-yellow-900/30 text-yellow-500' : 'text-stone-500 hover:bg-[#1c1917]'}`}>M</button>
                     </div>
                 </div>
             </div>
@@ -264,38 +264,38 @@ export const Grimoire: React.FC = () => {
         </div>
 
         {/* RIGHT PANEL: SUMMONING FORM */}
-        <div className={`w-full md:w-1/4 bg-[#0c0a09] flex flex-col relative z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] transition-colors duration-500 ${isEditing ? 'border-l-2 border-blue-900' : ''}`}>
-            <div className={`h-16 flex items-center justify-center border-b border-[#292524] ${isEditing ? 'bg-blue-950/20' : 'bg-[#0c0a09]'}`}>
-                <div className={`flex items-center gap-2 font-serif text-lg tracking-[0.2em] font-bold ${isEditing ? 'text-blue-400' : 'text-yellow-700'}`}>
-                    {isEditing ? <Pen size={16} /> : <Scroll size={16} className="rotate-45" />}
+        <div className={`w-full md:w-1/4 bg-[#0c0a09] flex flex-col h-[50%] md:h-full relative z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] transition-colors duration-500 ${isEditing ? 'border-l-0 md:border-l-2 border-t-2 md:border-t-0 border-blue-900' : ''}`}>
+            <div className={`h-12 md:h-16 flex items-center justify-center border-b border-[#292524] ${isEditing ? 'bg-blue-950/20' : 'bg-[#0c0a09]'}`}>
+                <div className={`flex items-center gap-2 font-serif text-sm md:text-lg tracking-[0.2em] font-bold ${isEditing ? 'text-blue-400' : 'text-yellow-700'}`}>
+                    {isEditing ? <Pen size={14} /> : <Scroll size={14} className="rotate-45" />}
                     <span>{isEditing ? 'EDITING FATE' : 'SUMMONING'}</span>
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 p-6 overflow-y-auto space-y-5 custom-scrollbar">
+            <form onSubmit={handleSubmit} className="flex-1 p-4 md:p-6 overflow-y-auto space-y-4 md:space-y-5 custom-scrollbar pb-20 md:pb-6">
                 
                 {/* Date/Time Readout */}
-                <div className={`bg-[#151210] border p-4 text-center ${isEditing ? 'border-blue-900/30' : 'border-[#292524]'}`}>
-                    <div className="text-xs text-stone-500 uppercase tracking-widest mb-2 font-bold">{DAYS[selectedDate.getDay()]}, {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]}</div>
+                <div className={`bg-[#151210] border p-2 md:p-4 text-center ${isEditing ? 'border-blue-900/30' : 'border-[#292524]'}`}>
+                    <div className="text-[10px] md:text-xs text-stone-500 uppercase tracking-widest mb-2 font-bold">{DAYS[selectedDate.getDay()]}, {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]}</div>
                     
                     <div className="flex items-center justify-center gap-2">
                         <div className="flex flex-col items-center">
-                            <label className="text-[9px] text-stone-600 mb-1 uppercase">Manifestation</label>
+                            <label className="text-[9px] text-stone-600 mb-1 uppercase">Start</label>
                             <input 
                                 type="time" 
                                 value={startTimeStr} 
                                 onChange={(e) => setStartTimeStr(e.target.value)} 
-                                className="bg-black border border-[#292524] text-stone-300 font-mono text-sm p-1 w-20 text-center outline-none focus:border-stone-500"
+                                className="bg-black border border-[#292524] text-stone-300 font-mono text-sm p-1 w-16 md:w-20 text-center outline-none focus:border-stone-500"
                             />
                         </div>
                         <span className="text-stone-600 mt-4">-</span>
                         <div className="flex flex-col items-center">
-                            <label className="text-[9px] text-yellow-900 mb-1 uppercase font-bold">Doom</label>
+                            <label className="text-[9px] text-yellow-900 mb-1 uppercase font-bold">End</label>
                             <input 
                                 type="time" 
                                 value={endTimeStr} 
                                 onChange={(e) => setEndTimeStr(e.target.value)} 
-                                className="bg-black border border-yellow-900/30 text-yellow-500 font-mono text-sm p-1 w-20 text-center outline-none focus:border-yellow-600"
+                                className="bg-black border border-yellow-900/30 text-yellow-500 font-mono text-sm p-1 w-16 md:w-20 text-center outline-none focus:border-yellow-600"
                             />
                         </div>
                     </div>
@@ -307,7 +307,7 @@ export const Grimoire: React.FC = () => {
                         type="text" 
                         value={title} 
                         onChange={(e) => setTitle(e.target.value)} 
-                        className="w-full bg-[#151210] border-b border-[#292524] p-3 text-stone-200 focus:border-yellow-900 outline-none font-serif text-lg placeholder:text-stone-800 placeholder:italic transition-colors"
+                        className="w-full bg-[#151210] border-b border-[#292524] p-2 md:p-3 text-stone-200 focus:border-yellow-900 outline-none font-serif text-base md:text-lg placeholder:text-stone-800 placeholder:italic transition-colors"
                         placeholder="e.g., The Tax Beast"
                         autoFocus={!isEditing}
                     />
@@ -316,30 +316,20 @@ export const Grimoire: React.FC = () => {
                 {/* PARENT TASK SELECTOR (Hierarchical Linking) */}
                 <div>
                     <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
-                        <Network size={10} /> Link to Overlord (Parent Task)
+                        <Network size={10} /> Link to Overlord
                     </label>
                     <select 
                         value={parentId} 
                         onChange={(e) => setParentId(e.target.value)}
-                        className="w-full bg-[#151210] border border-[#292524] p-3 text-stone-300 text-xs focus:border-blue-900 outline-none"
+                        className="w-full bg-[#151210] border border-[#292524] p-2 md:p-3 text-stone-300 text-xs focus:border-blue-900 outline-none"
                     >
-                        <option value="">-- None (Independent) --</option>
+                        <option value="">-- Independent --</option>
                         {potentialParents.map(p => (
                             <option key={p.id} value={p.id}>
                                 {getTaskDisplayTitle(p)}
                             </option>
                         ))}
                     </select>
-                </div>
-
-                <div>
-                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block">Tactical Notes</label>
-                    <textarea 
-                        value={notes} 
-                        onChange={(e) => setNotes(e.target.value)} 
-                        className="w-full bg-[#151210] border border-[#292524] p-3 text-stone-400 focus:border-yellow-900 outline-none text-xs resize-none h-20 placeholder:text-stone-800 font-mono"
-                        placeholder="Intel on the objective..."
-                    />
                 </div>
 
                 <div>
@@ -351,7 +341,7 @@ export const Grimoire: React.FC = () => {
                                 type="button" 
                                 onClick={() => setPriority(p as TaskPriority)} 
                                 className={`
-                                    flex-1 py-3 flex flex-col items-center justify-center gap-1 transition-all
+                                    flex-1 py-2 md:py-3 flex flex-col items-center justify-center gap-1 transition-all
                                     ${priority === p ? 'bg-yellow-900/20 text-yellow-500 border-x border-yellow-900/50' : 'bg-[#0c0a09] text-stone-600 hover:bg-[#151210] border-x border-transparent'}
                                 `}
                             >
@@ -366,17 +356,12 @@ export const Grimoire: React.FC = () => {
                     <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-2 block flex items-center gap-2">
                         <Users size={12} /> Minions (Subtasks)
                     </label>
-                    <div className="bg-[#050202] border border-[#292524] p-0 flex-1 min-h-[100px] flex flex-col">
+                    <div className="bg-[#050202] border border-[#292524] p-0 flex-1 min-h-[80px] flex flex-col">
                         <div className="flex-1 space-y-0 p-0">
                             {subtasks.map((st, idx) => (
                                 <div key={idx} className="flex justify-between items-center group text-xs text-stone-400 p-2 border-b border-[#1c1917] hover:bg-[#151210]">
                                     <div className="flex flex-col">
                                         <span className="font-mono truncate">{st.title}</span>
-                                        {st.deadline && (
-                                            <span className="text-[9px] text-stone-600 flex items-center gap-1">
-                                                <Hourglass size={8} /> Due: {new Date(st.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                            </span>
-                                        )}
                                     </div>
                                     <button type="button" onClick={() => setSubtasks(subtasks.filter((_,i)=>i!==idx))} className="text-stone-700 hover:text-red-500"><Trash2 size={12} /></button>
                                 </div>
@@ -392,13 +377,6 @@ export const Grimoire: React.FC = () => {
                                     className="flex-1 bg-transparent text-xs text-stone-300 outline-none placeholder:text-stone-700 p-2"
                                     placeholder="Add minion..."
                                 />
-                                <input 
-                                    type="time"
-                                    value={newSubtaskDeadlineStr}
-                                    onChange={e => setNewSubtaskDeadlineStr(e.target.value)}
-                                    className="w-16 bg-black border-l border-[#292524] text-[10px] text-stone-500 text-center outline-none"
-                                    title="Optional specific deadline"
-                                />
                                 <button type="button" onClick={handleAddSubtask} className="text-stone-500 hover:text-stone-200 px-3 border-l border-[#292524]"><Plus size={14} /></button>
                             </div>
                         </div>
@@ -407,14 +385,14 @@ export const Grimoire: React.FC = () => {
 
             </form>
 
-            <div className={`p-4 border-t ${isEditing ? 'border-blue-900/30 bg-blue-950/10' : 'border-[#292524] bg-[#0c0a09]'}`}>
+            <div className={`p-4 border-t ${isEditing ? 'border-blue-900/30 bg-blue-950/10' : 'border-[#292524] bg-[#0c0a09]'} sticky bottom-0`}>
                 {isEditing ? (
                     <div className="flex gap-2">
                          <button 
                             onClick={handleSubmit} 
-                            className="flex-1 bg-blue-900/30 text-blue-300 border border-blue-800 py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-blue-900/50 hover:text-white transition-colors flex items-center justify-center gap-2"
+                            className="flex-1 bg-blue-900/30 text-blue-300 border border-blue-800 py-3 md:py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-blue-900/50 hover:text-white transition-colors flex items-center justify-center gap-2"
                         >
-                            <Save size={16} /> Rewrite Fate
+                            <Save size={16} /> Rewrite
                         </button>
                          <button 
                             onClick={resetForm} 
@@ -427,7 +405,7 @@ export const Grimoire: React.FC = () => {
                 ) : (
                     <button 
                         onClick={handleSubmit} 
-                        className="w-full bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-[#5c3a22] hover:text-white transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+                        className="w-full bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-3 md:py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-[#5c3a22] hover:text-white transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
                     >
                         Manifest Enemy
                     </button>
