@@ -4,7 +4,7 @@ import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualE
 import { loadGame, saveGame } from '../utils/saveSystem';
 import { generateId, generateNemesis, generateSpawnPosition, getSageWisdom, getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateHeroEquipment, generateLoot } from '../utils/generators';
 import { simulateReactiveTurn, initializePopulation, updateRealmStats } from '../utils/worldSim';
-import { initFirebase, pushToCloud, subscribeToCloud, disconnect, DEFAULT_FIREBASE_CONFIG } from '../services/firebase';
+import { initFirebase, pushToCloud, subscribeToCloud, disconnect, DEFAULT_FIREBASE_CONFIG, loginWithGoogle, logout as firebaseLogout, subscribeToAuth } from '../services/firebase';
 import { ERA_CONFIG, LEVEL_THRESHOLDS, SPELLS } from '../constants';
 import { playSfx, initAudio, startAmbientDrone, setVolume } from '../utils/audio';
 
@@ -35,35 +35,57 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const cloudUnsubRef = useRef<(() => void) | null>(null);
 
-    // --- AUTO CONNECT CLOUD (MAGIC LINK LOGIC) ---
+    // --- AUTO CONNECT CLOUD (Legacy URL param support) ---
     useEffect(() => {
-        const initCloud = async () => {
-            // 1. Check URL Params for magic link (?room=XYZ)
-            const params = new URLSearchParams(window.location.search);
-            // Normalize ID to uppercase
-            const urlRoom = params.get('room')?.toUpperCase();
-            
-            // 2. Check LocalStorage
-            const savedRoom = localStorage.getItem('ECLIPSE_ROOM_ID');
-            
-            // Priority: URL > LocalStorage
-            const targetRoom = urlRoom || savedRoom;
+        // Initialize Firebase SDK
+        initFirebase(DEFAULT_FIREBASE_CONFIG);
 
-            if (targetRoom && !state.syncConfig?.isConnected) {
-                console.log("[AutoConnect] Establishing Neural Link to:", targetRoom);
+        // Listen for Auth Changes (Google Sign-In)
+        const unsubscribeAuth = subscribeToAuth((user) => {
+            if (user) {
+                console.log("[Auth] User signed in:", user.uid);
+                // When logged in, the Room ID is the User ID
+                const uid = user.uid;
                 
-                // If it came from URL, save it locally for next time so URL param isn't needed forever
-                if (urlRoom) {
-                    localStorage.setItem('ECLIPSE_ROOM_ID', urlRoom);
-                    // Optional: Clean URL without reload
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
+                setState(prev => ({ 
+                    ...prev, 
+                    syncConfig: { 
+                        firebase: DEFAULT_FIREBASE_CONFIG, 
+                        roomId: uid, 
+                        isConnected: true,
+                        user: { uid: user.uid, displayName: user.displayName, email: user.email }
+                    } 
+                }));
 
-                await connectToCloud(DEFAULT_FIREBASE_CONFIG, targetRoom);
+                subscribeToCloud(uid, (data) => { 
+                    playSfx('UI_CLICK'); 
+                    // Preserve sync config when merging
+                    setState(current => ({ 
+                        ...current, 
+                        ...data, 
+                        syncConfig: { ...current.syncConfig!, isConnected: true, user: { uid: user.uid, displayName: user.displayName, email: user.email } } 
+                    })); 
+                });
+            } else {
+                console.log("[Auth] User signed out");
+                // Do not clear state immediately to avoid jarring UX, but mark disconnected
+                setState(prev => ({ 
+                    ...prev, 
+                    syncConfig: prev.syncConfig ? { ...prev.syncConfig, isConnected: false, user: undefined } : undefined 
+                }));
             }
-        };
+        });
 
-        initCloud();
+        // Legacy: Check URL Params for magic link if not authenticated
+        const params = new URLSearchParams(window.location.search);
+        const urlRoom = params.get('room')?.toUpperCase();
+        
+        if (urlRoom && !state.syncConfig?.isConnected) {
+             console.log("[AutoConnect] Establishing Legacy Link to:", urlRoom);
+             connectToCloud(DEFAULT_FIREBASE_CONFIG, urlRoom);
+        }
+
+        return () => unsubscribeAuth();
     }, []);
 
     // --- IDLE DETECTION ---
@@ -796,16 +818,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }
 
-    const connectToCloud = async (config: FirebaseConfig, roomId: string) => {
+    const connectToCloud = async (config: FirebaseConfig, roomId?: string) => {
         ensureAudio();
         resetIdleTimer();
         playSfx('UI_CLICK');
         const success = initFirebase(config);
-        if (success) {
+        
+        // If room ID provided explicitly (Manual/Legacy)
+        if (success && roomId) {
             setState(prev => ({ ...prev, syncConfig: { firebase: config, roomId, isConnected: true } }));
             subscribeToCloud(roomId, (data) => { 
                 playSfx('UI_CLICK'); 
-                // CRITICAL: Preserve local syncConfig when receiving cloud data to avoid losing connection state
+                // Preserve local syncConfig when receiving cloud data to avoid losing connection state
                 setState(current => ({ 
                     ...current, 
                     ...data, 
@@ -814,7 +838,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
             return true;
         }
-        playSfx('ERROR'); return false;
+        return success;
     };
 
     const triggerEvent = (type: MapEventType) => {
@@ -929,7 +953,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         rerollVision: () => triggerEvent('VISION_RITUAL'),
         interactWithNPC: (id) => { ensureAudio(); playSfx('UI_HOVER'); },
         updateSettings,
-        castSpell
+        castSpell,
+        loginWithGoogle: async () => {
+            playSfx('UI_CLICK');
+            await loginWithGoogle();
+        },
+        logout: async () => {
+            playSfx('UI_CLICK');
+            await firebaseLogout();
+        }
     };
 
     return <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>;

@@ -4,10 +4,14 @@
 import { initializeApp } from 'firebase/app';
 // @ts-ignore
 import { getDatabase, ref, set, onValue, off, get } from 'firebase/database';
+// @ts-ignore
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
+
 import { FirebaseConfig, GameState } from '../types';
 
 let app: any = null;
 let db: any = null;
+let auth: any = null;
 let currentUnsubscribe: any = null;
 
 // User provided default config - HARDCODED FOR CONVENIENCE
@@ -27,7 +31,8 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
         if (!app) {
             app = initializeApp(config);
             db = getDatabase(app);
-            console.log("[Cloud] Firebase Initialized via CDN");
+            auth = getAuth(app);
+            console.log("[Cloud] Firebase & Auth Initialized via CDN");
         }
         return true;
     } catch (e) {
@@ -35,6 +40,39 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
         return false;
     }
 };
+
+// --- AUTH FUNCTIONS ---
+
+export const loginWithGoogle = async (): Promise<any> => {
+    if (!auth) initFirebase();
+    if (!auth) {
+        console.error("Auth not initialized");
+        throw new Error("Firebase Auth not initialized");
+    }
+    const provider = new GoogleAuthProvider();
+    try {
+        const result = await signInWithPopup(auth, provider);
+        return result.user;
+    } catch (error) {
+        console.error("Auth Error", error);
+        throw error;
+    }
+};
+
+export const logout = async () => {
+    if (auth) await signOut(auth);
+};
+
+export const subscribeToAuth = (callback: (user: any) => void) => {
+    if (!auth) initFirebase();
+    if (!auth) {
+        console.warn("Auth initialization failed - cannot subscribe");
+        return () => {};
+    }
+    return onAuthStateChanged(auth, callback);
+};
+
+// --- DATA FUNCTIONS ---
 
 export const pushToCloud = async (roomId: string, state: GameState) => {
     if (!db) return;
@@ -51,11 +89,13 @@ export const pushToCloud = async (roomId: string, state: GameState) => {
         isMarketOpen: false,
         isAuditOpen: false,
         isSettingsOpen: false,
-        lastSyncTimestamp: Date.now() // Critical for conflict resolution
+        lastSyncTimestamp: Date.now()
     };
 
     try {
-        await set(ref(db, `timelines/${roomId}`), cleanState);
+        // We use JSON parse/stringify to sanitize undefined values which Firebase hates
+        const sanitized = JSON.parse(JSON.stringify(cleanState));
+        await set(ref(db, `timelines/${roomId}`), sanitized);
         console.log(`[Cloud] Synced to Room: ${roomId}`);
     } catch (e) {
         console.error("[Cloud] Push Failed", e);
@@ -85,6 +125,6 @@ export const disconnect = () => {
     if (db && currentUnsubscribe) {
         currentUnsubscribe = null;
     }
-    app = null;
+    // We don't nullify app/auth to allow reconnection without full reload if needed
     db = null;
 };

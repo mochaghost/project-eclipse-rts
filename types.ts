@@ -266,6 +266,7 @@ export interface GameState {
       firebase: FirebaseConfig;
       roomId: string; 
       isConnected: boolean;
+      user?: { uid: string, displayName: string | null, email: string | null };
   };
   lastSyncTimestamp?: number; 
   settings: GameSettings;
@@ -315,7 +316,9 @@ export interface GameContextType {
   clearSave: () => void; 
   exportSave: () => string; 
   importSave: (data: string) => boolean; 
-  connectToCloud: (config: FirebaseConfig, roomId: string) => Promise<boolean>; 
+  connectToCloud: (config: FirebaseConfig, roomId?: string) => Promise<boolean>; 
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
   disconnectCloud: () => void;
   addEffect: (type: VisualEffect['type'], position: {x:number, y:number, z:number}, text?: string) => void; 
   closeVision: () => void; 
