@@ -219,9 +219,11 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
 
     try {
         const urlObj = new URL(clean);
+        const lowerUrl = clean.toLowerCase();
 
-        // 1. IMAGE DIRECT LINK CHECK
-        if (clean.match(/\.(jpeg|jpg|gif|png|webp)$/) != null) {
+        // 1. DIRECT IMAGE CHECK (Absolute Priority)
+        // If it looks like an image, treat it as an image immediately.
+        if (lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/)) {
              return { type: 'IMAGE', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
         }
 

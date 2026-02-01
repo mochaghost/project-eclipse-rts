@@ -59,50 +59,69 @@ export const VisionMirror: React.FC = () => {
         }
 
         // DIRECT IMAGE
+        // This supports Pinterest Image Links (if ending in .jpg/.png), Discord images, etc.
         if (content.type === 'IMAGE') {
             return (
-                <div className="w-full h-full bg-black flex items-center justify-center">
-                    <img src={content.embedUrl} alt="Vision" className="max-w-full max-h-full object-contain" />
+                <div className="w-full h-full bg-black flex flex-col items-center justify-center relative overflow-hidden">
+                    <img 
+                        src={content.embedUrl} 
+                        alt="Vision" 
+                        className="max-w-full max-h-full object-contain z-10" 
+                    />
+                    {/* Blurred background for aesthetic */}
+                    <div 
+                        className="absolute inset-0 bg-cover bg-center blur-xl opacity-30 z-0"
+                        style={{ backgroundImage: `url(${content.embedUrl})` }}
+                    ></div>
                 </div>
             )
         }
 
         // SOCIAL PORTAL CARD (Default Fallback)
-        // Used for Instagram, Pinterest, TikTok, or ANY unknown link
+        // Used for Instagram Posts, Pinterest BOARDS/PINS (webpages), TikTok, or ANY unknown link
         const isInsta = content.platform === 'INSTAGRAM';
         const isPin = content.platform === 'PINTEREST';
         const isTikTok = content.platform === 'TIKTOK';
         
+        let cardColor = "text-purple-300";
+        let cardBorder = "border-purple-500/30";
+        let cardBg = "bg-purple-900/10";
+        
+        if (isPin) { cardColor = "text-red-300"; cardBorder = "border-red-500/30"; cardBg = "bg-red-900/10"; }
+        if (isInsta) { cardColor = "text-pink-300"; cardBorder = "border-pink-500/30"; cardBg = "bg-pink-900/10"; }
+        if (isTikTok) { cardColor = "text-cyan-300"; cardBorder = "border-cyan-500/30"; cardBg = "bg-cyan-900/10"; }
+
         return (
             <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] relative p-6">
-                <div className="absolute inset-0 bg-gradient-to-b from-purple-900/20 to-black pointer-events-none"></div>
+                <div className="absolute inset-0 bg-gradient-to-b from-black via-[#1a1025] to-black pointer-events-none"></div>
                 
                 {/* Icon */}
-                <div className="mb-6 p-4 rounded-full border-2 border-purple-500/30 bg-purple-900/10 shadow-[0_0_30px_rgba(168,85,247,0.2)]">
+                <div className={`mb-6 p-4 rounded-full border-2 ${cardBorder} ${cardBg} shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10`}>
                     {isInsta ? <Instagram size={48} className="text-pink-500" /> : 
                         isPin ? <div className="text-red-500 font-bold text-4xl font-serif">P</div> : 
                         isTikTok ? <div className="text-cyan-400 font-bold text-xl font-mono">TikTok</div> :
                         <Globe size={48} className="text-blue-400" />}
                 </div>
 
-                <h3 className="text-purple-300 font-serif text-lg tracking-widest mb-2 font-bold uppercase">
+                <h3 className={`${cardColor} font-serif text-lg tracking-widest mb-2 font-bold uppercase z-10`}>
                     {content.platform} SIGNAL
                 </h3>
-                <p className="text-stone-500 text-xs text-center mb-8 max-w-[80%] leading-relaxed">
-                    This vision is warded against scrying. You must open the portal to view it directly.
+                <p className="text-stone-500 text-xs text-center mb-8 max-w-[80%] leading-relaxed z-10">
+                    This scroll is sealed by the Ancients (Security Wards). <br/>
+                    {isPin ? "Use 'Copy Image Address' for a direct view." : "Open the portal to view it."}
                 </p>
 
                 <a 
                     href={content.originalUrl} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="group relative px-6 py-3 bg-purple-900/50 text-white font-serif font-bold tracking-widest uppercase border border-purple-500 hover:bg-purple-800 transition-all shadow-lg hover:shadow-purple-500/50 flex items-center gap-2 pointer-events-auto cursor-pointer z-50"
+                    className="group relative px-6 py-3 bg-stone-900/80 text-white font-serif font-bold tracking-widest uppercase border border-stone-600 hover:bg-stone-800 transition-all shadow-lg flex items-center gap-2 pointer-events-auto cursor-pointer z-50 hover:scale-105"
                 >
                         OPEN PORTAL <ExternalLink size={14}/>
                 </a>
                 
-                <div className="absolute bottom-16 text-[10px] text-stone-700 font-mono break-all max-w-[90%] text-center">
-                    {content.originalUrl}
+                <div className="absolute bottom-16 text-[10px] text-stone-700 font-mono break-all max-w-[90%] text-center z-10 opacity-50">
+                    {content.originalUrl.substring(0, 40)}...
                 </div>
             </div>
         );

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualEffect, FirebaseConfig, MapEventType, ShopItem, EnemyEntity, GameSettings, FactionKey, MinionEntity, WeatherType } from '../types';
 import { loadGame, saveGame } from '../utils/saveSystem';
@@ -168,7 +167,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         const enemy = newState.enemies.find(e => e.taskId === task.id);
                         let graveyardUpdate = prev.nemesisGraveyard || [];
                         if (enemy) {
-                             graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: now, killer: 'TIME' }].slice(-10);
+                             // Fix: Explicitly cast killer to 'TIME' | 'HERO' or use 'as const' to prevent type widening
+                             graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: now, killer: 'TIME' as const }].slice(-10);
                         }
 
                         const sim = simulateReactiveTurn(newState, 'DEFEAT');
@@ -310,7 +310,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const enemy = prev.enemies.find(e => e.taskId === taskId);
             
             let graveyardUpdate = prev.nemesisGraveyard || [];
-            if (enemy) graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'HERO' }].slice(-10);
+            // Fix: Explicitly cast killer to 'HERO' as const
+            if (enemy) graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'HERO' as const }].slice(-10);
 
             const effects: VisualEffect[] = [];
             if (enemy) {
@@ -373,7 +374,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const sim = simulateReactiveTurn(prev, 'DEFEAT');
             const enemy = prev.enemies.find(e => e.taskId === taskId);
             let graveyardUpdate = prev.nemesisGraveyard || [];
-            if (enemy) graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'TIME' }].slice(-10);
+            // Fix: Explicitly cast killer to 'TIME' as const
+            if (enemy) graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'TIME' as const }].slice(-10);
 
             const next: GameState = {
                 ...prev,

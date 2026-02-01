@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 
@@ -89,6 +89,29 @@ const EventTicker: React.FC = () => {
     )
 }
 
+const RealmStatusWidget: React.FC = () => {
+    const { state } = useGame();
+    const stats = state.realmStats;
+    if (!stats) return null;
+
+    let statusText = "STABLE";
+    let statusColor = "text-stone-500";
+    let icon = <Shield size={14} />;
+
+    if (stats.fear > 70) { statusText = "CRISIS"; statusColor = "text-red-500"; icon = <AlertOctagon size={14} />; }
+    else if (stats.hope > 70) { statusText = "GOLDEN AGE"; statusColor = "text-yellow-500"; }
+    else if (stats.order < 30) { statusText = "ANARCHY"; statusColor = "text-orange-500"; }
+
+    return (
+        <div className="absolute top-24 left-6 pointer-events-none z-20 flex items-center gap-3">
+            <div className={`flex items-center gap-2 px-3 py-1 border bg-black/80 ${statusColor} border-current`}>
+                {icon}
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{statusText}</span>
+            </div>
+        </div>
+    );
+};
+
 export const HUD: React.FC = () => {
   const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, toggleDiplomacy } = useGame();
   
@@ -100,6 +123,7 @@ export const HUD: React.FC = () => {
     <div className="absolute inset-0 pointer-events-none p-4 md:p-6 flex flex-col justify-between z-10">
       <VazarothHUD />
       <WorldRumorHUD />
+      <RealmStatusWidget />
       <EventTicker />
       <SplatterOverlay />
 
@@ -119,6 +143,7 @@ export const HUD: React.FC = () => {
              <span>LVL {state.playerLevel}</span>
              <span className="text-[#fbbf24] flex items-center gap-1 font-bold"><Coins size={12} /> {state.gold}g</span>
              {isConnected && <span className="text-green-500 flex items-center gap-1 animate-pulse"><Cloud size={12} /> SYNC</span>}
+             <span className="text-stone-600">v0.0.2</span>
           </div>
         </div>
         

@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2 } from 'lucide-react';
 import { convertToEmbedUrl } from '../../utils/generators';
 
 export const SettingsModal: React.FC = () => {
@@ -14,11 +14,28 @@ export const SettingsModal: React.FC = () => {
     // Restored UI State for Vision
     const [visionMode, setVisionMode] = useState<'DIRECT' | 'SHEET'>('DIRECT');
 
+    // Load saved config from local storage on mount
+    useEffect(() => {
+        const savedConfig = localStorage.getItem('ECLIPSE_FIREBASE_CONFIG');
+        const savedRoom = localStorage.getItem('ECLIPSE_ROOM_ID');
+        if (savedConfig) {
+            try {
+                setConfig(JSON.parse(savedConfig));
+            } catch (e) { console.error("Config parse error", e); }
+        }
+        if (savedRoom) setRoomId(savedRoom);
+    }, []);
+
     if (!state.isSettingsOpen) return null;
 
-    const handleConnect = (e: React.FormEvent) => {
+    const handleConnect = async (e: React.FormEvent) => {
         e.preventDefault();
-        connectToCloud(config, roomId);
+        const success = await connectToCloud(config, roomId);
+        if (success) {
+            // Save to local storage for convenience next time
+            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(config));
+            localStorage.setItem('ECLIPSE_ROOM_ID', roomId);
+        }
     };
 
     const settings = state.settings || { masterVolume: 0.2, graphicsQuality: 'HIGH' };
@@ -117,19 +134,26 @@ export const SettingsModal: React.FC = () => {
                                         {visionMode === 'DIRECT' ? (
                                             <div className="space-y-3 animate-fade-in">
                                                 <p className="text-[10px] text-stone-400">
-                                                    Paste a single <strong>Instagram</strong>, <strong>Pinterest</strong>, or <strong>YouTube</strong> link here. This will override the sheet.
+                                                    Paste a link below. This overrides the Google Sheet.
                                                 </p>
+                                                <div className="bg-blue-900/20 p-2 border border-blue-900/50 rounded mb-2">
+                                                    <p className="text-[10px] text-blue-200 font-bold mb-1">PRO TIP FOR PINTEREST:</p>
+                                                    <ul className="text-[9px] text-stone-400 list-disc pl-4 space-y-1">
+                                                        <li><strong>For Image Mode:</strong> Right-Click the image -> "Copy Image Address" (ends in .jpg/.png).</li>
+                                                        <li><strong>For Portal Mode:</strong> Copy the URL from the browser bar.</li>
+                                                    </ul>
+                                                </div>
                                                 <input 
                                                     type="text" 
-                                                    placeholder="https://www.instagram.com/reel/..." 
+                                                    placeholder="e.g., https://i.pinimg.com/.../image.jpg" 
                                                     value={settings.directVisionUrl || ''}
                                                     onChange={(e) => updateSettings({ directVisionUrl: e.target.value })}
                                                     className="w-full bg-black border border-stone-700 p-3 text-white text-xs font-mono focus:border-purple-500 outline-none"
                                                 />
                                                 {settings.directVisionUrl && (
-                                                    <div className={`text-[10px] flex items-center gap-1 ${directUrlValid ? 'text-green-500' : 'text-red-500'}`}>
-                                                        {directUrlValid ? <Info size={10}/> : <X size={10}/>}
-                                                        {directUrlValid ? 'Link format supported.' : 'Invalid or unsupported link format.'}
+                                                    <div className={`text-[10px] flex items-center gap-1 ${directUrlValid ? 'text-green-500' : 'text-yellow-500'}`}>
+                                                        {directUrlValid ? <CheckCircle2 size={10}/> : <Info size={10}/>}
+                                                        {directUrlValid ? 'Direct Image detected. Will render in 3D.' : 'Webpage detected. Will render as Portal Card.'}
                                                     </div>
                                                 )}
                                             </div>
@@ -178,7 +202,8 @@ export const SettingsModal: React.FC = () => {
                                 <div className="bg-[#151210] p-6 border border-stone-800">
                                     <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest"><Cloud size={14}/> Firebase Sync</h4>
                                     <p className="text-[10px] text-stone-500 mb-4 leading-relaxed">
-                                        Syncs game state across devices sharing the same Room ID. Requires your own Firebase Realtime Database credentials.
+                                        Syncs game state across devices sharing the same Room ID. 
+                                        <br/><strong>Instructions:</strong> Create a Project at <em>console.firebase.google.com</em>, enable Realtime Database (Test Mode), and paste config below.
                                     </p>
                                     <form onSubmit={handleConnect} className="space-y-3">
                                         <input type="text" placeholder="Unique Room ID (e.g. MySecretRoom)" value={roomId} onChange={e => setRoomId(e.target.value)} className="w-full bg-black border border-stone-700 p-3 text-white text-xs outline-none focus:border-blue-500" required />
@@ -196,6 +221,7 @@ export const SettingsModal: React.FC = () => {
                                 <div className="bg-[#151210] p-6 border border-stone-800">
                                     <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest"><Database size={14}/> Manual Backup</h4>
                                     <div className="space-y-4">
+                                        <p className="text-[10px] text-stone-500">Use this to transfer data between Localhost and your deployed site.</p>
                                         <textarea value={importData} onChange={e => setImportData(e.target.value)} className="w-full h-20 bg-black border border-stone-700 p-2 text-stone-300 text-[10px] font-mono outline-none focus:border-yellow-600" placeholder="Paste save string..." />
                                         <div className="flex gap-2">
                                             <button onClick={() => importSave(importData)} className="flex-1 bg-yellow-900/30 text-yellow-500 py-2 border border-yellow-800 hover:bg-yellow-900/50 text-xs font-bold">IMPORT</button>
