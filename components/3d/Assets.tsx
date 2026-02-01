@@ -330,7 +330,7 @@ const CitadelEclipse = () => (
     </group>
 );
 
-export const BaseComplex = ({ era, currentHp, maxHp }: any) => {
+const BaseComplex = ({ era, currentHp, maxHp }: any) => {
     // Determine visuals based on Health %
     const healthPercent = currentHp / maxHp;
     const isDamaged = healthPercent < 0.5;
@@ -482,9 +482,6 @@ export const MinionMesh = () => {
     );
 };
 
-// --- ASSET EXPORTS ---
-export { VazarothTitan, EnemyMesh, VillagerAvatar, House }; 
-
 const VazarothTitan = () => (
     <group position={[0, 20, -100]} scale={[4, 4, 4]}>
         <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
@@ -500,6 +497,7 @@ const VazarothTitan = () => (
         </Float>
     </group>
 );
+
 const House = () => (
     <group>
         <mesh position={[0, 0.5, 0]} castShadow><boxGeometry args={[1.2, 1, 1.2]} /><meshStandardMaterial color="#1f1d1b" /></mesh>
@@ -511,6 +509,7 @@ const House = () => (
         </mesh>
     </group>
 );
+
 const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype = 'MONSTER', subtaskCount = 0, race }: { priority: TaskPriority, name: string, onClick?: () => void, isSelected?: boolean, scale?: number, archetype?: 'MONSTER' | 'KNIGHT', subtaskCount?: number, race?: string }) => {
     const finalScale = scale || (0.5 + (priority * 0.3));
     let color = priority === TaskPriority.HIGH ? PALETTE.BLOOD_BRIGHT : PALETTE.RUST;
@@ -531,6 +530,7 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
         </group>
     )
 }
+
 const VillagerAvatar = ({ role, name, status, onClick, currentAction }: any) => {
     let color = role === 'Guard' ? '#404040' : role === 'Noble' ? '#7f1d1d' : '#57534e';
     if (role === 'Cultist') color = '#3f0e0e';
@@ -560,3 +560,6 @@ export const ResourceNode: React.FC<{ position: any, type: 'GOLD' | 'IRON' }> = 
         <Sparkles count={5} scale={2} color={type === 'GOLD' ? '#fbbf24' : '#94a3b8'} />
     </group>
 );
+
+// Exports at the bottom to avoid Temporal Dead Zone (TDZ) issues
+export { VazarothTitan, EnemyMesh, VillagerAvatar, House, BaseComplex };

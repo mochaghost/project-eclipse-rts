@@ -1,7 +1,7 @@
 
 import React, { useMemo, Suspense, useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { MapControls, Stars, PerspectiveCamera, Cloud, Ring, Sparkles, Instances, Instance } from '@react-three/drei';
+import { MapControls, Stars, PerspectiveCamera, Cloud, Ring, Sparkles, Instances, Instance, Html } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
 import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
@@ -236,11 +236,6 @@ const AtmosphericController = () => {
     // --- REAL TIME CALCULATIONS ---
     const hours = currentTime.getHours() + currentTime.getMinutes() / 60;
     
-    // Day Cycle: 6am (0 rads) to 6pm (PI rads). Night is the rest.
-    // Map 24h to 0-2PI. 
-    // Noon (12) should be PI/2 (Top).
-    // Midnight (0/24) should be 1.5PI (Bottom).
-    // Sunrise (6) should be 0 (Right).
     const sunAngle = ((hours - 6) / 24) * Math.PI * 2; 
     
     const sunRadius = 100;
@@ -273,7 +268,6 @@ const AtmosphericController = () => {
         ambientIntensity = 0.4;
     } else if (isNight) {
         // RTS "Bright Night" Style
-        // Instead of darkness, we shift to High Contrast Blue
         sunColor = '#bfdbfe'; // Very Bright Blue-White Moon
         skyColor = '#1e3a8a'; // Deep Blue Sky
         fogColor = '#0f172a'; // Navy Fog
@@ -298,7 +292,6 @@ const AtmosphericController = () => {
         <>
             <WeatherSystem type={weather} />
             
-            {/* Drastically reduced fog at night to allow visibility */}
             {weather === 'CLEAR' && <fog attach="fog" args={[fogColor, 10, isNight ? fogDist * 1.5 : fogDist]} />}
             
             <hemisphereLight 
@@ -307,7 +300,6 @@ const AtmosphericController = () => {
                 groundColor={isNight ? '#334155' : '#292524'} // Ground is slate blue at night, not black
             />
             
-            {/* SUN / MOON LIGHT */}
             <directionalLight 
                 position={[sunX, sunY, sunZ]} 
                 intensity={intensity} 
@@ -342,6 +334,15 @@ const RitualCircle = () => {
     )
 }
 
+const LoaderFallback = () => (
+    <Html center>
+        <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 border-4 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-yellow-600 font-serif text-sm tracking-widest animate-pulse">MANIFESTING REALITY...</div>
+        </div>
+    </Html>
+)
+
 const PostProcessingEffects = () => {
     const { state } = useGame();
     const isLowQual = state.settings?.graphicsQuality === 'LOW';
@@ -372,7 +373,7 @@ export const Scene: React.FC = () => {
     <Canvas shadows={isHighQuality} dpr={[1, isHighQuality ? 1.5 : 1]} gl={{ antialias: false, stencil: false, depth: true }}>
       <PerspectiveCamera makeDefault position={[20, 20, 20]} fov={35} onUpdate={c => c.lookAt(0, 0, 0)} />
       
-      <Suspense fallback={null}>
+      <Suspense fallback={<LoaderFallback />}>
           <AtmosphericController />
           {isHighQuality && <Stars radius={200} depth={50} count={5000} factor={4} saturation={0} fade speed={0.5} />}
           {isHighQuality && <Cloud opacity={0.2} speed={0.2} bounds={[100, 5, 5]} segments={10} position={[0, 15, -20]} color="#4c1d95" />}
