@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle, Wand2 } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle, Wand2, Activity, Wifi, RefreshCw } from 'lucide-react';
 import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
-    const { state, toggleSettings, exportSave, importSave, clearSave, updateSettings, loginWithGoogle, logout } = useGame();
+    // @ts-ignore
+    const { state, toggleSettings, exportSave, importSave, clearSave, updateSettings, loginWithGoogle, logout, testCloudConnection, forcePull } = useGame();
     const [tab, setTab] = useState<'GENERAL' | 'CLOUD'>('GENERAL');
     const [importData, setImportData] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -14,6 +15,10 @@ export const SettingsModal: React.FC = () => {
     const [configInput, setConfigInput] = useState('');
     const [configStatus, setConfigStatus] = useState<'VALID' | 'INVALID' | 'EMPTY'>('EMPTY');
     const [parsedPreview, setParsedPreview] = useState<any>(null);
+
+    // Diagnostics state
+    const [testStatus, setTestStatus] = useState<'IDLE' | 'TESTING' | 'SUCCESS' | 'FAIL'>('IDLE');
+    const [testMessage, setTestMessage] = useState('');
 
     // Load saved config from local storage on mount
     useEffect(() => {
@@ -30,37 +35,38 @@ export const SettingsModal: React.FC = () => {
 
     // --- SMART PARSER ---
     const parseLooseJson = (input: string) => {
-        // 1. Clean up "const firebaseConfig =" garbage if copied
-        let clean = input.trim();
-        clean = clean.replace(/^(const|var|let)\s+\w+\s*=\s*/, ''); // Remove variable declaration
-        clean = clean.replace(/;$/, ''); // Remove trailing semicolon
-
-        // 2. If it doesn't look like an object, wrap it
-        if (!clean.startsWith('{') && clean.includes(':')) {
-            clean = `{${clean}}`;
-        }
+        if (!input) return null;
 
         try {
-            return JSON.parse(clean);
-        } catch (e) {
-            // 3. AGGRESSIVE FIXING MODE
-            try {
-                let fixed = clean;
-                
-                // Replace single quotes with double quotes
-                fixed = fixed.replace(/'/g, '"');
-                
-                // Add quotes to unquoted keys (e.g. apiKey: -> "apiKey":)
-                // Logic: Find a word followed by a colon, that isn't already inside quotes
-                fixed = fixed.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":');
-                
-                // Remove trailing commas (e.g. "a": 1, } -> "a": 1 })
-                fixed = fixed.replace(/,(\s*})/g, '$1');
+            // 1. Remove comments (// ... and /* ... */)
+            let clean = input.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
-                return JSON.parse(fixed);
-            } catch (e2) {
-                throw new Error("Could not auto-fix");
+            // 2. Extract ONLY the object part (between the first { and last })
+            const firstBrace = clean.indexOf('{');
+            const lastBrace = clean.lastIndexOf('}');
+
+            if (firstBrace === -1 || lastBrace === -1) {
+                // Try strict parse in case it's a flat string, though unlikely here
+                return JSON.parse(clean);
             }
+
+            let objectStr = clean.substring(firstBrace, lastBrace + 1);
+
+            // 3. Convert JS Object syntax to JSON
+            // Quote keys:  apiKey: -> "apiKey":
+            // Regex: find words followed by a colon, but ignore if already quoted
+            objectStr = objectStr.replace(/([a-zA-Z0-9_]+)\s*:/g, '"$1":');
+
+            // Swap single quotes for double quotes (values)
+            objectStr = objectStr.replace(/'/g, '"');
+
+            // Remove trailing commas before closing braces/brackets
+            objectStr = objectStr.replace(/,(\s*[}\]])/g, '$1');
+
+            return JSON.parse(objectStr);
+        } catch (e) {
+            console.error("Parse error", e);
+            return null;
         }
     }
 
@@ -71,16 +77,11 @@ export const SettingsModal: React.FC = () => {
             return;
         }
 
-        try {
-            const parsed = parseLooseJson(input);
-            if (parsed && parsed.apiKey && parsed.projectId) {
-                setConfigStatus('VALID');
-                setParsedPreview(parsed);
-            } else {
-                setConfigStatus('INVALID');
-                setParsedPreview(null);
-            }
-        } catch (e) {
+        const parsed = parseLooseJson(input);
+        if (parsed && parsed.apiKey && parsed.projectId) {
+            setConfigStatus('VALID');
+            setParsedPreview(parsed);
+        } else {
             setConfigStatus('INVALID');
             setParsedPreview(null);
         }
@@ -114,6 +115,18 @@ export const SettingsModal: React.FC = () => {
         if (confirm("FORCE UPLOAD: This will overwrite the Cloud data with the data on THIS device. Are you sure?")) {
             pushToCloud(state.syncConfig.roomId, state);
             alert("Data pushed to Cloud.");
+        }
+    };
+
+    const handleTestConnection = async () => {
+        setTestStatus('TESTING');
+        const res = await testCloudConnection();
+        if (res.success) {
+            setTestStatus('SUCCESS');
+            setTestMessage("Write Verified. Database accessible.");
+        } else {
+            setTestStatus('FAIL');
+            setTestMessage(res.message);
         }
     };
 
@@ -215,63 +228,72 @@ export const SettingsModal: React.FC = () => {
                     ) : (
                         // Cloud / Data Tab
                         <div className="space-y-8">
-                            {/* API CONFIG SECTION */}
-                            <div className={`p-6 border transition-colors ${configStatus === 'VALID' ? 'bg-green-950/10 border-green-900/50' : 'bg-[#151210] border-stone-800'}`}>
-                                <div className="flex justify-between items-start mb-4">
-                                    <h4 className="text-stone-300 text-sm font-bold flex items-center gap-2 uppercase tracking-widest">
-                                        <Key size={14}/> Firebase Config
-                                    </h4>
-                                    {configStatus === 'VALID' ? 
-                                        <span className="text-[10px] text-green-500 flex items-center gap-1 font-bold animate-pulse"><CheckCircle2 size={12}/> VALID CONFIG DETECTED</span> : 
-                                        <span className="text-[10px] text-red-500 flex items-center gap-1 font-bold"><AlertTriangle size={12}/> PASTE CONFIG BELOW</span>
-                                    }
-                                </div>
-                                
-                                <textarea 
-                                    value={configInput}
-                                    onChange={handleInputChange}
-                                    className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-stone-300 border-stone-700'}`}
-                                    placeholder='Paste the entire "firebaseConfig" object here (e.g. apiKey: "AIza..."). We will fix the formatting for you.'
-                                />
-                                
-                                <div className="flex gap-2">
-                                     <button 
-                                        onClick={handleSaveConfig}
-                                        disabled={configStatus !== 'VALID'}
-                                        className={`flex-1 py-3 text-xs font-bold border transition-all flex items-center justify-center gap-2 ${configStatus === 'VALID' ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40' : 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed'}`}
-                                    >
-                                        <Wand2 size={14} /> SAVE & RELOAD (AUTO-FIX)
-                                    </button>
-                                </div>
-                                
-                                {parsedPreview && (
-                                    <div className="mt-2 text-[10px] text-stone-500 font-mono">
-                                        Project ID detected: <span className="text-stone-300">{parsedPreview.projectId}</span>
-                                    </div>
-                                )}
-                            </div>
-
+                            
                             {user ? (
-                                <div className="text-center py-6 animate-fade-in border border-green-900/30 bg-green-950/10">
-                                    <div className="text-green-500 text-xl font-bold mb-2 font-serif tracking-widest">SOUL LINK ACTIVE</div>
-                                    <div className="flex flex-col items-center mb-8">
-                                        <div className="w-16 h-16 rounded-full bg-blue-900/30 border-2 border-blue-500 flex items-center justify-center mb-2">
-                                            <span className="text-2xl text-blue-300 font-serif font-bold">{user.displayName?.[0] || 'A'}</span>
-                                        </div>
-                                        <div className="text-stone-300 font-bold">{user.displayName || 'Anonymous Soul'}</div>
-                                        <div className="text-[10px] text-stone-600">{user.email}</div>
+                                <div className="animate-fade-in border border-green-900/30 bg-green-950/10">
+                                    <div className="p-4 border-b border-green-900/30 flex justify-between items-center">
+                                         <div className="text-green-500 text-sm font-bold font-serif tracking-widest flex items-center gap-2"><CheckCircle2 size={16}/> SOUL LINK ACTIVE</div>
+                                         <div className="text-[10px] text-green-700 font-mono">Connected</div>
                                     </div>
                                     
-                                    <div className="max-w-xs mx-auto mb-8 space-y-3">
-                                        <button 
-                                            onClick={handleForcePush}
-                                            className="w-full bg-blue-900/30 border border-blue-800 text-blue-300 py-2 text-xs font-bold hover:bg-blue-900/50 flex items-center justify-center gap-2"
-                                        >
-                                            <UploadCloud size={14} /> FORCE PUSH LOCAL TO CLOUD
-                                        </button>
-                                        <button onClick={logout} className="w-full bg-red-900/30 text-red-500 px-6 py-2 border border-red-900 hover:bg-red-900/50 font-bold text-xs">
-                                            SEVER LINK (LOGOUT)
-                                        </button>
+                                    <div className="p-6">
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="w-12 h-12 rounded-full bg-blue-900/30 border-2 border-blue-500 flex items-center justify-center shrink-0">
+                                                <span className="text-xl text-blue-300 font-serif font-bold">{user.displayName?.[0] || 'A'}</span>
+                                            </div>
+                                            <div>
+                                                <div className="text-stone-300 font-bold">{user.displayName || 'Anonymous Soul'}</div>
+                                                <div className="text-[10px] text-stone-600">{user.email}</div>
+                                                <div className="text-[10px] text-stone-500 font-mono mt-1">User ID: <span className="text-yellow-600 select-all">{user.uid}</span></div>
+                                            </div>
+                                        </div>
+
+                                        {/* DIAGNOSTICS PANEL */}
+                                        <div className="bg-black/40 border border-stone-800 p-4 mb-6">
+                                            <h5 className="text-[10px] text-stone-500 uppercase tracking-widest font-bold mb-3 flex items-center gap-2"><Activity size={12}/> Connection Diagnostics</h5>
+                                            
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={handleTestConnection}
+                                                    disabled={testStatus === 'TESTING'}
+                                                    className="flex-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-[10px] py-2 border border-stone-600 font-bold flex items-center justify-center gap-2"
+                                                >
+                                                    {testStatus === 'TESTING' ? <Loader2 className="animate-spin" size={12}/> : <Wifi size={12}/>}
+                                                    TEST WRITE PERMISSION
+                                                </button>
+                                                 <button 
+                                                    onClick={forcePull}
+                                                    className="flex-1 bg-blue-900/20 hover:bg-blue-900/40 text-blue-300 text-[10px] py-2 border border-blue-800 font-bold flex items-center justify-center gap-2"
+                                                >
+                                                    <RefreshCw size={12}/>
+                                                    FORCE PULL FROM CLOUD
+                                                </button>
+                                            </div>
+
+                                            {testStatus !== 'IDLE' && (
+                                                <div className={`mt-2 text-[10px] font-mono p-1 text-center ${testStatus === 'SUCCESS' ? 'text-green-500 bg-green-950/30' : testStatus === 'FAIL' ? 'text-red-500 bg-red-950/30' : 'text-stone-500'}`}>
+                                                    {testStatus === 'TESTING' ? "Verifying access..." : testMessage}
+                                                </div>
+                                            )}
+                                            
+                                            {testStatus === 'FAIL' && (
+                                                <div className="mt-2 text-[9px] text-stone-500 leading-tight">
+                                                    Check your Firebase Console &gt; Realtime Database &gt; Rules. Set read/write to true.
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="flex flex-col gap-2">
+                                            <button 
+                                                onClick={handleForcePush}
+                                                className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-600 py-3 text-xs font-bold hover:bg-yellow-900/30 flex items-center justify-center gap-2"
+                                            >
+                                                <UploadCloud size={14} /> FORCE PUSH LOCAL -> CLOUD (OVERWRITE)
+                                            </button>
+                                            <button onClick={logout} className="w-full bg-red-900/30 text-red-500 px-6 py-2 border border-red-900 hover:bg-red-900/50 font-bold text-xs">
+                                                SEVER LINK (LOGOUT)
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
@@ -286,10 +308,46 @@ export const SettingsModal: React.FC = () => {
                                         {isLoggingIn ? "CONNECTING..." : "LOGIN WITH GOOGLE"}
                                     </button>
                                     {configStatus !== 'VALID' && (
-                                        <p className="text-red-500 text-[10px] mt-2 font-mono">Valid Config Required First</p>
+                                        <p className="text-red-500 text-[10px] mt-2 font-mono">Valid Config Required First (See Below)</p>
                                     )}
                                 </div>
                             )}
+
+                            {/* API CONFIG SECTION */}
+                            <div className={`p-6 border transition-colors ${configStatus === 'VALID' ? 'bg-green-950/10 border-green-900/50' : 'bg-[#151210] border-stone-800'}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <h4 className="text-stone-300 text-sm font-bold flex items-center gap-2 uppercase tracking-widest">
+                                        <Key size={14}/> Firebase Config
+                                    </h4>
+                                    {configStatus === 'VALID' ? 
+                                        <span className="text-[10px] text-green-500 flex items-center gap-1 font-bold animate-pulse"><CheckCircle2 size={12}/> VALID CONFIG DETECTED</span> : 
+                                        <span className="text-[10px] text-stone-500 flex items-center gap-1 font-bold"><AlertTriangle size={12}/> PASTE CODE SNIPPET</span>
+                                    }
+                                </div>
+                                
+                                <textarea 
+                                    value={configInput}
+                                    onChange={handleInputChange}
+                                    className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-stone-300 border-stone-700'}`}
+                                    placeholder={`// Paste the ENTIRE block from Firebase here:\n\nconst firebaseConfig = {\n  apiKey: "AIza...",\n  authDomain: "..."\n};`}
+                                />
+                                
+                                <div className="flex gap-2">
+                                     <button 
+                                        onClick={handleSaveConfig}
+                                        disabled={configStatus !== 'VALID'}
+                                        className={`flex-1 py-3 text-xs font-bold border transition-all flex items-center justify-center gap-2 ${configStatus === 'VALID' ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40' : 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed'}`}
+                                    >
+                                        <Wand2 size={14} /> SAVE & RELOAD (AUTO-CLEAN)
+                                    </button>
+                                </div>
+                                
+                                {parsedPreview && (
+                                    <div className="mt-2 text-[10px] text-stone-500 font-mono">
+                                        Project ID: <span className="text-stone-300">{parsedPreview.projectId}</span>
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Manual Backup */}
                             <div className="bg-[#151210] p-6 border border-stone-800">

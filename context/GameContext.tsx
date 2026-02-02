@@ -4,7 +4,7 @@ import { GameState, GameContextType, TaskPriority, Task, Era, AlertType, VisualE
 import { loadGame, saveGame } from '../utils/saveSystem';
 import { generateId, generateNemesis, generateSpawnPosition, getSageWisdom, getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateHeroEquipment, generateLoot } from '../utils/generators';
 import { simulateReactiveTurn, initializePopulation, updateRealmStats } from '../utils/worldSim';
-import { initFirebase, pushToCloud, subscribeToCloud, disconnect, DEFAULT_FIREBASE_CONFIG, loginWithGoogle, logout as firebaseLogout, subscribeToAuth } from '../services/firebase';
+import { initFirebase, pushToCloud, subscribeToCloud, disconnect, DEFAULT_FIREBASE_CONFIG, loginWithGoogle, logout as firebaseLogout, subscribeToAuth, testConnection } from '../services/firebase';
 import { ERA_CONFIG, LEVEL_THRESHOLDS, SPELLS } from '../constants';
 import { playSfx, initAudio, startAmbientDrone, setVolume } from '../utils/audio';
 
@@ -16,7 +16,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     { id: 'WALL_UP', name: 'Reinforce Walls', description: 'Increases Base Max HP.', cost: 400, type: 'UPGRADE_WALLS', value: 1 }
 ];
 
-const GameContext = createContext<GameContextType | undefined>(undefined);
+const GameContext = createContext<GameContextType & { testCloudConnection: () => Promise<{success: boolean, message: string}>, forcePull: () => void } | undefined>(undefined);
 
 export const useGame = () => {
     const context = useContext(GameContext);
@@ -879,7 +879,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fn();
     }
 
-    const contextValue: GameContextType = {
+    const testCloudConnection = async () => {
+        if (!state.syncConfig?.roomId) return { success: false, message: "No Cloud Room ID" };
+        return await testConnection(state.syncConfig.roomId);
+    }
+
+    const forcePull = () => {
+         if (!state.syncConfig?.roomId) return;
+         subscribeToCloud(state.syncConfig.roomId, (data) => {
+             setState(current => ({ 
+                 ...current, 
+                 ...data, 
+                 syncConfig: { ...current.syncConfig!, isConnected: true } 
+             }));
+             alert("Data force pulled from cloud.");
+         });
+    }
+
+    const contextValue: GameContextType & { testCloudConnection: () => Promise<{success: boolean, message: string}>, forcePull: () => void } = {
         state,
         addTask,
         editTask,
@@ -961,7 +978,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout: async () => {
             playSfx('UI_CLICK');
             await firebaseLogout();
-        }
+        },
+        testCloudConnection,
+        forcePull
     };
 
     return <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>;

@@ -183,3 +183,14 @@ export const disconnect = () => {
     }
     db = null;
 };
+
+export const testConnection = async (roomId: string): Promise<{success: boolean, message: string}> => {
+    if (!db) return { success: false, message: "Database not initialized" };
+    try {
+        await set(ref(db, `timelines/${roomId}/_connection_test`), Date.now());
+        return { success: true, message: "Write successful" };
+    } catch (e: any) {
+        console.error("Test Connection Failed", e);
+        return { success: false, message: e.message || "Write failed" };
+    }
+}

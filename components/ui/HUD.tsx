@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 import { SPELLS } from '../../constants';
@@ -182,6 +182,7 @@ const SpellBar: React.FC = () => {
 }
 
 export const HUD: React.FC = () => {
+  // @ts-ignore
   const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, toggleDiplomacy } = useGame();
   const [cinematic, setCinematic] = useState(false);
   
@@ -235,9 +236,13 @@ export const HUD: React.FC = () => {
              <span>ERA: <span className="text-yellow-500">{state.era}</span></span>
              <span>LVL {state.playerLevel}</span>
              <span className="text-[#fbbf24] flex items-center gap-1 font-bold"><Coins size={10} /> {state.gold}g</span>
-             {isConnected && (
-                 <span className="text-green-500 flex items-center gap-1 animate-pulse border border-green-900/50 px-2 bg-green-950/20 rounded">
-                     <Cloud size={10} /> {state.syncConfig?.roomId}
+             {isConnected ? (
+                 <span className="text-green-500 flex items-center gap-1 animate-pulse border border-green-900/50 px-2 bg-green-950/20 rounded cursor-pointer" title="Connected to Cloud" onClick={toggleSettings}>
+                     <Wifi size={10} /> {state.syncConfig?.roomId?.substring(0,6)}...
+                 </span>
+             ) : (
+                 <span className="text-red-500 flex items-center gap-1 border border-red-900/50 px-2 bg-red-950/20 rounded cursor-pointer" title="Offline - Click to Connect" onClick={toggleSettings}>
+                     <WifiOff size={10} /> OFFLINE
                  </span>
              )}
           </div>
@@ -246,7 +251,7 @@ export const HUD: React.FC = () => {
         {/* TOOLBAR */}
         <div className="flex gap-1 md:gap-2">
              <button onClick={() => setCinematic(true)} className="bg-stone-950 border border-stone-800 text-stone-500 p-2 md:p-3 hover:bg-stone-900 hover:text-white" title="Cinematic Mode"><Maximize2 size={16} /></button>
-             <button onClick={toggleSettings} className="bg-stone-900 border border-stone-600 text-stone-400 p-2 md:p-3 hover:bg-stone-800" title="Settings"><Settings size={16} /></button>
+             <button onClick={toggleSettings} className={`border p-2 md:p-3 hover:bg-stone-800 ${isConnected ? 'bg-stone-900 border-stone-600 text-stone-400' : 'bg-red-950/30 border-red-900 text-red-500 animate-pulse'}`} title="Settings"><Settings size={16} /></button>
              <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Audit"><PieChart size={16} /></button>
              <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Map & Diplomacy"><MapIcon size={16} /></button>
              <button onClick={toggleMarket} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Market"><ShoppingBag size={16} /></button>
