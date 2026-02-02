@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle, Wand2 } from 'lucide-react';
 import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
@@ -13,6 +13,7 @@ export const SettingsModal: React.FC = () => {
     // Config state
     const [configInput, setConfigInput] = useState('');
     const [configStatus, setConfigStatus] = useState<'VALID' | 'INVALID' | 'EMPTY'>('EMPTY');
+    const [parsedPreview, setParsedPreview] = useState<any>(null);
 
     // Load saved config from local storage on mount
     useEffect(() => {
@@ -27,20 +28,61 @@ export const SettingsModal: React.FC = () => {
         }
     }, []);
 
-    const validateConfig = (input: string) => {
+    // --- SMART PARSER ---
+    const parseLooseJson = (input: string) => {
+        // 1. Clean up "const firebaseConfig =" garbage if copied
+        let clean = input.trim();
+        clean = clean.replace(/^(const|var|let)\s+\w+\s*=\s*/, ''); // Remove variable declaration
+        clean = clean.replace(/;$/, ''); // Remove trailing semicolon
+
+        // 2. If it doesn't look like an object, wrap it
+        if (!clean.startsWith('{') && clean.includes(':')) {
+            clean = `{${clean}}`;
+        }
+
         try {
-            // Try strict parse first
-            JSON.parse(input);
-            setConfigStatus('VALID');
+            return JSON.parse(clean);
         } catch (e) {
+            // 3. AGGRESSIVE FIXING MODE
             try {
-                // Try "Loose" parse (add quotes to keys) common in JS objects
-                const loose = input.replace(/(\w+):/g, '"$1":').replace(/'/g, '"');
-                JSON.parse(loose);
-                setConfigStatus('VALID');
+                let fixed = clean;
+                
+                // Replace single quotes with double quotes
+                fixed = fixed.replace(/'/g, '"');
+                
+                // Add quotes to unquoted keys (e.g. apiKey: -> "apiKey":)
+                // Logic: Find a word followed by a colon, that isn't already inside quotes
+                fixed = fixed.replace(/([{,]\s*)([a-zA-Z0-9_]+?)\s*:/g, '$1"$2":');
+                
+                // Remove trailing commas (e.g. "a": 1, } -> "a": 1 })
+                fixed = fixed.replace(/,(\s*})/g, '$1');
+
+                return JSON.parse(fixed);
             } catch (e2) {
-                setConfigStatus('INVALID');
+                throw new Error("Could not auto-fix");
             }
+        }
+    }
+
+    const validateConfig = (input: string) => {
+        if (!input.trim()) {
+            setConfigStatus('EMPTY');
+            setParsedPreview(null);
+            return;
+        }
+
+        try {
+            const parsed = parseLooseJson(input);
+            if (parsed && parsed.apiKey && parsed.projectId) {
+                setConfigStatus('VALID');
+                setParsedPreview(parsed);
+            } else {
+                setConfigStatus('INVALID');
+                setParsedPreview(null);
+            }
+        } catch (e) {
+            setConfigStatus('INVALID');
+            setParsedPreview(null);
         }
     };
 
@@ -50,28 +92,20 @@ export const SettingsModal: React.FC = () => {
     };
 
     const handleSaveConfig = () => {
-        try {
-            let parsed;
-            try {
-                parsed = JSON.parse(configInput);
-            } catch (e) {
-                // Auto-fix JS object notation to JSON
-                const loose = configInput.replace(/(\w+):/g, '"$1":').replace(/'/g, '"');
-                parsed = JSON.parse(loose);
-            }
-            
-            // Check for required fields
-            if (!parsed.apiKey || !parsed.projectId) {
-                alert("Config looks incomplete. Missing 'apiKey' or 'projectId'.");
-                return;
-            }
+        if (configStatus !== 'VALID' || !parsedPreview) {
+            alert("Invalid Config. Please ensure you copied the 'firebaseConfig' object correctly.");
+            return;
+        }
 
-            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(parsed));
-            if (confirm("Configuration Saved! The page must reload to initialize the new connection. Reload now?")) {
+        try {
+            // Save the SANITIZED version
+            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(parsedPreview));
+            
+            if (confirm("Configuration Saved! The system must restart to apply the new Soul Link. Reload now?")) {
                 window.location.reload();
             }
         } catch (e) {
-            alert("Could not parse configuration. Please ensure you copied the object correctly from Firebase.");
+            alert("Save failed.");
         }
     };
 
@@ -188,27 +222,33 @@ export const SettingsModal: React.FC = () => {
                                         <Key size={14}/> Firebase Config
                                     </h4>
                                     {configStatus === 'VALID' ? 
-                                        <span className="text-[10px] text-green-500 flex items-center gap-1 font-bold"><CheckCircle2 size={12}/> VALID FORMAT</span> : 
-                                        <span className="text-[10px] text-red-500 flex items-center gap-1 font-bold"><AlertTriangle size={12}/> INVALID</span>
+                                        <span className="text-[10px] text-green-500 flex items-center gap-1 font-bold animate-pulse"><CheckCircle2 size={12}/> VALID CONFIG DETECTED</span> : 
+                                        <span className="text-[10px] text-red-500 flex items-center gap-1 font-bold"><AlertTriangle size={12}/> PASTE CONFIG BELOW</span>
                                     }
                                 </div>
                                 
                                 <textarea 
                                     value={configInput}
                                     onChange={handleInputChange}
-                                    className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-red-300 border-red-900/50'}`}
-                                    placeholder='Paste the "firebaseConfig" object from Firebase Console here...'
+                                    className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-stone-300 border-stone-700'}`}
+                                    placeholder='Paste the entire "firebaseConfig" object here (e.g. apiKey: "AIza..."). We will fix the formatting for you.'
                                 />
-                                <button 
-                                    onClick={handleSaveConfig}
-                                    disabled={configStatus !== 'VALID'}
-                                    className={`w-full py-2 text-xs font-bold border transition-all ${configStatus === 'VALID' ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40' : 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed'}`}
-                                >
-                                    SAVE & RELOAD
-                                </button>
-                                <p className="text-[10px] text-stone-500 mt-2 italic text-center">
-                                    Paste the object found in Project Settings {`{ apiKey: "...", ... }`}
-                                </p>
+                                
+                                <div className="flex gap-2">
+                                     <button 
+                                        onClick={handleSaveConfig}
+                                        disabled={configStatus !== 'VALID'}
+                                        className={`flex-1 py-3 text-xs font-bold border transition-all flex items-center justify-center gap-2 ${configStatus === 'VALID' ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40' : 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed'}`}
+                                    >
+                                        <Wand2 size={14} /> SAVE & RELOAD (AUTO-FIX)
+                                    </button>
+                                </div>
+                                
+                                {parsedPreview && (
+                                    <div className="mt-2 text-[10px] text-stone-500 font-mono">
+                                        Project ID detected: <span className="text-stone-300">{parsedPreview.projectId}</span>
+                                    </div>
+                                )}
                             </div>
 
                             {user ? (
