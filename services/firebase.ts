@@ -14,7 +14,7 @@ let db: any = null;
 let auth: any = null;
 let currentUnsubscribe: any = null;
 
-// PLACEHOLDER CONFIG - This is likely what is causing the "configuration-not-found" error
+// PLACEHOLDER CONFIG - This is likely what is causing the "configuration-not-found" error if used directly
 // The user MUST provide their own config via the Settings UI if this fails.
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   apiKey: "AIzaSyAC0BL8gZCzOZeHuSBXTljs2Zs0v4MA070",
@@ -40,7 +40,7 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
         console.warn("[Cloud] Failed to load saved config", e);
     }
 
-    // 2. Initialize
+    // 2. Initialize App
     try {
         const apps = getApps();
         if (apps.length === 0) {
@@ -54,23 +54,29 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
         return false;
     }
 
+    // 3. Initialize Services (Defensively)
+    // We try/catch individual services so one failure doesn't break the whole app
     try {
         if (app && !db) {
             db = getDatabase(app);
+            console.log("[Cloud] Database Service Initialized");
         }
     } catch (e) {
-        console.error("[Cloud] Database Service Failed", e);
+        console.error("[Cloud] Database Service Failed - Cloud Save Disabled", e);
+        db = null; 
     }
 
     try {
         if (app && !auth) {
             auth = getAuth(app);
+            console.log("[Cloud] Auth Service Initialized");
         }
     } catch (e) {
-        console.error("[Cloud] Auth Service Failed", e);
+        console.error("[Cloud] Auth Service Failed - Login Disabled", e);
+        auth = null;
     }
 
-    return !!app;
+    return !!app && (!!db || !!auth);
 };
 
 // --- AUTH FUNCTIONS ---
@@ -95,7 +101,7 @@ export const loginWithGoogle = async (): Promise<any> => {
         
         // Handle specific errors for the user
         if (error.code === 'auth/configuration-not-found') {
-            throw new Error("CLOUD CONFIG ERROR: This project ID is not set up for Google Login. Please creating your own Firebase project, enable Google Auth, and paste the config in Settings > Cloud Save.");
+            throw new Error("CLOUD CONFIG ERROR: This project ID is not set up for Google Login. Please create your own Firebase project, enable Google Auth, and paste the config in Settings > Cloud Save.");
         }
         if (error.code === 'auth/popup-blocked') {
             throw new Error("Popup blocked by browser. Please allow popups for this site.");
@@ -119,7 +125,6 @@ export const subscribeToAuth = (callback: (user: any) => void) => {
     if (!auth) initFirebase();
     
     if (!auth) {
-        // If still no auth, wait a bit or just return empty
         console.warn("[Auth] Cannot subscribe - Auth service missing");
         return () => {};
     }
@@ -130,7 +135,7 @@ export const subscribeToAuth = (callback: (user: any) => void) => {
 
 export const pushToCloud = async (roomId: string, state: GameState) => {
     if (!db) {
-        console.warn("[Cloud] Cannot push - Database service missing");
+        // Silent fail if DB failed to init, to avoid spamming console
         return;
     }
     
@@ -185,7 +190,7 @@ export const disconnect = () => {
 };
 
 export const testConnection = async (roomId: string): Promise<{success: boolean, message: string}> => {
-    if (!db) return { success: false, message: "Database not initialized" };
+    if (!db) return { success: false, message: "Database not initialized (Check Console for errors)" };
     try {
         await set(ref(db, `timelines/${roomId}/_connection_test`), Date.now());
         return { success: true, message: "Write successful" };
