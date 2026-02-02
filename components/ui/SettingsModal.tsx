@@ -321,6 +321,7 @@ export const SettingsModal: React.FC = () => {
                                 <textarea 
                                     value={configInput}
                                     onChange={handleInputChange}
+                                    spellCheck={false}
                                     className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-stone-300 border-stone-700'}`}
                                     placeholder={`// Paste the ENTIRE block from Firebase here:\n\nconst firebaseConfig = {\n  apiKey: "AIza...",\n  authDomain: "..."\n};`}
                                 />
