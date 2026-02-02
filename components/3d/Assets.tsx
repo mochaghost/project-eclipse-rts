@@ -656,6 +656,7 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
                 `}>
                     {name}
                     {failed && <span className="text-[8px] bg-red-600 text-white px-1 mt-1">FAILED</span>}
+                    {/* VISUAL INDICATOR FOR FORESIGHT/PREDICTION if name matches format (hacky but functional without passing new prop deeper) */}
                 </div>
             </Html>
         </group>

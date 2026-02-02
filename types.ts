@@ -309,6 +309,7 @@ export interface GameContextType {
   resolveCrisisHubris: (taskId: string) => void;
   resolveCrisisHumility: (taskId: string) => void; 
   resolveAeonBattle: (taskId: string, newSubtasks: string[], success: boolean) => void; 
+  resolveFailedTask: (taskId: string, action: 'RESCHEDULE' | 'MERGE', newTime?: number) => void;
   triggerRitual: (type: AlertType) => void;
   triggerEvent: (type: MapEventType) => void; 
   completeRitual: () => void;
