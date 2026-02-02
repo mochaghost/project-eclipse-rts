@@ -281,7 +281,7 @@ export const SettingsModal: React.FC = () => {
                                                 onClick={handleForcePush}
                                                 className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-600 py-3 text-xs font-bold hover:bg-yellow-900/30 flex items-center justify-center gap-2"
                                             >
-                                                <UploadCloud size={14} /> FORCE PUSH LOCAL -> CLOUD (OVERWRITE)
+                                                <UploadCloud size={14} /> FORCE PUSH LOCAL -&gt; CLOUD (OVERWRITE)
                                             </button>
                                             <button onClick={logout} className="w-full bg-red-900/30 text-red-500 px-6 py-2 border border-red-900 hover:bg-red-900/50 font-bold text-xs">
                                                 SEVER LINK (LOGOUT)
