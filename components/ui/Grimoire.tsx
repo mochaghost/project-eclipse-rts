@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Archive } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -11,7 +11,8 @@ const HOURS = Array.from({length: 24}, (_, i) => i);
 type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
 export const Grimoire: React.FC = () => {
-  const { state, toggleGrimoire, addTask, editTask, moveTask, completeRitual } = useGame();
+  // @ts-ignore
+  const { state, toggleGrimoire, addTask, editTask, moveTask, completeRitual, resolveFailedTask } = useGame();
   
   // Navigation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -34,6 +35,9 @@ export const Grimoire: React.FC = () => {
   const [newSubtask, setNewSubtask] = useState('');
   const [newSubtaskDeadlineStr, setNewSubtaskDeadlineStr] = useState('');
   const [parentId, setParentId] = useState<string>(''); 
+  
+  // Failed Task Resolution State
+  const [resolvingTaskId, setResolvingTaskId] = useState<string | null>(null);
 
   // Potential Parents (Any active main task except the one we are editing)
   const potentialParents = useMemo(() => {
@@ -52,18 +56,21 @@ export const Grimoire: React.FC = () => {
 
   // --- DRAG & DROP HANDLERS ---
   const handleDragStart = (e: React.DragEvent, task: Task) => {
+      e.stopPropagation(); // Crucial: Stop bubbling so HUD doesn't think we clicked "outside"
       e.dataTransfer.setData("taskId", task.id);
       setDraggedTaskId(task.id);
       e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault(); // Necessary to allow dropping
+      e.preventDefault(); 
+      e.stopPropagation();
       e.dataTransfer.dropEffect = "move";
   };
 
   const handleDrop = (e: React.DragEvent, targetDate: Date, targetHour?: number) => {
       e.preventDefault();
+      e.stopPropagation();
       const taskId = e.dataTransfer.getData("taskId");
       setDraggedTaskId(null);
       
@@ -95,12 +102,28 @@ export const Grimoire: React.FC = () => {
   };
 
   const handleSelectSlot = (date: Date, hour?: number) => {
+      // Prevent selecting past if strict, but let's be flexible for viewing.
+      // However, for creation, update selectedDate.
       setSelectedDate(date);
       if (hour !== undefined) {
           const start = `${hour < 10 ? '0'+hour : hour}:00`;
           const end = `${hour+1 < 10 ? '0'+(hour+1) : (hour+1)}:00`;
           setStartTimeStr(start);
           setEndTimeStr(end);
+      }
+      // Reset resolving/editing if clicking blank
+      setEditingTaskId(null);
+      setResolvingTaskId(null);
+      resetForm();
+  };
+
+  const handleTaskClick = (task: Task) => {
+      if (task.failed) {
+          setResolvingTaskId(task.id);
+          setEditingTaskId(null);
+      } else {
+          handleEditTask(task);
+          setResolvingTaskId(null);
       }
   };
 
@@ -117,13 +140,14 @@ export const Grimoire: React.FC = () => {
       const deadlineDate = new Date(task.deadline);
       const startDate = new Date(task.startTime);
       
-      setSelectedDate(deadlineDate); 
+      setSelectedDate(startDate); 
       setStartTimeStr(startDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: false}));
       setEndTimeStr(deadlineDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: false}));
   };
 
   const resetForm = () => {
       setEditingTaskId(null);
+      setResolvingTaskId(null);
       setTitle(''); 
       setNotes(''); 
       setSubtasks([]); 
@@ -142,8 +166,20 @@ export const Grimoire: React.FC = () => {
     const startDate = new Date(selectedDate);
     startDate.setHours(startH, startM, 0);
     
-    const deadlineDate = new Date(selectedDate);
+    // Check if past (Simple check, allow 1 min grace)
+    if (startDate.getTime() < Date.now() - 60000 && !editingTaskId) {
+        alert("Time flows forward, Summoner. You cannot schedule in the past.");
+        return;
+    }
+    
+    // Handle overnight tasks or simple end time
+    let deadlineDate = new Date(selectedDate);
     deadlineDate.setHours(endH, endM, 0);
+    if (deadlineDate <= startDate) {
+        // Assume next day if end time is before start time (e.g. 23:00 -> 01:00)
+        // Or just enforce min duration
+        deadlineDate.setTime(startDate.getTime() + 60 * 60 * 1000); 
+    }
     
     const dur = Math.max(15, (deadlineDate.getTime() - startDate.getTime()) / 60000);
 
@@ -203,7 +239,7 @@ export const Grimoire: React.FC = () => {
           const date = new Date(year, month, d);
           const isToday = new Date().toDateString() === date.toDateString();
           const isSelected = selectedDate.toDateString() === date.toDateString();
-          const tasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === date.toDateString());
+          const tasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === date.toDateString());
           grid.push(
               <div 
                 key={d} 
@@ -219,8 +255,8 @@ export const Grimoire: React.FC = () => {
                             key={t.id} 
                             draggable
                             onDragStart={(e) => handleDragStart(e, t)}
-                            onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
-                            className={`text-[8px] md:text-[9px] px-1 truncate rounded cursor-grab active:cursor-grabbing hover:brightness-125 flex items-center gap-1 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700' : 'bg-yellow-950/30 text-yellow-600'}`}
+                            onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
+                            className={`text-[8px] md:text-[9px] px-1 truncate rounded cursor-grab active:cursor-grabbing hover:brightness-125 flex items-center gap-1 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700 font-bold border border-red-900' : 'bg-yellow-950/30 text-yellow-600'}`}
                           >
                               <GripVertical size={8} className="opacity-50" />
                               {getTaskDisplayTitle(t)}
@@ -236,7 +272,42 @@ export const Grimoire: React.FC = () => {
 
   const renderDayView = () => {
       const d = new Date(currentDate);
-      const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString());
+      const dayTasks = state.tasks.filter(t => {
+          const taskStart = new Date(t.startTime);
+          return taskStart.toDateString() === d.toDateString();
+      });
+
+      // CALCULATE OVERLAPS for layout
+      // Simple algorithm: Sort by start time, find intersecting groups, assign columns
+      const sorted = [...dayTasks].sort((a,b) => a.startTime - b.startTime);
+      const layoutMap = new Map<string, { left: number, width: number }>();
+      
+      const columns: Task[][] = [];
+      sorted.forEach(task => {
+          let placed = false;
+          for(let i=0; i<columns.length; i++) {
+              const lastInCol = columns[i][columns[i].length-1];
+              // If this task starts after the last one in this column ends, put it here
+              if (task.startTime >= lastInCol.deadline) {
+                  columns[i].push(task);
+                  placed = true;
+                  break;
+              }
+          }
+          if (!placed) {
+              columns.push([task]);
+          }
+      });
+
+      // Assign widths based on overlap count at any given time? 
+      // Simplified: Just use column index / total columns active in that overlapping cluster.
+      // Actually, a simpler CSS grid approach: width = 100% / max_overlap_group? 
+      // Let's stick to simple columns: left = (colIndex * 100/totalCols)%, width = (100/totalCols)%
+      
+      // Need to refine columns logic: A task in col 0 might overlap with col 1, but col 1 task might end, then col 2 starts.
+      // This is complex for a quick fix. We'll use a visual offset approach.
+      // Width = 90% - (indent * 5%). Z-index increases.
+      
       return (
           <div className="flex h-full overflow-hidden flex-col">
               <div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-16 border-r border-[#292524]"></div><div className={`flex-1 text-center py-2 ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-xs text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-lg font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div></div>
@@ -250,14 +321,47 @@ export const Grimoire: React.FC = () => {
                         className="h-32 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
                     ></div>
                 ))}
-                {dayTasks.map(t => {
-                  const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 128; const height = Math.max(32, durationHrs * 128);
-                  return (<div 
+                {sorted.map((t, index) => {
+                  const date = new Date(t.startTime); 
+                  const startHour = date.getHours() + (date.getMinutes()/60); 
+                  const deadline = new Date(t.deadline);
+                  const endHour = deadline.getHours() + (deadline.getMinutes()/60);
+                  
+                  // Handle day wrapping visual (cutoff at 24)
+                  const displayEndHour = deadline.getDate() !== date.getDate() ? 24 : endHour;
+                  const durationHrs = Math.max(0.25, displayEndHour - startHour);
+                  
+                  const top = startHour * 128; // 128px per hour (matching h-32 * 4? no, h-32 is 8rem = 128px)
+                  const height = durationHrs * 128;
+                  
+                  // Find column index
+                  let colIndex = 0;
+                  for(let c=0; c<columns.length; c++) {
+                      if(columns[c].includes(t)) { colIndex = c; break; }
+                  }
+                  const widthPercent = 100 / columns.length;
+                  const leftPercent = colIndex * widthPercent;
+
+                  return (
+                      <div 
                             key={t.id} 
                             draggable
                             onDragStart={(e) => handleDragStart(e, t)}
-                            onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
-                            className={`absolute left-2 right-2 rounded border overflow-hidden p-2 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.01] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-20'}`} style={{ top: `${top}px`, height: `${height}px` }}><div className="font-bold flex items-center justify-between"><span className="truncate">{getTaskDisplayTitle(t)}</span>{t.parentId && <LinkIcon size={10} className="opacity-50" />}</div><span className="text-[10px] opacity-70 font-mono mt-1">{new Date(t.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(t.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>)
+                            onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
+                            className={`absolute rounded border overflow-hidden p-2 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/80 border-red-600 text-red-100 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-yellow-950/80 border-yellow-800 text-yellow-100 hover:z-20'}`} 
+                            style={{ 
+                                top: `${top}px`, 
+                                height: `${height}px`,
+                                left: `${leftPercent}%`,
+                                width: `${widthPercent}%`,
+                                borderLeftWidth: '4px'
+                            }}
+                      >
+                            <div className="font-bold flex items-center justify-between"><span className="truncate">{getTaskDisplayTitle(t)}</span>{t.parentId && <LinkIcon size={10} className="opacity-50" />}</div>
+                            <span className="text-[10px] opacity-70 font-mono mt-1">{new Date(t.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(t.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                            {t.failed && <div className="mt-auto text-[9px] font-bold text-red-300 uppercase bg-red-900/50 text-center py-1">FAILED - RESOLVE</div>}
+                      </div>
+                  )
               })}</div></div></div>
       );
   }
@@ -266,7 +370,7 @@ export const Grimoire: React.FC = () => {
       const startOfWeek = new Date(currentDate); startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
       const weekDays = Array.from({length: 7}, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
       return (
-          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[9px] md:text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-xs md:text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.deadline).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
+          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[9px] md:text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-xs md:text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
             {HOURS.map(h => (
                 <div 
                     key={h} 
@@ -276,12 +380,12 @@ export const Grimoire: React.FC = () => {
                     className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
                 ></div>
             ))}
-            {dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = t.estimatedDuration / 60; const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div 
+            {dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = (t.deadline - t.startTime) / (1000*60*60); const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div 
                 key={t.id} 
                 draggable
                 onDragStart={(e) => handleDragStart(e, t)}
-                onClick={(e) => { e.stopPropagation(); handleEditTask(t); }} 
-                className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/50 border-red-800 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-20'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
+                onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
+                className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/80 border-red-600 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-20'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
       );
   };
 
@@ -292,6 +396,51 @@ export const Grimoire: React.FC = () => {
   };
 
   const isEditing = !!editingTaskId;
+  const isResolving = !!resolvingTaskId;
+
+  // Resolve Panel Content
+  const renderResolvePanel = () => {
+      const task = state.tasks.find(t => t.id === resolvingTaskId);
+      if (!task) return null;
+
+      return (
+          <div className="h-full flex flex-col p-6 bg-red-950/10">
+              <div className="text-center mb-6">
+                  <Skull size={48} className="text-red-600 mx-auto mb-2 animate-pulse" />
+                  <h3 className="text-xl font-serif text-red-500 tracking-widest font-bold">FAILURE DETECTED</h3>
+                  <p className="text-stone-400 text-sm mt-2 italic">"{task.title}" has succumbed to the void.</p>
+              </div>
+
+              <div className="space-y-4">
+                  <button 
+                    onClick={() => resolveFailedTask(task.id, 'RESCHEDULE', Date.now())}
+                    className="w-full bg-[#1c1917] border border-stone-600 p-4 hover:border-yellow-500 hover:bg-yellow-950/20 text-left group transition-all"
+                  >
+                      <div className="flex items-center gap-2 text-yellow-600 font-bold mb-1">
+                          <RefreshCw size={18} />
+                          <span>RESURRECT (Reschedule)</span>
+                      </div>
+                      <p className="text-xs text-stone-500 group-hover:text-stone-300">Move this task to now. The enemy returns.</p>
+                  </button>
+
+                  <button 
+                    onClick={() => resolveFailedTask(task.id, 'MERGE')}
+                    className="w-full bg-[#1c1917] border border-stone-600 p-4 hover:border-purple-500 hover:bg-purple-950/20 text-left group transition-all"
+                  >
+                      <div className="flex items-center gap-2 text-purple-500 font-bold mb-1">
+                          <Archive size={18} />
+                          <span>CONSUME (Dismiss)</span>
+                      </div>
+                      <p className="text-xs text-stone-500 group-hover:text-stone-300">Accept the loss. The enemy fades, but the damage remains.</p>
+                  </button>
+              </div>
+
+              <button onClick={() => setResolvingTaskId(null)} className="mt-auto w-full py-3 text-stone-500 hover:text-white border-t border-stone-800">
+                  Close
+              </button>
+          </div>
+      )
+  }
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md md:p-4 pointer-events-auto">
@@ -344,173 +493,194 @@ export const Grimoire: React.FC = () => {
             </div>
         </div>
 
-        {/* RIGHT PANEL: SUMMONING FORM */}
-        <div className={`w-full md:w-1/4 bg-[#0c0a09] flex flex-col h-[50%] md:h-full relative z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] transition-colors duration-500 ${isEditing ? 'border-l-0 md:border-l-2 border-t-2 md:border-t-0 border-blue-900' : ''}`}>
-            <div className={`h-12 md:h-16 flex items-center justify-center border-b border-[#292524] ${isEditing ? 'bg-blue-950/20' : 'bg-[#0c0a09]'}`}>
-                <div className={`flex items-center gap-2 font-serif text-sm md:text-lg tracking-[0.2em] font-bold ${isEditing ? 'text-blue-400' : 'text-yellow-700'}`}>
-                    {isEditing ? <Pen size={14} /> : <Scroll size={14} className="rotate-45" />}
-                    <span>{isEditing ? 'EDITING FATE' : 'SUMMONING'}</span>
-                </div>
-            </div>
-
-            <form onSubmit={handleSubmit} className="flex-1 p-4 md:p-6 overflow-y-auto space-y-4 md:space-y-5 custom-scrollbar pb-20 md:pb-6">
-                
-                {/* Date/Time Readout */}
-                <div className={`bg-[#151210] border p-2 md:p-4 text-center ${isEditing ? 'border-blue-900/30' : 'border-[#292524]'}`}>
-                    <div className="text-[10px] md:text-xs text-stone-500 uppercase tracking-widest mb-2 font-bold">{DAYS[selectedDate.getDay()]}, {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]}</div>
-                    
-                    <div className="flex items-center justify-center gap-2">
-                        <div className="flex flex-col items-center">
-                            <label className="text-[9px] text-stone-600 mb-1 uppercase">Start</label>
-                            <input 
-                                type="time" 
-                                value={startTimeStr} 
-                                onChange={(e) => setStartTimeStr(e.target.value)} 
-                                className="bg-black border border-[#292524] text-stone-300 font-mono text-sm p-1 w-16 md:w-20 text-center outline-none focus:border-stone-500"
-                            />
-                        </div>
-                        <span className="text-stone-600 mt-4">-</span>
-                        <div className="flex flex-col items-center">
-                            <label className="text-[9px] text-yellow-900 mb-1 uppercase font-bold">End</label>
-                            <input 
-                                type="time" 
-                                value={endTimeStr} 
-                                onChange={(e) => setEndTimeStr(e.target.value)} 
-                                className="bg-black border border-yellow-900/30 text-yellow-500 font-mono text-sm p-1 w-16 md:w-20 text-center outline-none focus:border-yellow-600"
-                            />
+        {/* RIGHT PANEL: SUMMONING FORM or RESOLVE PANEL */}
+        <div className={`w-full md:w-1/4 bg-[#0c0a09] flex flex-col h-[50%] md:h-full relative z-20 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] transition-colors duration-500 ${isEditing ? 'border-l-0 md:border-l-2 border-t-2 md:border-t-0 border-blue-900' : isResolving ? 'border-l-0 md:border-l-2 border-t-2 md:border-t-0 border-red-900' : ''}`}>
+            
+            {isResolving ? renderResolvePanel() : (
+                <>
+                    <div className={`h-12 md:h-16 flex items-center justify-center border-b border-[#292524] ${isEditing ? 'bg-blue-950/20' : 'bg-[#0c0a09]'}`}>
+                        <div className={`flex items-center gap-2 font-serif text-sm md:text-lg tracking-[0.2em] font-bold ${isEditing ? 'text-blue-400' : 'text-yellow-700'}`}>
+                            {isEditing ? <Pen size={14} /> : <Scroll size={14} className="rotate-45" />}
+                            <span>{isEditing ? 'EDITING FATE' : 'SUMMONING'}</span>
                         </div>
                     </div>
-                </div>
 
-                <div>
-                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block">Enemy Name</label>
-                    <input 
-                        type="text" 
-                        value={title} 
-                        onChange={(e) => setTitle(e.target.value)} 
-                        className="w-full bg-[#151210] border-b border-[#292524] p-2 md:p-3 text-stone-200 focus:border-yellow-900 outline-none font-serif text-base md:text-lg placeholder:text-stone-800 placeholder:italic transition-colors"
-                        placeholder="e.g., The Tax Beast"
-                        autoFocus={!isEditing}
-                    />
-                </div>
-
-                {/* DESCRIPTION BOX - RESTORED */}
-                <div>
-                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
-                        <AlignLeft size={10} /> Description / Notes
-                    </label>
-                    <textarea 
-                        value={notes} 
-                        onChange={(e) => setNotes(e.target.value)} 
-                        className="w-full bg-[#151210] border border-[#292524] p-2 md:p-3 text-stone-400 text-xs focus:border-stone-600 outline-none min-h-[80px] font-mono resize-none"
-                        placeholder="Details of the summoning..."
-                    />
-                </div>
-
-                {/* PARENT TASK SELECTOR (Hierarchical Linking) */}
-                <div>
-                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
-                        <Network size={10} /> Link to Overlord
-                    </label>
-                    <select 
-                        value={parentId} 
-                        onChange={(e) => setParentId(e.target.value)}
-                        className="w-full bg-[#151210] border border-[#292524] p-2 md:p-3 text-stone-300 text-xs focus:border-blue-900 outline-none"
-                    >
-                        <option value="">-- Independent --</option>
-                        {potentialParents.map(p => (
-                            <option key={p.id} value={p.id}>
-                                {getTaskDisplayTitle(p)}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div>
-                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-2 block">Threat Level</label>
-                    <div className="flex gap-0 border border-[#292524]">
-                        {[1,2,3].map(p => (
-                            <button 
-                                key={p} 
-                                type="button" 
-                                onClick={() => setPriority(p as TaskPriority)} 
-                                className={`
-                                    flex-1 py-2 md:py-3 flex flex-col items-center justify-center gap-1 transition-all
-                                    ${priority === p ? 'bg-yellow-900/20 text-yellow-500 border-x border-yellow-900/50' : 'bg-[#0c0a09] text-stone-600 hover:bg-[#151210] border-x border-transparent'}
-                                `}
-                            >
-                                <span className="font-serif font-bold text-sm">{p === 1 ? 'I' : p === 2 ? 'II' : 'III'}</span>
-                                {p === 3 && <ShieldAlert size={10} />}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex-1 flex flex-col">
-                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-2 block flex items-center gap-2">
-                        <Users size={12} /> Minions (Subtasks)
-                    </label>
-                    <div className="bg-[#050202] border border-[#292524] p-0 flex-1 min-h-[80px] flex flex-col">
-                        <div className="flex-1 space-y-0 p-0">
-                            {subtasks.map((st, idx) => (
-                                <div key={idx} className="flex justify-between items-center group text-xs text-stone-400 p-2 border-b border-[#1c1917] hover:bg-[#151210]">
-                                    <div className="flex flex-col">
-                                        <span className="font-mono truncate">{st.title}</span>
-                                    </div>
-                                    <button type="button" onClick={() => setSubtasks(subtasks.filter((_,i)=>i!==idx))} className="text-stone-700 hover:text-red-500"><Trash2 size={12} /></button>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="border-t border-[#292524] bg-[#151210]">
-                            <div className="flex gap-0">
+                    <form onSubmit={handleSubmit} className="flex-1 p-4 md:p-6 overflow-y-auto space-y-4 md:space-y-5 custom-scrollbar pb-20 md:pb-6">
+                        
+                        {/* Date Input Added */}
+                        <div className={`bg-[#151210] border p-2 md:p-4 text-center ${isEditing ? 'border-blue-900/30' : 'border-[#292524]'}`}>
+                            <div className="flex items-center justify-center gap-2 mb-4">
+                                <CalendarDays size={14} className="text-stone-500" />
                                 <input 
-                                    type="text" 
-                                    value={newSubtask} 
-                                    onChange={e => setNewSubtask(e.target.value)} 
-                                    onKeyDown={e => e.key === 'Enter' && handleAddSubtask(e)}
-                                    className="flex-1 bg-transparent text-xs text-stone-300 outline-none placeholder:text-stone-700 p-2"
-                                    placeholder="Add minion..."
+                                    type="date"
+                                    min={new Date().toISOString().split('T')[0]} // Block past dates
+                                    value={selectedDate.toISOString().split('T')[0]}
+                                    onChange={(e) => {
+                                        const d = new Date(e.target.value);
+                                        // Preserve time from current selection if needed, or just date.
+                                        // Actually better to just set the date part of selectedDate
+                                        const newDate = new Date(selectedDate);
+                                        newDate.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+                                        setSelectedDate(newDate);
+                                    }}
+                                    className="bg-black text-stone-300 font-serif text-xs border border-stone-800 p-1 outline-none focus:border-yellow-600 text-center"
                                 />
-                                <button type="button" onClick={handleAddSubtask} className="text-stone-500 hover:text-stone-200 px-3 border-l border-[#292524]"><Plus size={14} /></button>
+                            </div>
+                            
+                            <div className="flex items-center justify-center gap-2">
+                                <div className="flex flex-col items-center">
+                                    <label className="text-[9px] text-stone-600 mb-1 uppercase">Start</label>
+                                    <input 
+                                        type="time" 
+                                        value={startTimeStr} 
+                                        onChange={(e) => setStartTimeStr(e.target.value)} 
+                                        className="bg-black border border-[#292524] text-stone-300 font-mono text-sm p-1 w-16 md:w-20 text-center outline-none focus:border-stone-500"
+                                    />
+                                </div>
+                                <span className="text-stone-600 mt-4">-</span>
+                                <div className="flex flex-col items-center">
+                                    <label className="text-[9px] text-yellow-900 mb-1 uppercase font-bold">End</label>
+                                    <input 
+                                        type="time" 
+                                        value={endTimeStr} 
+                                        onChange={(e) => setEndTimeStr(e.target.value)} 
+                                        className="bg-black border border-yellow-900/30 text-yellow-500 font-mono text-sm p-1 w-16 md:w-20 text-center outline-none focus:border-yellow-600"
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-            </form>
+                        <div>
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block">Enemy Name</label>
+                            <input 
+                                type="text" 
+                                value={title} 
+                                onChange={(e) => setTitle(e.target.value)} 
+                                className="w-full bg-[#151210] border-b border-[#292524] p-2 md:p-3 text-stone-200 focus:border-yellow-900 outline-none font-serif text-base md:text-lg placeholder:text-stone-800 placeholder:italic transition-colors"
+                                placeholder="e.g., The Tax Beast"
+                                autoFocus={!isEditing}
+                            />
+                        </div>
 
-            <div className={`p-4 border-t ${isEditing ? 'border-blue-900/30 bg-blue-950/10' : 'border-[#292524] bg-[#0c0a09]'} sticky bottom-0`}>
-                {isEditing ? (
-                    <div className="flex gap-2">
-                         <button 
-                            onClick={handleSubmit} 
-                            className="flex-1 bg-blue-900/30 text-blue-300 border border-blue-800 py-3 md:py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-blue-900/50 hover:text-white transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Save size={16} /> Rewrite
-                        </button>
-                         <button 
-                            onClick={resetForm} 
-                            className="px-4 bg-stone-900 text-stone-400 border border-stone-700 font-bold hover:bg-stone-800"
-                            title="Cancel Edit"
-                        >
-                            <X size={16} />
-                        </button>
+                        {/* DESCRIPTION BOX - RESTORED */}
+                        <div>
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
+                                <AlignLeft size={10} /> Description / Notes
+                            </label>
+                            <textarea 
+                                value={notes} 
+                                onChange={(e) => setNotes(e.target.value)} 
+                                className="w-full bg-[#151210] border border-[#292524] p-2 md:p-3 text-stone-400 text-xs focus:border-stone-600 outline-none min-h-[80px] font-mono resize-none"
+                                placeholder="Details of the summoning..."
+                            />
+                        </div>
+
+                        {/* PARENT TASK SELECTOR (Hierarchical Linking) */}
+                        <div>
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
+                                <Network size={10} /> Link to Overlord
+                            </label>
+                            <select 
+                                value={parentId} 
+                                onChange={(e) => setParentId(e.target.value)}
+                                className="w-full bg-[#151210] border border-[#292524] p-2 md:p-3 text-stone-300 text-xs focus:border-blue-900 outline-none"
+                            >
+                                <option value="">-- Independent --</option>
+                                {potentialParents.map(p => (
+                                    <option key={p.id} value={p.id}>
+                                        {getTaskDisplayTitle(p)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-2 block">Threat Level</label>
+                            <div className="flex gap-0 border border-[#292524]">
+                                {[1,2,3].map(p => (
+                                    <button 
+                                        key={p} 
+                                        type="button" 
+                                        onClick={() => setPriority(p as TaskPriority)} 
+                                        className={`
+                                            flex-1 py-2 md:py-3 flex flex-col items-center justify-center gap-1 transition-all
+                                            ${priority === p ? 'bg-yellow-900/20 text-yellow-500 border-x border-yellow-900/50' : 'bg-[#0c0a09] text-stone-600 hover:bg-[#151210] border-x border-transparent'}
+                                        `}
+                                    >
+                                        <span className="font-serif font-bold text-sm">{p === 1 ? 'I' : p === 2 ? 'II' : 'III'}</span>
+                                        {p === 3 && <ShieldAlert size={10} />}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 flex flex-col">
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-2 block flex items-center gap-2">
+                                <Users size={12} /> Minions (Subtasks)
+                            </label>
+                            <div className="bg-[#050202] border border-[#292524] p-0 flex-1 min-h-[80px] flex flex-col">
+                                <div className="flex-1 space-y-0 p-0">
+                                    {subtasks.map((st, idx) => (
+                                        <div key={idx} className="flex justify-between items-center group text-xs text-stone-400 p-2 border-b border-[#1c1917] hover:bg-[#151210]">
+                                            <div className="flex flex-col">
+                                                <span className="font-mono truncate">{st.title}</span>
+                                            </div>
+                                            <button type="button" onClick={() => setSubtasks(subtasks.filter((_,i)=>i!==idx))} className="text-stone-700 hover:text-red-500"><Trash2 size={12} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="border-t border-[#292524] bg-[#151210]">
+                                    <div className="flex gap-0">
+                                        <input 
+                                            type="text" 
+                                            value={newSubtask} 
+                                            onChange={e => setNewSubtask(e.target.value)} 
+                                            onKeyDown={e => e.key === 'Enter' && handleAddSubtask(e)}
+                                            className="flex-1 bg-transparent text-xs text-stone-300 outline-none placeholder:text-stone-700 p-2"
+                                            placeholder="Add minion..."
+                                        />
+                                        <button type="button" onClick={handleAddSubtask} className="text-stone-500 hover:text-stone-200 px-3 border-l border-[#292524]"><Plus size={14} /></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </form>
+
+                    <div className={`p-4 border-t ${isEditing ? 'border-blue-900/30 bg-blue-950/10' : 'border-[#292524] bg-[#0c0a09]'} sticky bottom-0`}>
+                        {isEditing ? (
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={handleSubmit} 
+                                    className="flex-1 bg-blue-900/30 text-blue-300 border border-blue-800 py-3 md:py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-blue-900/50 hover:text-white transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Save size={16} /> Rewrite
+                                </button>
+                                <button 
+                                    onClick={resetForm} 
+                                    className="px-4 bg-stone-900 text-stone-400 border border-stone-700 font-bold hover:bg-stone-800"
+                                    title="Cancel Edit"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={handleSubmit} 
+                                className="w-full bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-3 md:py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-[#5c3a22] hover:text-white transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+                            >
+                                Manifest Enemy
+                            </button>
+                        )}
+                        
+                        {isRitual && !isEditing && (
+                            <button type="button" onClick={completeRitual} className="w-full mt-2 text-[10px] text-indigo-400 uppercase tracking-widest hover:text-indigo-300">
+                                Seal Pact (End Ritual)
+                            </button>
+                        )}
                     </div>
-                ) : (
-                    <button 
-                        onClick={handleSubmit} 
-                        className="w-full bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-3 md:py-4 font-serif font-bold tracking-[0.2em] uppercase hover:bg-[#5c3a22] hover:text-white transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
-                    >
-                        Manifest Enemy
-                    </button>
-                )}
-                
-                {isRitual && !isEditing && (
-                     <button type="button" onClick={completeRitual} className="w-full mt-2 text-[10px] text-indigo-400 uppercase tracking-widest hover:text-indigo-300">
-                        Seal Pact (End Ritual)
-                    </button>
-                )}
-            </div>
+                </>
+            )}
         </div>
       </div>
     </div>

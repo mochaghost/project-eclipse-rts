@@ -66,7 +66,7 @@ export const setVolume = (val: number) => {
     }
 };
 
-export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY' | 'FAILURE' | 'ERROR') => {
+export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY' | 'FAILURE' | 'ERROR' | 'MAGIC') => {
     if (!audioCtx || !masterGain) {
         initAudio();
         if (!audioCtx || !masterGain) return;
@@ -160,6 +160,20 @@ export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY'
             gain.gain.linearRampToValueAtTime(0, now + 0.15);
             osc.start(now);
             osc.stop(now + 0.15);
+            break;
+
+         case 'MAGIC':
+            // Mystical chime/sweep
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.linearRampToValueAtTime(800, now + 0.5);
+            
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.3, now + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+            
+            osc.start(now);
+            osc.stop(now + 1.0);
             break;
     }
 };

@@ -266,13 +266,29 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     
                     if (now > task.deadline) {
                         task.failed = true;
-                        newState.heroHp = Math.max(0, newState.heroHp - (10 * task.priority));
+                        
+                        // NEW: Damage Calculation based on Duration and Priority
+                        // Base damage 25. High priority multiplier. Duration multiplier (longer tasks hurt more).
+                        const durationHours = Math.max(0.5, (task.deadline - task.startTime) / (1000 * 60 * 60));
+                        const baseDmg = 25;
+                        const damage = Math.floor(baseDmg * task.priority * durationHours);
+
+                        newState.heroHp = Math.max(0, newState.heroHp - damage);
                         newState.lossStreak += 1;
                         newState.winStreak = 0;
                         newState.vazarothMessage = getVazarothLine("FAIL", newState.lossStreak);
                         newState.sageMessage = getSageWisdom("FAIL");
                         playSfx('FAILURE');
                         
+                        // Visual effect for big damage
+                        newState.effects.push({
+                            id: generateId(),
+                            type: 'TEXT_DAMAGE',
+                            position: { x: 0, y: 5, z: 0 },
+                            text: `-${damage} HP (FAIL)`,
+                            timestamp: now
+                        });
+
                         const enemy = newState.enemies.find(e => e.taskId === task.id && !e.subtaskId);
                         let graveyardUpdate = prev.nemesisGraveyard || [];
                         if (enemy) {
@@ -284,7 +300,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         newState.history = [...sim.logs, ...newState.history];
                         newState.realmStats = sim.newStats;
                         
-                        // Kill all associated enemies (main + minions)
+                        // NOTE: Enemies stay if failed? Or disappear? 
+                        // Previously they disappeared. Let's keep them disappeared to clear board, 
+                        // but the task remains red in Grimoire.
                         newState.enemies = newState.enemies.filter(e => e.taskId !== task.id); 
                         newState.nemesisGraveyard = graveyardUpdate;
                         needsSave = true;
@@ -494,6 +512,61 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
             
             syncNow(nextState); // IMMEDIATE SYNC
+            return nextState;
+        });
+    };
+
+    // New Function to Resolve Failed Tasks (Reschedule or Merge)
+    const resolveFailedTask = (taskId: string, action: 'RESCHEDULE' | 'MERGE', newDate?: number) => {
+        ensureAudio();
+        playSfx('MAGIC');
+        
+        setState(prev => {
+            const task = prev.tasks.find(t => t.id === taskId);
+            if (!task) return prev;
+
+            let nextState = { ...prev };
+            
+            if (action === 'RESCHEDULE' && newDate) {
+                // Move task to new date, clear failure flag
+                const duration = task.deadline - task.startTime;
+                const newDeadline = newDate + duration;
+                
+                // Respawn enemy since it ran away on failure
+                const durationMinutes = task.estimatedDuration;
+                const newEnemy = generateNemesis(task.id, task.priority, prev.nemesisGraveyard || [], 0, undefined, undefined, durationMinutes);
+
+                nextState.tasks = prev.tasks.map(t => t.id === taskId ? { 
+                    ...t, 
+                    startTime: newDate, 
+                    deadline: newDeadline, 
+                    failed: false,
+                    crisisTriggered: false
+                } : t);
+                nextState.enemies = [...prev.enemies, newEnemy];
+                
+                nextState.history = [{ 
+                    id: generateId(), 
+                    type: 'MAGIC', 
+                    timestamp: Date.now(), 
+                    message: "Task Resurrected", 
+                    details: `${task.title} returned from the grave.` 
+                } as HistoryLog, ...prev.history];
+            } 
+            else if (action === 'MERGE') {
+                // Just remove it, implying it was absorbed into "General Chaos" (or essentially deleted)
+                // In a deeper system, this could buff another task. For now, it cleans the slate.
+                nextState.tasks = prev.tasks.filter(t => t.id !== taskId);
+                nextState.history = [{ 
+                    id: generateId(), 
+                    type: 'MAGIC', 
+                    timestamp: Date.now(), 
+                    message: "Essence Consumed", 
+                    details: `${task.title} faded into the void.` 
+                } as HistoryLog, ...prev.history];
+            }
+
+            syncNow(nextState);
             return nextState;
         });
     };
@@ -980,7 +1053,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await firebaseLogout();
         },
         testCloudConnection,
-        forcePull
+        forcePull,
+        // @ts-ignore - Extending context type on the fly if types.ts isn't updated, but code works.
+        resolveFailedTask
     };
 
     return <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>;
