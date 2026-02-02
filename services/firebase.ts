@@ -27,34 +27,61 @@ export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
 };
 
 export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) => {
+    // Robust Initialization: Try each service independently
     try {
         if (!app) {
             app = initializeApp(config);
-            db = getDatabase(app);
-            auth = getAuth(app);
-            console.log("[Cloud] Firebase & Auth Initialized via CDN");
+            console.log("[Cloud] Firebase App Instance Created");
         }
-        return true;
     } catch (e) {
-        console.error("[Cloud] Init Failed", e);
+        console.error("[Cloud] CRITICAL: App Init Failed", e);
         return false;
     }
+
+    try {
+        if (!db && app) {
+            db = getDatabase(app);
+        }
+    } catch (e) {
+        console.error("[Cloud] Database Service Failed", e);
+    }
+
+    try {
+        if (!auth && app) {
+            auth = getAuth(app);
+        }
+    } catch (e) {
+        console.error("[Cloud] Auth Service Failed", e);
+    }
+
+    return !!app;
 };
 
 // --- AUTH FUNCTIONS ---
 
 export const loginWithGoogle = async (): Promise<any> => {
     if (!auth) initFirebase();
+    
     if (!auth) {
-        console.error("Auth not initialized");
-        throw new Error("Firebase Auth not initialized");
+        console.error("Auth object is null even after init attempt.");
+        throw new Error("Auth Service Unavailable. Check console for CSP/Network errors.");
     }
+
     const provider = new GoogleAuthProvider();
+    
     try {
+        console.log("[Auth] Requesting Popup...");
         const result = await signInWithPopup(auth, provider);
+        console.log("[Auth] Success:", result.user.uid);
         return result.user;
-    } catch (error) {
-        console.error("Auth Error", error);
+    } catch (error: any) {
+        console.error("[Auth] Login Error:", error);
+        if (error.code === 'auth/popup-blocked') {
+            throw new Error("Popup blocked by browser. Please allow popups for this site.");
+        }
+        if (error.code === 'auth/popup-closed-by-user') {
+            throw new Error("Login cancelled by user.");
+        }
         throw error;
     }
 };
@@ -66,7 +93,7 @@ export const logout = async () => {
 export const subscribeToAuth = (callback: (user: any) => void) => {
     if (!auth) initFirebase();
     if (!auth) {
-        console.warn("Auth initialization failed - cannot subscribe");
+        console.warn("[Auth] Cannot subscribe - Auth service missing");
         return () => {};
     }
     return onAuthStateChanged(auth, callback);
@@ -75,7 +102,10 @@ export const subscribeToAuth = (callback: (user: any) => void) => {
 // --- DATA FUNCTIONS ---
 
 export const pushToCloud = async (roomId: string, state: GameState) => {
-    if (!db) return;
+    if (!db) {
+        console.warn("[Cloud] Cannot push - Database service missing");
+        return;
+    }
     
     // Clean transient state before pushing to cloud
     const cleanState = {
