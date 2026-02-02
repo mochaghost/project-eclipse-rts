@@ -58,8 +58,13 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
     // We try/catch individual services so one failure doesn't break the whole app
     try {
         if (app && !db) {
-            db = getDatabase(app);
-            console.log("[Cloud] Database Service Initialized");
+            if (!activeConfig.databaseURL) {
+                console.warn("[Cloud] Config is missing databaseURL. Cloud Save Disabled.");
+                db = null;
+            } else {
+                db = getDatabase(app);
+                console.log("[Cloud] Database Service Initialized");
+            }
         }
     } catch (e) {
         console.error("[Cloud] Database Service Failed - Cloud Save Disabled", e);
@@ -111,6 +116,9 @@ export const loginWithGoogle = async (): Promise<any> => {
         }
         if (error.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
              throw new Error("INVALID API KEY. Please update your config in Settings.");
+        }
+        if (error.code === 'auth/unauthorized-domain') {
+             throw new Error("DOMAIN UNAUTHORIZED. Go to Firebase Console > Auth > Settings > Authorized Domains and add your Vercel URL.");
         }
         throw error;
     }
@@ -190,7 +198,7 @@ export const disconnect = () => {
 };
 
 export const testConnection = async (roomId: string): Promise<{success: boolean, message: string}> => {
-    if (!db) return { success: false, message: "Database not initialized (Check Console for errors)" };
+    if (!db) return { success: false, message: "DB Service not running. Missing databaseURL in config?" };
     try {
         await set(ref(db, `timelines/${roomId}/_connection_test`), Date.now());
         return { success: true, message: "Write successful" };

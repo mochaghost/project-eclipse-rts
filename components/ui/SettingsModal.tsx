@@ -12,7 +12,7 @@ export const SettingsModal: React.FC = () => {
     
     // Config state
     const [configInput, setConfigInput] = useState('');
-    const [configStatus, setConfigStatus] = useState<'VALID' | 'INVALID' | 'EMPTY'>('EMPTY');
+    const [configStatus, setConfigStatus] = useState<'VALID' | 'INVALID' | 'EMPTY' | 'MISSING_DB'>('EMPTY');
     const [parsedPreview, setParsedPreview] = useState<any>(null);
 
     // Diagnostics state
@@ -32,7 +32,7 @@ export const SettingsModal: React.FC = () => {
         }
     }, []);
 
-    // --- SMART PARSER (ROBUST V2) ---
+    // --- SMART PARSER (ROBUST V4 - SANITIZER) ---
     const parseLooseJson = (input: string) => {
         if (!input) return null;
 
@@ -42,58 +42,66 @@ export const SettingsModal: React.FC = () => {
             clean = input.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
         } catch (e) {}
 
-        // 2. Isolate the object if user pasted "const firebaseConfig = { ... };"
-        const firstBrace = clean.indexOf('{');
-        const lastBrace = clean.lastIndexOf('}');
-        
-        if (firstBrace !== -1 && lastBrace !== -1) {
-            clean = clean.substring(firstBrace, lastBrace + 1);
+        // 2. Extract object content if wrapped in declarations
+        if (clean.includes('=')) {
+            const eqIndex = clean.indexOf('=');
+            clean = clean.substring(eqIndex + 1);
+        }
+        if (clean.trim().endsWith(';')) {
+            clean = clean.substring(0, clean.lastIndexOf(';'));
         }
 
-        // STRATEGY A: Function Constructor (Handles trailing commas and unquoted keys - "Loose JSON")
-        // This is safer than eval() but effectively evaluates the object literal
+        let parsed: any = null;
+
+        // 3. Attempt JSON Parse first (Best case)
         try {
-            // We wrap in parenthesis to ensure it evaluates as an expression, not a block
-            const fn = new Function(`return (${clean});`);
-            const result = fn();
-            if (result && result.apiKey) return result;
+            parsed = JSON.parse(clean);
         } catch (e) {
-            // console.warn("Parse Strategy A failed", e);
-        }
+             // 4. Fallback: Function Constructor for "Loose Object" syntax
+            try {
+                // Safety: Ensure it looks like an object
+                if (clean.trim().startsWith('{') && clean.trim().endsWith('}')) {
+                     const fn = new Function(`return (${clean});`);
+                     parsed = fn();
+                }
+            } catch (e2) {
+                 // 5. Fallback: Brute Force Regex
+                try {
+                    const extract = (key: string) => {
+                        // Allow for newlines and messy formatting
+                        const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'im');
+                        const match = clean.match(regex);
+                        return match ? match[1] : undefined;
+                    };
 
-        // STRATEGY B: JSON Parse (Strict)
-        try {
-             const jsonAttempt = JSON.parse(clean);
-             if (jsonAttempt && jsonAttempt.apiKey) return jsonAttempt;
-        } catch (e) {
-             // Ignore
-        }
-
-        // STRATEGY C: Regex Extraction (Brute Force - Fallback)
-        try {
-            const extract = (key: string) => {
-                // Matches key: "value" or key: 'value' or "key": "value"
-                const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'i');
-                const match = clean.match(regex);
-                return match ? match[1] : undefined;
-            };
-
-            const extracted = {
-                apiKey: extract('apiKey'),
-                authDomain: extract('authDomain'),
-                databaseURL: extract('databaseURL'),
-                projectId: extract('projectId'),
-                storageBucket: extract('storageBucket'),
-                messagingSenderId: extract('messagingSenderId'),
-                appId: extract('appId'),
-                measurementId: extract('measurementId')
-            };
-
-            if (extracted.apiKey && extracted.projectId) {
-                return extracted;
+                    parsed = {
+                        apiKey: extract('apiKey'),
+                        authDomain: extract('authDomain'),
+                        databaseURL: extract('databaseURL'),
+                        projectId: extract('projectId'),
+                        storageBucket: extract('storageBucket'),
+                        messagingSenderId: extract('messagingSenderId'),
+                        appId: extract('appId'),
+                        measurementId: extract('measurementId')
+                    };
+                } catch (e3) {}
             }
-        } catch (e) {
-            console.error("All parsing strategies failed", e);
+        }
+
+        // 6. SANITIZATION LAYER (Crucial for Firebase URLs)
+        if (parsed) {
+            const sanitize = (val: any) => typeof val === 'string' ? val.replace(/[\n\r\s]+/g, '').trim() : val;
+            
+            return {
+                apiKey: sanitize(parsed.apiKey),
+                authDomain: sanitize(parsed.authDomain),
+                databaseURL: sanitize(parsed.databaseURL),
+                projectId: sanitize(parsed.projectId),
+                storageBucket: sanitize(parsed.storageBucket),
+                messagingSenderId: sanitize(parsed.messagingSenderId),
+                appId: sanitize(parsed.appId),
+                measurementId: sanitize(parsed.measurementId)
+            };
         }
 
         return null;
@@ -107,8 +115,13 @@ export const SettingsModal: React.FC = () => {
         }
 
         const parsed = parseLooseJson(input);
+        
         if (parsed && parsed.apiKey && parsed.projectId) {
-            setConfigStatus('VALID');
+            if (!parsed.databaseURL) {
+                setConfigStatus('MISSING_DB');
+            } else {
+                setConfigStatus('VALID');
+            }
             setParsedPreview(parsed);
         } else {
             setConfigStatus('INVALID');
@@ -123,13 +136,13 @@ export const SettingsModal: React.FC = () => {
 
     const handleSaveConfig = () => {
         if (configStatus !== 'VALID' || !parsedPreview) {
-            alert("Invalid Config. Please ensure you copied the 'firebaseConfig' object correctly.");
+            alert("Cannot save invalid config.");
             return;
         }
 
         try {
-            // Save the SANITIZED version
-            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(parsedPreview));
+            // Save the CLEANED / PARSED version, not the raw input
+            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(parsedPreview, null, 2));
             
             if (confirm("Configuration Saved! The system must restart to apply the new Soul Link. Reload now?")) {
                 window.location.reload();
@@ -307,7 +320,8 @@ export const SettingsModal: React.FC = () => {
                                             
                                             {testStatus === 'FAIL' && (
                                                 <div className="mt-2 text-[9px] text-stone-500 leading-tight">
-                                                    Check your Firebase Console &gt; Realtime Database &gt; Rules. Set read/write to true.
+                                                    Check your Firebase Console &gt; Realtime Database &gt; Rules. Set read/write to true. <br/>
+                                                    Also verify your Config has a databaseURL.
                                                 </div>
                                             )}
                                         </div>
@@ -343,16 +357,25 @@ export const SettingsModal: React.FC = () => {
                             )}
 
                             {/* API CONFIG SECTION */}
-                            <div className={`p-6 border transition-colors ${configStatus === 'VALID' ? 'bg-green-950/10 border-green-900/50' : 'bg-[#151210] border-stone-800'}`}>
+                            <div className={`p-6 border transition-colors ${configStatus === 'VALID' ? 'bg-green-950/10 border-green-900/50' : configStatus === 'MISSING_DB' ? 'bg-yellow-950/10 border-yellow-800' : 'bg-[#151210] border-stone-800'}`}>
                                 <div className="flex justify-between items-start mb-4">
                                     <h4 className="text-stone-300 text-sm font-bold flex items-center gap-2 uppercase tracking-widest">
                                         <Key size={14}/> Firebase Config
                                     </h4>
                                     {configStatus === 'VALID' ? 
                                         <span className="text-[10px] text-green-500 flex items-center gap-1 font-bold animate-pulse"><CheckCircle2 size={12}/> VALID CONFIG DETECTED</span> : 
+                                        configStatus === 'MISSING_DB' ?
+                                        <span className="text-[10px] text-yellow-500 flex items-center gap-1 font-bold animate-pulse"><AlertTriangle size={12}/> MISSING DATABASE URL</span> :
                                         <span className="text-[10px] text-stone-500 flex items-center gap-1 font-bold"><AlertTriangle size={12}/> PASTE CODE SNIPPET</span>
                                     }
                                 </div>
+                                
+                                {configStatus === 'MISSING_DB' && (
+                                    <div className="bg-yellow-900/20 p-2 mb-2 text-[10px] text-yellow-400 border border-yellow-800">
+                                        <strong>ATTENTION:</strong> Your config is missing <code>databaseURL</code>. 
+                                        You likely need to create the Realtime Database in the Firebase Console and copy the config again.
+                                    </div>
+                                )}
                                 
                                 <textarea 
                                     value={configInput}
@@ -375,6 +398,7 @@ export const SettingsModal: React.FC = () => {
                                 {parsedPreview && (
                                     <div className="mt-2 text-[10px] text-stone-500 font-mono">
                                         Project ID: <span className="text-stone-300">{parsedPreview.projectId}</span>
+                                        {parsedPreview.databaseURL && <div className="text-green-500">DB: {parsedPreview.databaseURL.substring(0, 30)}...</div>}
                                     </div>
                                 )}
                             </div>
