@@ -53,27 +53,21 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
         return false;
     }
 
-    // 3. Initialize Services (AGGRESSIVE MODE)
+    // 3. Initialize Services
     try {
-        // Always try to re-init DB if it's null, specifically passing the URL
+        // Init DB if not ready
         if (app && !db) {
             if (!activeConfig.databaseURL) {
                 console.warn("[Cloud] Config is missing databaseURL. Cloud Save Disabled.");
                 db = null;
             } else {
-                // FIX: Pass the URL explicitly to getDatabase. 
-                // This fixes the issue where the app instance didn't pick up the URL correctly.
-                try {
-                    db = getDatabase(app, activeConfig.databaseURL);
-                    console.log("[Cloud] Database Service Initialized with Explicit URL");
-                } catch (dbError) {
-                    console.error("[Cloud] Failed to init DB with explicit URL, trying default...", dbError);
-                    db = getDatabase(app);
-                }
+                // Pass URL explicitly to ensure correct shard connection
+                db = getDatabase(app, activeConfig.databaseURL);
+                console.log("[Cloud] Database Service Initialized");
             }
         }
     } catch (e) {
-        console.error("[Cloud] Database Service Failed - Cloud Save Disabled", e);
+        console.error("[Cloud] Database Service Failed to Start.", e);
         db = null; 
     }
 
@@ -83,7 +77,7 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
             console.log("[Cloud] Auth Service Initialized");
         }
     } catch (e) {
-        console.error("[Cloud] Auth Service Failed - Login Disabled", e);
+        console.error("[Cloud] Auth Service Failed to Start.", e);
         auth = null;
     }
 
@@ -93,7 +87,6 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
 // --- AUTH FUNCTIONS ---
 
 export const loginWithGoogle = async (): Promise<any> => {
-    // Ensure we are initialized
     if (!auth) initFirebase();
     
     if (!auth) {
@@ -186,7 +179,6 @@ export const disconnect = () => {
 };
 
 export const testConnection = async (roomId: string): Promise<{success: boolean, message: string}> => {
-    // Auto-retry init if db is missing
     if (!db) {
         console.log("[Test] DB missing, attempting re-init...");
         initFirebase();

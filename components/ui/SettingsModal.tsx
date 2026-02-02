@@ -32,79 +32,31 @@ export const SettingsModal: React.FC = () => {
         }
     }, []);
 
-    // --- SMART PARSER (ROBUST V4 - SANITIZER) ---
-    const parseLooseJson = (input: string) => {
+    // --- ROBUST REGEX PARSER ---
+    // Extracts keys regardless of whether it's JSON, JS Object, or just a list of lines.
+    const extractFirebaseConfig = (input: string) => {
         if (!input) return null;
 
-        let clean = input.trim();
-        // 1. Remove comments
-        try {
-            clean = input.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-        } catch (e) {}
-
-        // 2. Extract object content if wrapped in declarations
-        if (clean.includes('=')) {
-            const eqIndex = clean.indexOf('=');
-            clean = clean.substring(eqIndex + 1);
-        }
-        if (clean.trim().endsWith(';')) {
-            clean = clean.substring(0, clean.lastIndexOf(';'));
-        }
-
-        let parsed: any = null;
-
-        // 3. Attempt JSON Parse first (Best case)
-        try {
-            parsed = JSON.parse(clean);
-        } catch (e) {
-             // 4. Fallback: Function Constructor for "Loose Object" syntax
-            try {
-                // Safety: Ensure it looks like an object
-                if (clean.trim().startsWith('{') && clean.trim().endsWith('}')) {
-                     const fn = new Function(`return (${clean});`);
-                     parsed = fn();
-                }
-            } catch (e2) {
-                 // 5. Fallback: Brute Force Regex
-                try {
-                    const extract = (key: string) => {
-                        // Allow for newlines and messy formatting
-                        const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'im');
-                        const match = clean.match(regex);
-                        return match ? match[1] : undefined;
-                    };
-
-                    parsed = {
-                        apiKey: extract('apiKey'),
-                        authDomain: extract('authDomain'),
-                        databaseURL: extract('databaseURL'),
-                        projectId: extract('projectId'),
-                        storageBucket: extract('storageBucket'),
-                        messagingSenderId: extract('messagingSenderId'),
-                        appId: extract('appId'),
-                        measurementId: extract('measurementId')
-                    };
-                } catch (e3) {}
+        const keys = [
+            'apiKey', 'authDomain', 'databaseURL', 'projectId', 
+            'storageBucket', 'messagingSenderId', 'appId', 'measurementId'
+        ];
+        
+        const config: any = {};
+        let foundAny = false;
+        
+        keys.forEach(key => {
+            // Regex looks for: key (optional quotes) + colon + value (inside quotes)
+            const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'i');
+            const match = input.match(regex);
+            if (match && match[1]) {
+                config[key] = match[1].trim();
+                foundAny = true;
             }
-        }
+        });
 
-        // 6. SANITIZATION LAYER (Crucial for Firebase URLs)
-        if (parsed) {
-            const sanitize = (val: any) => typeof val === 'string' ? val.replace(/[\n\r\s]+/g, '').trim() : val;
-            
-            return {
-                apiKey: sanitize(parsed.apiKey),
-                authDomain: sanitize(parsed.authDomain),
-                databaseURL: sanitize(parsed.databaseURL),
-                projectId: sanitize(parsed.projectId),
-                storageBucket: sanitize(parsed.storageBucket),
-                messagingSenderId: sanitize(parsed.messagingSenderId),
-                appId: sanitize(parsed.appId),
-                measurementId: sanitize(parsed.measurementId)
-            };
-        }
-
-        return null;
+        if (!foundAny) return null;
+        return config;
     }
 
     const validateConfig = (input: string) => {
@@ -114,7 +66,7 @@ export const SettingsModal: React.FC = () => {
             return;
         }
 
-        const parsed = parseLooseJson(input);
+        const parsed = extractFirebaseConfig(input);
         
         if (parsed && parsed.apiKey && parsed.projectId) {
             if (!parsed.databaseURL) {
@@ -136,12 +88,12 @@ export const SettingsModal: React.FC = () => {
 
     const handleSaveConfig = () => {
         if (configStatus !== 'VALID' || !parsedPreview) {
-            alert("Cannot save invalid config.");
+            alert("Cannot save invalid config. Ensure databaseURL is present.");
             return;
         }
 
         try {
-            // Save the CLEANED / PARSED version, not the raw input
+            // Save the CLEANED object
             localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(parsedPreview, null, 2));
             
             if (confirm("Configuration Saved! The system must restart to apply the new Soul Link. Reload now?")) {
@@ -398,7 +350,10 @@ export const SettingsModal: React.FC = () => {
                                 {parsedPreview && (
                                     <div className="mt-2 text-[10px] text-stone-500 font-mono">
                                         Project ID: <span className="text-stone-300">{parsedPreview.projectId}</span>
-                                        {parsedPreview.databaseURL && <div className="text-green-500">DB: {parsedPreview.databaseURL.substring(0, 30)}...</div>}
+                                        {parsedPreview.databaseURL ? 
+                                            <div className="text-green-500 font-bold mt-1">DB URL FOUND: {parsedPreview.databaseURL}</div> :
+                                            <div className="text-red-500 font-bold mt-1">DB URL MISSING</div>
+                                        }
                                     </div>
                                 )}
                             </div>
