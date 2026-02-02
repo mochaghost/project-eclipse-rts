@@ -65,32 +65,29 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => clearInterval(t);
     }, [state]);
 
-    // --- RECOLECCIÓN DE BASURA OPTIMIZADA (High Performance) ---
+    // --- RECOLECCIÓN DE BASURA (Versión Segura) ---
+    // Limpia efectos visuales para salvar GPU, pero es conservador con los datos.
     useEffect(() => {
         const cleanupInterval = setInterval(() => {
             setState(prev => {
                 const now = Date.now();
                 
-                // 1. LIMPIEZA VISUAL (CRÍTICO): 
-                // Los efectos (partículas, texto flotante) consumen GPU. Deben morir rápido.
-                // Esto es lo que causaba el crasheo gráfico en el iPad.
+                // 1. Limpieza Visual (Solo efectos expirados)
                 const activeEffects = prev.effects.filter(e => now - e.timestamp < 4000);
                 
-                // 2. LÍMITE DE EJÉRCITO (HARDWARE POTENTE):
-                // Subimos el límite a 30. Renderizar 30 mallas animadas es costoso pero viable en iPad Pro.
+                // 2. Limite Ejército (Visual) - Solo si hay demasiados
                 let currentMinions = prev.minions || [];
-                if (currentMinions.length > 30) {
-                    currentMinions = currentMinions.slice(currentMinions.length - 30);
+                if (currentMinions.length > 40) {
+                    currentMinions = currentMinions.slice(currentMinions.length - 40);
                 }
 
-                // 3. MEMORIA HISTÓRICA (SIMULACIÓN):
-                // El texto es liviano. Subimos el límite a 500 entradas para mantener el sentimiento de "Dwarf Fortress".
-                // Solo truncamos si excede 500 para proteger el archivo de guardado.
+                // 3. Historial (Texto) - Limite alto para no perder lore
                 let currentHistory = prev.history;
                 if (currentHistory.length > 500) {
                     currentHistory = currentHistory.slice(0, 500);
                 }
 
+                // Solo actualizar si hay cambios reales para evitar re-render innecesario
                 if (activeEffects.length !== prev.effects.length || 
                     currentMinions.length !== (prev.minions || []).length ||
                     currentHistory.length !== prev.history.length) {
@@ -230,15 +227,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    // CALENDAR FUNCTION: CRITICAL
     const moveTask = (taskId: string, newStartTime: number) => {
         ensureAudio();
         setState(prev => {
             const task = prev.tasks.find(t => t.id === taskId);
-            if (!task) return prev;
+            if (!task) {
+                console.warn("Attempted to move non-existent task:", taskId);
+                return prev;
+            }
             
             const duration = task.deadline - task.startTime;
             const newDeadline = newStartTime + duration;
             
+            console.log(`[Calendar] Moving task "${task.title}" to ${new Date(newStartTime).toLocaleTimeString()}`);
+
             const nextTasks = prev.tasks.map(t => t.id === taskId ? { ...t, startTime: newStartTime, deadline: newDeadline } : t);
             
             const next = { ...prev, tasks: nextTasks };
@@ -282,7 +285,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const mainEnemy = prev.enemies.find(e => e.taskId === taskId && !e.subtaskId);
             
             let graveyardUpdate = prev.nemesisGraveyard || [];
-            if (mainEnemy) graveyardUpdate = [...graveyardUpdate, { name: mainEnemy.name, clan: mainEnemy.clan, deathTime: Date.now(), killer: 'HERO' as const }].slice(-10); // Keep last 10 dead nemesis for vengeance logic
+            if (mainEnemy) graveyardUpdate = [...graveyardUpdate, { name: mainEnemy.name, clan: mainEnemy.clan, deathTime: Date.now(), killer: 'HERO' as const }].slice(-10);
 
             const effects: VisualEffect[] = [];
             const pos = mainEnemy ? mainEnemy.position : { x: 0, y: 0, z: 0 };
@@ -305,7 +308,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             const newMinion: MinionEntity = { id: generateId(), type: 'WARRIOR', position: { x: 4, y: 0, z: 4 }, targetEnemyId: null, createdAt: Date.now() };
             
-            // Límite más relajado (30) para usuarios con hardware potente
             const currentMinions = prev.minions || [];
             const nextMinions = currentMinions.length >= 30 ? [...currentMinions.slice(1), newMinion] : [...currentMinions, newMinion];
 
