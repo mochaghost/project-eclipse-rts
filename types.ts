@@ -326,4 +326,6 @@ export interface GameContextType {
   interactWithNPC: (npcId: string) => void; 
   updateSettings: (settings: Partial<GameSettings>) => void;
   castSpell: (spellId: string) => void; 
+  testCloudConnection: () => Promise<{success: boolean, message: string}>;
+  forcePull: () => void;
 }

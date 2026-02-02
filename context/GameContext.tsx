@@ -16,7 +16,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     { id: 'WALL_UP', name: 'Reinforce Walls', description: 'Increases Base Max HP.', cost: 400, type: 'UPGRADE_WALLS', value: 1 }
 ];
 
-const GameContext = createContext<GameContextType & { testCloudConnection: () => Promise<{success: boolean, message: string}>, forcePull: () => void } | undefined>(undefined);
+const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const useGame = () => {
     const context = useContext(GameContext);
@@ -896,7 +896,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
          });
     }
 
-    const contextValue: GameContextType & { testCloudConnection: () => Promise<{success: boolean, message: string}>, forcePull: () => void } = {
+    const contextValue: GameContextType = {
         state,
         addTask,
         editTask,

@@ -5,7 +5,6 @@ import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loa
 import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
-    // @ts-ignore
     const { state, toggleSettings, exportSave, importSave, clearSave, updateSettings, loginWithGoogle, logout, testCloudConnection, forcePull } = useGame();
     const [tab, setTab] = useState<'GENERAL' | 'CLOUD'>('GENERAL');
     const [importData, setImportData] = useState('');
