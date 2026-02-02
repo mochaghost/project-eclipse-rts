@@ -206,14 +206,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // --- DEADLINE MARCH LOGIC ---
                 // Enemies physically move towards base [0,0,0] as deadline approaches
                 const updatedEnemies = newState.enemies.map(enemy => {
-                    // Logic based on Enemy Type (Main or Subtask)
                     const task = newState.tasks.find(t => t.id === enemy.taskId);
                     if (!task) return enemy; 
 
                     let startTime = task.startTime;
                     let deadline = task.deadline;
 
-                    // If it's a subtask, see if it has overrides
                     if (enemy.subtaskId) {
                         const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
                         if (sub) {
@@ -222,26 +220,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         }
                     }
 
-                    // Don't move if it hasn't started yet
                     if (now < startTime) return enemy;
 
                     const totalDuration = deadline - startTime;
-                    const timeLeft = deadline - now;
                     const elapsed = now - startTime;
                     
-                    // Progress 0 (Start) -> 1 (Deadline)
                     let progress = totalDuration > 0 ? Math.max(0, Math.min(1, elapsed / totalDuration)) : 1;
-                    
-                    // If deadline passed, stay at base
-                    if (timeLeft <= 0) progress = 1;
+                    if (now > deadline) progress = 1; // Cap at base
 
-                    // Interpolate Position
                     if (enemy.initialPosition) {
                         const startX = enemy.initialPosition.x;
                         const startZ = enemy.initialPosition.z;
-                        const targetRadius = 6; // Don't clip inside base
-                        
-                        // Vector to center
+                        const targetRadius = 6;
                         const angle = Math.atan2(startZ, startX);
                         const targetX = Math.cos(angle) * targetRadius;
                         const targetZ = Math.sin(angle) * targetRadius;
@@ -267,8 +257,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (now > task.deadline) {
                         task.failed = true;
                         
-                        // NEW: Damage Calculation based on Duration and Priority
-                        // Base damage 25. High priority multiplier. Duration multiplier (longer tasks hurt more).
                         const durationHours = Math.max(0.5, (task.deadline - task.startTime) / (1000 * 60 * 60));
                         const baseDmg = 25;
                         const damage = Math.floor(baseDmg * task.priority * durationHours);
@@ -280,7 +268,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         newState.sageMessage = getSageWisdom("FAIL");
                         playSfx('FAILURE');
                         
-                        // Visual effect for big damage
                         newState.effects.push({
                             id: generateId(),
                             type: 'TEXT_DAMAGE',
@@ -300,10 +287,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         newState.history = [...sim.logs, ...newState.history];
                         newState.realmStats = sim.newStats;
                         
-                        // NOTE: Enemies stay if failed? Or disappear? 
-                        // Previously they disappeared. Let's keep them disappeared to clear board, 
-                        // but the task remains red in Grimoire.
-                        newState.enemies = newState.enemies.filter(e => e.taskId !== task.id); 
+                        // CRITICAL CHANGE: DO NOT REMOVE THE ENEMY
+                        // The enemy stays but is marked as failed (logic handled in renderer via task.failed check)
+                        // newState.enemies = newState.enemies.filter(e => e.taskId !== task.id); // REMOVED
+                        
                         newState.nemesisGraveyard = graveyardUpdate;
                         needsSave = true;
                     } 
@@ -359,8 +346,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 if (needsSave) {
                     saveGame(newState);
-                    // Passive sync (every ~1m or on major events) can still happen here if needed, 
-                    // but we rely more on action-based sync now.
                 }
                 
                 return newState;
@@ -409,10 +394,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             parentId
         };
 
-        // Spawn Main Enemy (Overlord)
         const mainEnemy: EnemyEntity = generateNemesis(taskId, priority, state.nemesisGraveyard || [], state.winStreak, undefined, undefined, durationMinutes);
-        
-        // Spawn Subtask Enemies (Lieutenants/Minions)
         const subtaskEnemies = subtaskObjects.map(st => 
             generateNemesis(taskId, TaskPriority.LOW, [], 0, st.id, st.title, 30)
         );
@@ -425,9 +407,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 tasks: [...prev.tasks, newTask],
                 enemies: [...prev.enemies, mainEnemy, ...subtaskEnemies],
                 sageMessage: sageLine,
-                vazarothMessage: getVazarothLine("IDLE") // Reset Vazaroth
+                vazarothMessage: getVazarothLine("IDLE")
             };
-            syncNow(next); // IMMEDIATE SYNC
+            syncNow(next);
             return next;
         });
     };
@@ -441,23 +423,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const existingTask = prev.tasks.find(t => t.id === taskId);
             if (!existingTask) return prev;
 
-            // Handle Subtasks: Identify new ones to spawn enemies
-            // Ensure we handle cases where existingTask.subtasks might be undefined
             let updatedSubtasks = existingTask.subtasks || [];
             let newEnemiesToSpawn: EnemyEntity[] = [];
 
             if (data.subtasks) {
                 updatedSubtasks = data.subtasks.map(draft => {
-                    const existingSub = (existingTask.subtasks || []).find(s => s.title === draft.title); // Match by title if ID unknown
+                    const existingSub = (existingTask.subtasks || []).find(s => s.title === draft.title);
                     if (existingSub) {
                         return { ...existingSub, deadline: draft.deadline || existingSub.deadline, startTime: draft.startTime || existingSub.startTime };
                     }
-                    
-                    // New Subtask created via edit
                     const newSubId = generateId();
                     const subMinion = generateNemesis(taskId, TaskPriority.LOW, [], 0, newSubId, draft.title, 30);
                     newEnemiesToSpawn.push(subMinion);
-                    
                     return { id: newSubId, title: draft.title, completed: false, startTime: draft.startTime, deadline: draft.deadline };
                 });
             }
@@ -474,7 +451,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 subtasks: updatedSubtasks
             };
 
-            // Update Existing Enemies (Rescale main enemy if duration/priority changed)
             let updatedEnemies = prev.enemies;
             
             if (data.title || data.priority || data.estimatedDuration) {
@@ -482,7 +458,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (e.taskId === taskId && !e.subtaskId) {
                         const newPriority = data.priority || e.priority;
                         const newDuration = data.estimatedDuration || existingTask.estimatedDuration;
-                        // Recalculate Scale
                         const newScale = 1.0 + ((newPriority - 1) * 1.5) + (newDuration / 60);
                         return {
                             ...e,
@@ -511,7 +486,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } as HistoryLog, ...prev.history]
             };
             
-            syncNow(nextState); // IMMEDIATE SYNC
+            syncNow(nextState);
             return nextState;
         });
     };
@@ -532,9 +507,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const duration = task.deadline - task.startTime;
                 const newDeadline = newDate + duration;
                 
-                // Respawn enemy since it ran away on failure
-                const durationMinutes = task.estimatedDuration;
-                const newEnemy = generateNemesis(task.id, task.priority, prev.nemesisGraveyard || [], 0, undefined, undefined, durationMinutes);
+                // Respawn/Heal enemy
+                const updatedEnemies = prev.enemies.map(e => {
+                    if (e.taskId === taskId && !e.subtaskId) {
+                        return { ...e, hp: e.maxHp }; // Full heal
+                    }
+                    return e;
+                });
 
                 nextState.tasks = prev.tasks.map(t => t.id === taskId ? { 
                     ...t, 
@@ -543,26 +522,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     failed: false,
                     crisisTriggered: false
                 } : t);
-                nextState.enemies = [...prev.enemies, newEnemy];
+                nextState.enemies = updatedEnemies;
                 
                 nextState.history = [{ 
                     id: generateId(), 
                     type: 'MAGIC', 
                     timestamp: Date.now(), 
                     message: "Task Resurrected", 
-                    details: `${task.title} returned from the grave.` 
+                    details: `${task.title} returns from failure.` 
                 } as HistoryLog, ...prev.history];
             } 
             else if (action === 'MERGE') {
-                // Just remove it, implying it was absorbed into "General Chaos" (or essentially deleted)
-                // In a deeper system, this could buff another task. For now, it cleans the slate.
+                // Remove the old task and enemy (To be replaced by a new one via UI)
                 nextState.tasks = prev.tasks.filter(t => t.id !== taskId);
+                nextState.enemies = prev.enemies.filter(e => e.taskId !== taskId);
+                
                 nextState.history = [{ 
                     id: generateId(), 
                     type: 'MAGIC', 
                     timestamp: Date.now(), 
-                    message: "Essence Consumed", 
-                    details: `${task.title} faded into the void.` 
+                    message: "Soul Fusion", 
+                    details: `${task.title} sacrificed for a new purpose.` 
                 } as HistoryLog, ...prev.history];
             }
 
@@ -571,7 +551,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // UPDATED: Move Task Logic to shift both Start and End
     const moveTask = (taskId: string, newStartTime: number) => {
         wrapUi(() => {
             setState(prev => {
@@ -586,13 +565,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 );
 
                 const nextState = { ...prev, tasks: updatedTasks };
-                syncNow(nextState); // IMMEDIATE SYNC
+                syncNow(nextState); 
                 return nextState;
             });
         });
     };
 
-    // ... (keep existing completeTask, failTask, completeSubtask, etc.)
     const completeTask = (taskId: string) => {
         ensureAudio();
         resetIdleTimer();
@@ -663,7 +641,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 selectedEnemyId: null,
                 isProfileOpen: false 
             };
-            syncNow(next); // IMMEDIATE SYNC
+            syncNow(next); 
             return next;
         });
     };
@@ -678,13 +656,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             let graveyardUpdate = prev.nemesisGraveyard || [];
             if (enemy) graveyardUpdate = [...graveyardUpdate, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'TIME' as const }].slice(-10);
 
+            // Manual Fail logic same as Deadline Fail
             const next: GameState = {
                 ...prev,
                 heroHp: Math.max(0, prev.heroHp - 20),
                 lossStreak: prev.lossStreak + 1,
                 winStreak: 0,
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, failed: true } : t),
-                enemies: prev.enemies.filter(e => e.taskId !== taskId),
+                // Enemy remains!
                 vazarothMessage: getVazarothLine("FAIL"),
                 sageMessage: getSageWisdom("FAIL"),
                 population: sim.newPopulation,
@@ -700,7 +679,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } as HistoryLog, ...sim.logs, ...prev.history],
                 selectedEnemyId: null
             };
-            syncNow(next); // IMMEDIATE SYNC
+            syncNow(next);
             return next;
         });
     };
@@ -1054,7 +1033,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         testCloudConnection,
         forcePull,
-        // @ts-ignore - Extending context type on the fly if types.ts isn't updated, but code works.
+        // @ts-ignore
         resolveFailedTask
     };
 

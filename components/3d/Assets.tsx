@@ -583,13 +583,20 @@ const House = () => (
     </group>
 );
 
-const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype = 'MONSTER', subtaskCount = 0, race }: { priority: TaskPriority, name: string, onClick?: () => void, isSelected?: boolean, scale?: number, archetype?: 'MONSTER' | 'KNIGHT', subtaskCount?: number, race?: string }) => {
-    const finalScale = scale || (0.5 + (priority * 0.3));
+const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype = 'MONSTER', subtaskCount = 0, race, failed }: { priority: TaskPriority, name: string, onClick?: () => void, isSelected?: boolean, scale?: number, archetype?: 'MONSTER' | 'KNIGHT', subtaskCount?: number, race?: string, failed?: boolean }) => {
+    // If failed, make it visually dominant/scary
+    const finalScale = failed ? (scale * 1.3) : (scale || (0.5 + (priority * 0.3)));
+    
     let color = priority === TaskPriority.HIGH ? PALETTE.BLOOD_BRIGHT : PALETTE.RUST;
     if (race === 'ELF') color = '#22c55e'; 
     if (race === 'DWARF') color = '#93c5fd';
     if (race === 'CONSTRUCT') color = '#0ea5e9';
     if (race === 'HUMAN') color = priority === TaskPriority.HIGH ? '#fca5a5' : '#fbbf24';
+    
+    // Override color for failure
+    if (failed) {
+        color = '#ff0000';
+    }
     
     // VISUAL DISTINCTION FOR RACES (Geometry)
     // Construct = Blocky
@@ -613,15 +620,23 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
             </mesh>
 
             <group position={[0, finalScale - 1, 0]} scale={[finalScale, finalScale, finalScale]}>
+                {/* Visual pulsating effect for failed state */}
+                {failed && (
+                    <mesh position={[0, 1, 0]}>
+                        <sphereGeometry args={[1.5, 16, 16]} />
+                        <meshBasicMaterial color="red" transparent opacity={0.2} wireframe />
+                    </mesh>
+                )}
+
                 {/* BASE BODY */}
                 <mesh position={[0, 0.8, 0]} castShadow>
                     {isConstruct ? <boxGeometry args={[0.8, 0.8, 0.8]} /> : isDemon ? <octahedronGeometry args={[0.5]} /> : <dodecahedronGeometry args={[0.5, 0]} />}
-                    <meshStandardMaterial color="#0f0f0f" roughness={0.9} />
+                    <meshStandardMaterial color={failed ? "#200000" : "#0f0f0f"} roughness={0.9} emissive={failed ? "#500" : "#000"} />
                 </mesh>
                 
                 {/* LIMBS / FEATURES */}
-                <mesh position={[0.3, 1, 0]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} /></mesh>
-                <mesh position={[-0.3, 0.6, 0.2]} rotation={[0,0,0.5]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} /></mesh>
+                <mesh position={[0.3, 1, 0]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} emissive={failed ? color : undefined} emissiveIntensity={2} /></mesh>
+                <mesh position={[-0.3, 0.6, 0.2]} rotation={[0,0,0.5]}><coneGeometry args={[0.1, 0.6, 4]} /><meshStandardMaterial color={color} emissive={failed ? color : undefined} emissiveIntensity={2} /></mesh>
                 
                 {/* Selection Ring */}
                 {isSelected && <mesh position={[0, 0.1, 0]} rotation={[-Math.PI/2, 0, 0]}><ringGeometry args={[0.8, 0.9, 32]} /><meshBasicMaterial color="#ef4444" /></mesh>}
@@ -635,10 +650,12 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
                 style={{pointerEvents: 'none'}}
             >
                 <div className={`
-                    text-[10px] uppercase tracking-widest font-bold px-3 py-1 border transition-all duration-300 whitespace-nowrap
+                    text-[10px] uppercase tracking-widest font-bold px-3 py-1 border transition-all duration-300 whitespace-nowrap flex flex-col items-center
                     ${(hovered || isSelected) ? 'bg-red-950/90 border-red-500 text-red-100 scale-110 opacity-100 shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'bg-black/40 border-transparent text-white/70 opacity-70'}
+                    ${failed ? 'border-red-600 bg-red-900/50 text-white animate-pulse' : ''}
                 `}>
                     {name}
+                    {failed && <span className="text-[8px] bg-red-600 text-white px-1 mt-1">FAILED</span>}
                 </div>
             </Html>
         </group>

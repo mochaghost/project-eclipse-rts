@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Archive } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -39,10 +39,20 @@ export const Grimoire: React.FC = () => {
   // Failed Task Resolution State
   const [resolvingTaskId, setResolvingTaskId] = useState<string | null>(null);
 
-  // Potential Parents (Any active main task except the one we are editing)
+  // Derived State
+  const isEditing = !!editingTaskId;
+  const isResolving = !!resolvingTaskId;
+
+  // Potential Parents
   const potentialParents = useMemo(() => {
       return state.tasks.filter(t => !t.completed && !t.failed && t.id !== editingTaskId && !t.parentId);
   }, [state.tasks, editingTaskId]);
+
+  // Selected Task Enemy Data (For Lore Display)
+  const selectedEnemy = useMemo(() => {
+      if (!editingTaskId) return null;
+      return state.enemies.find(e => e.taskId === editingTaskId && !e.subtaskId);
+  }, [editingTaskId, state.enemies]);
 
   if (!state.isGrimoireOpen) return null;
   const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
@@ -56,7 +66,7 @@ export const Grimoire: React.FC = () => {
 
   // --- DRAG & DROP HANDLERS ---
   const handleDragStart = (e: React.DragEvent, task: Task) => {
-      e.stopPropagation(); // Crucial: Stop bubbling so HUD doesn't think we clicked "outside"
+      e.stopPropagation(); 
       e.dataTransfer.setData("taskId", task.id);
       setDraggedTaskId(task.id);
       e.dataTransfer.effectAllowed = "move";
@@ -80,10 +90,8 @@ export const Grimoire: React.FC = () => {
       const newStart = new Date(targetDate);
       
       if (targetHour !== undefined) {
-          // DAY/WEEK View: Drop specific hour
           newStart.setHours(targetHour, 0, 0, 0);
       } else {
-          // MONTH View: Drop on day, preserve original time
           const originalStart = new Date(task.startTime);
           newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
       }
@@ -102,8 +110,6 @@ export const Grimoire: React.FC = () => {
   };
 
   const handleSelectSlot = (date: Date, hour?: number) => {
-      // Prevent selecting past if strict, but let's be flexible for viewing.
-      // However, for creation, update selectedDate.
       setSelectedDate(date);
       if (hour !== undefined) {
           const start = `${hour < 10 ? '0'+hour : hour}:00`;
@@ -111,7 +117,6 @@ export const Grimoire: React.FC = () => {
           setStartTimeStr(start);
           setEndTimeStr(end);
       }
-      // Reset resolving/editing if clicking blank
       setEditingTaskId(null);
       setResolvingTaskId(null);
       resetForm();
@@ -133,7 +138,6 @@ export const Grimoire: React.FC = () => {
       setNotes(task.description || '');
       setDuration(task.estimatedDuration);
       setPriority(task.priority);
-      // SAFEGUARD: Ensure subtasks is an array before mapping
       setSubtasks((task.subtasks || []).map(s => ({ title: s.title, startTime: s.startTime, deadline: s.deadline })));
       setParentId(task.parentId || '');
       
@@ -166,18 +170,14 @@ export const Grimoire: React.FC = () => {
     const startDate = new Date(selectedDate);
     startDate.setHours(startH, startM, 0);
     
-    // Check if past (Simple check, allow 1 min grace)
     if (startDate.getTime() < Date.now() - 60000 && !editingTaskId) {
         alert("Time flows forward, Summoner. You cannot schedule in the past.");
         return;
     }
     
-    // Handle overnight tasks or simple end time
     let deadlineDate = new Date(selectedDate);
     deadlineDate.setHours(endH, endM, 0);
     if (deadlineDate <= startDate) {
-        // Assume next day if end time is before start time (e.g. 23:00 -> 01:00)
-        // Or just enforce min duration
         deadlineDate.setTime(startDate.getTime() + 60 * 60 * 1000); 
     }
     
@@ -206,139 +206,75 @@ export const Grimoire: React.FC = () => {
     }
   };
 
+  const handleMergeTask = (oldTaskId: string, oldTitle: string) => {
+      // 1. Resolve old task as 'MERGE' (Deletes it from state)
+      resolveFailedTask(oldTaskId, 'MERGE');
+      
+      // 2. Pre-fill form for NEW task
+      setEditingTaskId(null); // Ensure we are creating new
+      setTitle(`Revenge: ${oldTitle}`);
+      setNotes(`A new attempt born from the ashes of failure. +XP Bonus.`);
+      setPriority(TaskPriority.HIGH); // Escalation
+      
+      // Set time to NOW
+      const now = new Date();
+      setSelectedDate(now);
+      const h = now.getHours();
+      setStartTimeStr(`${h < 10 ? '0'+h : h}:00`);
+      setEndTimeStr(`${h+1 < 10 ? '0'+(h+1) : (h+1)}:00`);
+      
+      // Close resolve panel so we see the form
+      setResolvingTaskId(null);
+  };
+
   const handleAddSubtask = (e?: React.FormEvent) => {
       e?.preventDefault();
       if (newSubtask.trim()) {
-          let deadline: number | undefined = undefined;
-          let startTime: number | undefined = undefined;
-
-          if (newSubtaskDeadlineStr) {
-              const [h, m] = newSubtaskDeadlineStr.split(':').map(Number);
-              const d = new Date(selectedDate);
-              d.setHours(h, m, 0);
-              deadline = d.getTime();
-              startTime = d.getTime() - (30 * 60000);
-          }
-
-          setSubtasks([...subtasks, { title: newSubtask.trim(), startTime, deadline }]);
+          setSubtasks([...subtasks, { title: newSubtask.trim() }]);
           setNewSubtask('');
-          setNewSubtaskDeadlineStr('');
       }
   };
 
   // --- VIEW RENDERERS (Month, Day, Week, Year) ---
-  const renderMonthView = () => {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      const firstDay = new Date(year, month, 1);
-      const startDay = firstDay.getDay();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const grid = [];
-      for (let i=0; i<startDay; i++) grid.push(<div key={`empty-${i}`} className="bg-[#050202] border border-[#1c1917] min-h-[60px] md:min-h-[100px]"></div>);
-      for (let d=1; d<=daysInMonth; d++) {
-          const date = new Date(year, month, d);
-          const isToday = new Date().toDateString() === date.toDateString();
-          const isSelected = selectedDate.toDateString() === date.toDateString();
-          const tasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === date.toDateString());
-          grid.push(
-              <div 
-                key={d} 
-                onClick={() => handleSelectSlot(date)} 
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, date)}
-                className={`border border-[#1c1917] p-1 md:p-2 min-h-[60px] md:min-h-[100px] hover:bg-[#151210] cursor-pointer relative ${isSelected ? 'bg-[#1a1512]' : 'bg-[#050202]'}`}
-              >
-                  <div className={`text-[10px] md:text-xs font-serif ${isToday ? 'text-yellow-500 font-bold' : 'text-stone-500'}`}>{d}</div>
-                  <div className="mt-1 md:mt-2 space-y-1">
-                      {tasks.map(t => (
-                          <div 
-                            key={t.id} 
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, t)}
-                            onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
-                            className={`text-[8px] md:text-[9px] px-1 truncate rounded cursor-grab active:cursor-grabbing hover:brightness-125 flex items-center gap-1 ${t.completed ? 'bg-green-950/30 text-green-700 line-through' : t.failed ? 'bg-red-950/30 text-red-700 font-bold border border-red-900' : 'bg-yellow-950/30 text-yellow-600'}`}
-                          >
-                              <GripVertical size={8} className="opacity-50" />
-                              {getTaskDisplayTitle(t)}
-                          </div>
-                      ))}
-                  </div>
-                  {isSelected && <div className="absolute inset-0 border-2 border-yellow-800 pointer-events-none"></div>}
-              </div>
-          );
-      }
-      return <div className="grid grid-cols-7 gap-0 h-full overflow-y-auto custom-scrollbar">{DAYS.map(d => <div key={d} className="text-center text-[8px] md:text-[10px] uppercase text-stone-600 py-2 bg-[#0c0a09] border-b border-[#292524]">{d}</div>)}{grid}</div>;
-  };
-
+  
   const renderDayView = () => {
       const d = new Date(currentDate);
-      const dayTasks = state.tasks.filter(t => {
-          const taskStart = new Date(t.startTime);
-          return taskStart.toDateString() === d.toDateString();
-      });
-
-      // CALCULATE OVERLAPS for layout
-      // Simple algorithm: Sort by start time, find intersecting groups, assign columns
+      const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === d.toDateString());
       const sorted = [...dayTasks].sort((a,b) => a.startTime - b.startTime);
-      const layoutMap = new Map<string, { left: number, width: number }>();
       
+      // Simple column logic for overlaps
       const columns: Task[][] = [];
       sorted.forEach(task => {
           let placed = false;
           for(let i=0; i<columns.length; i++) {
               const lastInCol = columns[i][columns[i].length-1];
-              // If this task starts after the last one in this column ends, put it here
               if (task.startTime >= lastInCol.deadline) {
                   columns[i].push(task);
                   placed = true;
                   break;
               }
           }
-          if (!placed) {
-              columns.push([task]);
-          }
+          if (!placed) columns.push([task]);
       });
 
-      // Assign widths based on overlap count at any given time? 
-      // Simplified: Just use column index / total columns active in that overlapping cluster.
-      // Actually, a simpler CSS grid approach: width = 100% / max_overlap_group? 
-      // Let's stick to simple columns: left = (colIndex * 100/totalCols)%, width = (100/totalCols)%
-      
-      // Need to refine columns logic: A task in col 0 might overlap with col 1, but col 1 task might end, then col 2 starts.
-      // This is complex for a quick fix. We'll use a visual offset approach.
-      // Width = 90% - (indent * 5%). Z-index increases.
-      
       return (
           <div className="flex h-full overflow-hidden flex-col">
               <div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-16 border-r border-[#292524]"></div><div className={`flex-1 text-center py-2 ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-xs text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-lg font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div></div>
               <div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-16 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-32 text-[10px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div><div className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
                 {HOURS.map(h => (
-                    <div 
-                        key={h} 
-                        onClick={() => handleSelectSlot(d, h)} 
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, d, h)}
-                        className="h-32 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
-                    ></div>
+                    <div key={h} onClick={() => handleSelectSlot(d, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, d, h)} className="h-32 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>
                 ))}
-                {sorted.map((t, index) => {
+                {sorted.map((t) => {
                   const date = new Date(t.startTime); 
                   const startHour = date.getHours() + (date.getMinutes()/60); 
                   const deadline = new Date(t.deadline);
                   const endHour = deadline.getHours() + (deadline.getMinutes()/60);
-                  
-                  // Handle day wrapping visual (cutoff at 24)
                   const displayEndHour = deadline.getDate() !== date.getDate() ? 24 : endHour;
                   const durationHrs = Math.max(0.25, displayEndHour - startHour);
-                  
-                  const top = startHour * 128; // 128px per hour (matching h-32 * 4? no, h-32 is 8rem = 128px)
+                  const top = startHour * 128; 
                   const height = durationHrs * 128;
-                  
-                  // Find column index
                   let colIndex = 0;
-                  for(let c=0; c<columns.length; c++) {
-                      if(columns[c].includes(t)) { colIndex = c; break; }
-                  }
+                  for(let c=0; c<columns.length; c++) { if(columns[c].includes(t)) { colIndex = c; break; } }
                   const widthPercent = 100 / columns.length;
                   const leftPercent = colIndex * widthPercent;
 
@@ -348,103 +284,183 @@ export const Grimoire: React.FC = () => {
                             draggable
                             onDragStart={(e) => handleDragStart(e, t)}
                             onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
-                            className={`absolute rounded border overflow-hidden p-2 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/80 border-red-600 text-red-100 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'bg-yellow-950/80 border-yellow-800 text-yellow-100 hover:z-20'}`} 
-                            style={{ 
-                                top: `${top}px`, 
-                                height: `${height}px`,
-                                left: `${leftPercent}%`,
-                                width: `${widthPercent}%`,
-                                borderLeftWidth: '4px'
-                            }}
+                            className={`absolute rounded border overflow-hidden p-2 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/90 border-red-500 text-red-100 shadow-[0_0_15px_rgba(220,38,38,0.6)] animate-pulse-slow' : 'bg-yellow-950/80 border-yellow-800 text-yellow-100 hover:z-20'}`} 
+                            style={{ top: `${top}px`, height: `${height}px`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftWidth: '4px' }}
                       >
                             <div className="font-bold flex items-center justify-between"><span className="truncate">{getTaskDisplayTitle(t)}</span>{t.parentId && <LinkIcon size={10} className="opacity-50" />}</div>
-                            <span className="text-[10px] opacity-70 font-mono mt-1">{new Date(t.startTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {new Date(t.deadline).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                            {t.failed && <div className="mt-auto text-[9px] font-bold text-red-300 uppercase bg-red-900/50 text-center py-1">FAILED - RESOLVE</div>}
+                            {t.failed && <div className="mt-auto text-[9px] font-bold text-red-200 uppercase bg-red-900 text-center py-1 border-t border-red-500">ENEMY STILL STANDS</div>}
                       </div>
                   )
               })}</div></div></div>
       );
   }
 
-  const renderWeekView = () => {
-      const startOfWeek = new Date(currentDate); startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
-      const weekDays = Array.from({length: 7}, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
-      return (
-          <div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[9px] md:text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-xs md:text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">
-            {HOURS.map(h => (
-                <div 
-                    key={h} 
-                    onClick={() => handleSelectSlot(d, h)} 
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, d, h)}
-                    className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"
-                ></div>
-            ))}
-            {dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = (t.deadline - t.startTime) / (1000*60*60); const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div 
-                key={t.id} 
-                draggable
-                onDragStart={(e) => handleDragStart(e, t)}
-                onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
-                className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/80 border-red-600 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-20'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>
-      );
+  const renderMonthView = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startingDayOfWeek = firstDay.getDay(); // 0 (Sun) to 6 (Sat)
+    const daysInMonth = lastDay.getDate();
+
+    const cells = [];
+    
+    // Empty cells for previous month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+        cells.push(<div key={`empty-${i}`} className="border-r border-b border-[#292524] bg-[#0c0a09]"></div>);
+    }
+
+    // Days
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === date.toDateString());
+        const isToday = date.toDateString() === new Date().toDateString();
+        
+        cells.push(
+            <div 
+                key={d} 
+                onClick={() => handleSelectSlot(date, 9)} 
+                onDragOver={handleDragOver} 
+                onDrop={(e) => handleDrop(e, date, 9)}
+                className={`border-r border-b border-[#292524] bg-[#050202] min-h-[80px] p-1 hover:bg-[#151210] cursor-pointer flex flex-col gap-1 relative overflow-hidden group`}
+            >
+                <div className={`text-right text-xs font-serif ${isToday ? 'text-yellow-500 font-bold' : 'text-stone-500'}`}>{d}</div>
+                <div className="flex-1 flex flex-col gap-1 overflow-y-auto custom-scrollbar">
+                    {dayTasks.map(t => (
+                        <div 
+                            key={t.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, t)}
+                            onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }}
+                            className={`text-[9px] truncate px-1 rounded border pointer-events-auto ${t.completed ? 'bg-green-950/30 text-green-400 border-green-900' : t.failed ? 'bg-red-950/50 text-red-300 border-red-800' : 'bg-yellow-900/20 text-yellow-200 border-yellow-900/50'}`}
+                        >
+                            {getTaskDisplayTitle(t)}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+    
+    const totalCells = cells.length;
+    const remaining = 7 - (totalCells % 7);
+    if (remaining < 7) {
+        for (let i = 0; i < remaining; i++) {
+            cells.push(<div key={`empty-end-${i}`} className="border-r border-b border-[#292524] bg-[#0c0a09]"></div>);
+        }
+    }
+
+    return (
+        <div className="flex h-full flex-col bg-[#050202]">
+            <div className="grid grid-cols-7 border-b border-[#292524]">
+                {DAYS.map(day => (
+                    <div key={day} className="text-center py-1 text-[10px] text-stone-500 uppercase tracking-widest border-r border-[#292524] last:border-r-0">
+                        {day}
+                    </div>
+                ))}
+            </div>
+            <div className="grid grid-cols-7 flex-1 auto-rows-fr">
+                {cells}
+            </div>
+        </div>
+    );
   };
 
-  const renderYearView = () => {
-      return (
-          <div className="grid grid-cols-4 gap-4 p-4 overflow-y-auto h-full bg-[#050202]">{MONTHS.map((m, i) => (<div key={m} className="border border-[#292524] bg-[#0c0a09] p-2 hover:border-stone-500 cursor-pointer" onClick={() => { setCurrentDate(new Date(currentDate.getFullYear(), i, 1)); setViewMode('MONTH'); }}><div className="text-center font-serif text-stone-400 mb-2 font-bold">{m}</div><div className="grid grid-cols-7 gap-0.5">{Array.from({length: new Date(currentDate.getFullYear(), i+1, 0).getDate()}).map((_, d) => { const dDate = new Date(currentDate.getFullYear(), i, d+1); const count = state.tasks.filter(t => new Date(t.deadline).toDateString() === dDate.toDateString()).length; let bg = 'bg-[#1c1917]'; if (count > 0) bg = 'bg-yellow-900/40'; if (count > 2) bg = 'bg-yellow-700/60'; return <div key={d} className={`w-full h-2 ${bg}`}></div> })}</div></div>))}</div>
-      );
-  };
+  const renderOtherViews = () => {
+      if (viewMode === 'WEEK') {
+          const startOfWeek = new Date(currentDate); startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+          const weekDays = Array.from({length: 7}, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
+          return (<div className="flex h-full overflow-hidden flex-col"><div className="flex border-b border-[#292524] bg-[#0c0a09]"><div className="w-12 border-r border-[#292524]"></div>{weekDays.map(d => (<div key={d.toISOString()} className={`flex-1 text-center py-2 border-r border-[#292524] ${d.toDateString() === new Date().toDateString() ? 'bg-yellow-950/10' : ''}`}><div className="text-[9px] md:text-[10px] text-stone-500 uppercase">{DAYS[d.getDay()]}</div><div className={`text-xs md:text-sm font-serif ${d.toDateString() === new Date().toDateString() ? 'text-yellow-500 font-bold' : 'text-stone-300'}`}>{d.getDate()}</div></div>))}</div><div className="flex-1 overflow-y-auto flex custom-scrollbar relative"><div className="w-12 bg-[#0c0a09] border-r border-[#292524] shrink-0">{HOURS.map(h => (<div key={h} className="h-20 text-[9px] text-stone-600 text-right pr-2 pt-1 border-b border-[#1c1917] bg-[#0c0a09]">{h}:00</div>))}</div>{weekDays.map(d => { const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === d.toDateString()); return (<div key={d.toISOString()} className="flex-1 border-r border-[#1c1917] relative bg-[#050202]">{HOURS.map(h => (<div key={h} onClick={() => handleSelectSlot(d, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, d, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>))}{dayTasks.map(t => { const date = new Date(t.startTime); const startHour = date.getHours() + (date.getMinutes()/60); const durationHrs = (t.deadline - t.startTime) / (1000*60*60); const top = startHour * 80; const height = Math.max(20, durationHrs * 80); return (<div key={t.id} draggable onDragStart={(e) => handleDragStart(e, t)} onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} className={`absolute left-1 right-1 rounded border overflow-hidden p-1 text-[10px] flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto hover:scale-[1.02] transition-transform z-10 ${t.completed ? 'bg-green-950/50 border-green-800 text-green-300 opacity-60' : t.failed ? 'bg-red-950/80 border-red-600 text-red-300' : 'bg-yellow-950/50 border-yellow-800 text-yellow-100 hover:z-20'}`} style={{ top: `${top}px`, height: `${height}px` }}><span className="font-bold truncate">{getTaskDisplayTitle(t)}</span></div>)})}</div>)})}</div></div>);
+      }
+      if (viewMode === 'MONTH') {
+          return renderMonthView();
+      }
+      return <div className="p-4">Year View</div>;
+  }
 
-  const isEditing = !!editingTaskId;
-  const isResolving = !!resolvingTaskId;
-
-  // Resolve Panel Content
+  // --- RENDER RESOLVE PANEL ---
   const renderResolvePanel = () => {
       const task = state.tasks.find(t => t.id === resolvingTaskId);
       if (!task) return null;
 
       return (
-          <div className="h-full flex flex-col p-6 bg-red-950/10">
+          <div className="h-full flex flex-col p-6 bg-red-950/20 border-l border-red-900/50">
               <div className="text-center mb-6">
                   <Skull size={48} className="text-red-600 mx-auto mb-2 animate-pulse" />
-                  <h3 className="text-xl font-serif text-red-500 tracking-widest font-bold">FAILURE DETECTED</h3>
-                  <p className="text-stone-400 text-sm mt-2 italic">"{task.title}" has succumbed to the void.</p>
+                  <h3 className="text-xl font-serif text-red-500 tracking-widest font-bold uppercase">Enemy Unvanquished</h3>
+                  <p className="text-stone-400 text-sm mt-2 italic">"{task.title}" haunts the timeline.</p>
               </div>
 
               <div className="space-y-4">
                   <button 
                     onClick={() => resolveFailedTask(task.id, 'RESCHEDULE', Date.now())}
-                    className="w-full bg-[#1c1917] border border-stone-600 p-4 hover:border-yellow-500 hover:bg-yellow-950/20 text-left group transition-all"
+                    className="w-full bg-[#1c1917] border border-stone-600 p-4 hover:border-yellow-500 hover:bg-yellow-950/20 text-left group transition-all relative overflow-hidden"
                   >
-                      <div className="flex items-center gap-2 text-yellow-600 font-bold mb-1">
-                          <RefreshCw size={18} />
-                          <span>RESURRECT (Reschedule)</span>
+                      <div className="flex items-center gap-3 text-yellow-600 font-bold mb-1 relative z-10">
+                          <RefreshCw size={20} />
+                          <span className="uppercase tracking-widest">Reschedule (Move)</span>
                       </div>
-                      <p className="text-xs text-stone-500 group-hover:text-stone-300">Move this task to now. The enemy returns.</p>
+                      <p className="text-xs text-stone-500 group-hover:text-stone-300 relative z-10">
+                          Shift the battle to now. The enemy retreats but remains.
+                      </p>
                   </button>
 
                   <button 
-                    onClick={() => resolveFailedTask(task.id, 'MERGE')}
-                    className="w-full bg-[#1c1917] border border-stone-600 p-4 hover:border-purple-500 hover:bg-purple-950/20 text-left group transition-all"
+                    onClick={() => handleMergeTask(task.id, task.title)}
+                    className="w-full bg-[#1c1917] border border-stone-600 p-4 hover:border-purple-500 hover:bg-purple-950/20 text-left group transition-all relative overflow-hidden"
                   >
-                      <div className="flex items-center gap-2 text-purple-500 font-bold mb-1">
-                          <Archive size={18} />
-                          <span>CONSUME (Dismiss)</span>
+                      <div className="flex items-center gap-3 text-purple-500 font-bold mb-1 relative z-10">
+                          <Flame size={20} />
+                          <span className="uppercase tracking-widest">Fusion (Merge into New)</span>
                       </div>
-                      <p className="text-xs text-stone-500 group-hover:text-stone-300">Accept the loss. The enemy fades, but the damage remains.</p>
+                      <p className="text-xs text-stone-500 group-hover:text-stone-300 relative z-10">
+                          Consume this failure to fuel a new, stronger task.
+                      </p>
                   </button>
               </div>
 
-              <button onClick={() => setResolvingTaskId(null)} className="mt-auto w-full py-3 text-stone-500 hover:text-white border-t border-stone-800">
-                  Close
-              </button>
+              <div className="mt-auto pt-6 border-t border-red-900/30">
+                  <p className="text-[10px] text-red-400/50 text-center uppercase mb-2">Simulated Consequence</p>
+                  <p className="text-xs text-stone-500 text-center italic">The realm's Fear has increased. Resolving this will restore Order.</p>
+                  <button onClick={() => setResolvingTaskId(null)} className="w-full mt-4 py-2 text-stone-500 hover:text-white border border-stone-800 hover:bg-stone-800 uppercase text-xs font-bold">
+                      Close & Lament
+                  </button>
+              </div>
+          </div>
+      )
+  }
+
+  // --- RENDER LORE PANEL (If Enemy Exists) ---
+  const renderLorePanel = () => {
+      if (!selectedEnemy) return null;
+      return (
+          <div className="mb-4 bg-[#151210] border border-stone-800 p-3">
+              <h4 className="text-[10px] text-yellow-700 uppercase tracking-[0.2em] font-bold mb-2 flex items-center gap-2 border-b border-stone-800 pb-1">
+                  <Scroll size={10} /> Nemesis Intel
+              </h4>
+              <div className="flex justify-between items-center mb-1">
+                  <span className="text-stone-300 font-serif font-bold text-sm">{selectedEnemy.name}</span>
+                  <span className="text-[9px] text-stone-500 uppercase">{selectedEnemy.race} {selectedEnemy.clan}</span>
+              </div>
+              <p className="text-[10px] text-stone-400 italic mb-2 leading-relaxed">"{selectedEnemy.lore}"</p>
+              <div className="flex gap-2 flex-wrap">
+                  {selectedEnemy.memories.slice(0, 1).map((m,i) => (
+                      <span key={i} className="text-[9px] bg-black px-1 border border-stone-800 text-stone-600">{m}</span>
+                  ))}
+              </div>
           </div>
       )
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md md:p-4 pointer-events-auto">
-      <div className="relative w-full h-full md:max-w-[95vw] md:h-[85vh] bg-[#0c0a09] border border-[#44403c] flex flex-col md:flex-row shadow-2xl overflow-hidden">
+    <div 
+        className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md md:p-4 pointer-events-auto"
+        onClick={toggleGrimoire} // Close ONLY when clicking backdrop
+    >
+      <div 
+        className="relative w-full h-full md:max-w-[95vw] md:h-[85vh] bg-[#0c0a09] border border-[#44403c] flex flex-col md:flex-row shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()} // STOP CLOSING WHEN CLICKING INSIDE
+      >
         
         {/* LEFT PANEL: CALENDAR VISUALIZER */}
         <div className="w-full md:w-3/4 flex flex-col border-r border-[#292524] bg-[#050202] h-[50%] md:h-full">
@@ -470,10 +486,7 @@ export const Grimoire: React.FC = () => {
                         </button>
                     )}
                     
-                    <button 
-                        onClick={() => setShowRealNames(!showRealNames)} 
-                        className={`flex items-center gap-2 px-2 py-1 md:px-3 md:py-2 border rounded transition-all ${showRealNames ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-red-900/30 border-red-500 text-red-400'}`}
-                    >
+                    <button onClick={() => setShowRealNames(!showRealNames)} className={`flex items-center gap-2 px-2 py-1 md:px-3 md:py-2 border rounded transition-all ${showRealNames ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-red-900/30 border-red-500 text-red-400'}`}>
                         {showRealNames ? <Eye size={14} /> : <Skull size={14} />}
                     </button>
 
@@ -486,10 +499,7 @@ export const Grimoire: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-hidden relative">
-                {viewMode === 'MONTH' && renderMonthView()}
-                {viewMode === 'WEEK' && renderWeekView()}
-                {viewMode === 'DAY' && renderDayView()} 
-                {viewMode === 'YEAR' && renderYearView()}
+                {viewMode === 'DAY' ? renderDayView() : renderOtherViews()}
             </div>
         </div>
 
@@ -507,18 +517,17 @@ export const Grimoire: React.FC = () => {
 
                     <form onSubmit={handleSubmit} className="flex-1 p-4 md:p-6 overflow-y-auto space-y-4 md:space-y-5 custom-scrollbar pb-20 md:pb-6">
                         
-                        {/* Date Input Added */}
+                        {isEditing && renderLorePanel()}
+
                         <div className={`bg-[#151210] border p-2 md:p-4 text-center ${isEditing ? 'border-blue-900/30' : 'border-[#292524]'}`}>
                             <div className="flex items-center justify-center gap-2 mb-4">
                                 <CalendarDays size={14} className="text-stone-500" />
                                 <input 
                                     type="date"
-                                    min={new Date().toISOString().split('T')[0]} // Block past dates
+                                    min={new Date().toISOString().split('T')[0]} 
                                     value={selectedDate.toISOString().split('T')[0]}
                                     onChange={(e) => {
                                         const d = new Date(e.target.value);
-                                        // Preserve time from current selection if needed, or just date.
-                                        // Actually better to just set the date part of selectedDate
                                         const newDate = new Date(selectedDate);
                                         newDate.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
                                         setSelectedDate(newDate);
@@ -562,7 +571,6 @@ export const Grimoire: React.FC = () => {
                             />
                         </div>
 
-                        {/* DESCRIPTION BOX - RESTORED */}
                         <div>
                             <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
                                 <AlignLeft size={10} /> Description / Notes
@@ -575,7 +583,6 @@ export const Grimoire: React.FC = () => {
                             />
                         </div>
 
-                        {/* PARENT TASK SELECTOR (Hierarchical Linking) */}
                         <div>
                             <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1 block flex items-center gap-1">
                                 <Network size={10} /> Link to Overlord
@@ -622,9 +629,7 @@ export const Grimoire: React.FC = () => {
                                 <div className="flex-1 space-y-0 p-0">
                                     {subtasks.map((st, idx) => (
                                         <div key={idx} className="flex justify-between items-center group text-xs text-stone-400 p-2 border-b border-[#1c1917] hover:bg-[#151210]">
-                                            <div className="flex flex-col">
-                                                <span className="font-mono truncate">{st.title}</span>
-                                            </div>
+                                            <span className="font-mono truncate">{st.title}</span>
                                             <button type="button" onClick={() => setSubtasks(subtasks.filter((_,i)=>i!==idx))} className="text-stone-700 hover:text-red-500"><Trash2 size={12} /></button>
                                         </div>
                                     ))}
@@ -656,13 +661,7 @@ export const Grimoire: React.FC = () => {
                                 >
                                     <Save size={16} /> Rewrite
                                 </button>
-                                <button 
-                                    onClick={resetForm} 
-                                    className="px-4 bg-stone-900 text-stone-400 border border-stone-700 font-bold hover:bg-stone-800"
-                                    title="Cancel Edit"
-                                >
-                                    <X size={16} />
-                                </button>
+                                <button onClick={resetForm} className="px-4 bg-stone-900 text-stone-400 border border-stone-700 font-bold hover:bg-stone-800" title="Cancel Edit"><X size={16} /></button>
                             </div>
                         ) : (
                             <button 

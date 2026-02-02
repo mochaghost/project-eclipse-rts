@@ -407,6 +407,7 @@ export const Scene: React.FC = () => {
                     archetype={enemy.race === 'HUMAN' || enemy.race === 'DWARF' ? 'KNIGHT' : 'MONSTER'}
                     race={enemy.race}
                     subtaskCount={activeSubtasks}
+                    failed={task?.failed} // Pass failed state to renderer
                 />
             );
           })}

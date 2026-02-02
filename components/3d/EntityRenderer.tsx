@@ -21,6 +21,7 @@ interface EntityRendererProps {
   race?: RaceType; 
   subtaskCount?: number;
   npcAction?: NPC['currentAction']; 
+  failed?: boolean;
 }
 
 const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { children?: React.ReactNode, initialPos: [number,number,number], type: EntityType, speed?: number }) => {
@@ -81,7 +82,7 @@ const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { childr
     return <group ref={group} position={initialPos}>{children}</group>;
 }
 
-export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction }) => {
+export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed }) => {
   const content = useMemo(() => {
     switch (type) {
       case EntityType.HERO:
@@ -91,7 +92,7 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
       case EntityType.ENEMY:
         let visualArchetype = archetype || 'MONSTER';
         if (race === 'HUMAN' && archetype === 'KNIGHT') visualArchetype = 'KNIGHT';
-        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={onClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} />;
+        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={onClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} failed={failed} />;
       case EntityType.MINION:
           return <MinionMesh />;
       case EntityType.VILLAGER:
@@ -103,7 +104,7 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
       default:
         return null;
     }
-  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction]);
+  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed]);
 
   if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null; // Handled by Scene Instances now
 
