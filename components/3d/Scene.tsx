@@ -7,7 +7,7 @@ import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
 import { VisualEffectsRenderer } from './VisualEffects';
 import { VazarothEffects } from './VazarothEffects'; 
-import { EntityType, Era, AlertType, WeatherType } from '../../types';
+import { EntityType, Era, AlertType, WeatherType, Vector3 } from '../../types';
 import { PALETTE } from '../../constants';
 import { VazarothTitan, GrassTuft, Pebble, BonePile, VoidCrystal, RuinedColumn, RuinedArch, Torch, TwistedTree, GlowingMushroom, GhostWisp } from './Assets'; 
 import * as THREE from 'three';
@@ -278,7 +278,7 @@ const RitualCircle = () => {
 }
 
 // Visual for FUTURE enemies (Fixed Geometry from Triangle to Portal)
-const PortalRift = ({ position }: { position: {x:number, y:number, z:number} }) => {
+const PortalRift: React.FC<{ position: Vector3 }> = ({ position }) => {
     const r1 = useRef<THREE.Mesh>(null);
     const r2 = useRef<THREE.Mesh>(null);
     

@@ -32,34 +32,36 @@ export const SettingsModal: React.FC = () => {
         }
     }, []);
 
-    // --- SMART PARSER (ROBUST) ---
+    // --- SMART PARSER (ROBUST V2) ---
     const parseLooseJson = (input: string) => {
         if (!input) return null;
 
-        let clean = input;
+        let clean = input.trim();
         // 1. Remove comments
         try {
             clean = input.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-        } catch (e) {
-            // regex fail, continue with raw
+        } catch (e) {}
+
+        // 2. Isolate the object if user pasted "const firebaseConfig = { ... };"
+        const firstBrace = clean.indexOf('{');
+        const lastBrace = clean.lastIndexOf('}');
+        
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            clean = clean.substring(firstBrace, lastBrace + 1);
         }
 
-        // STRATEGY A: Function Constructor (Best for standard JS objects)
+        // STRATEGY A: Function Constructor (Handles trailing commas and unquoted keys - "Loose JSON")
+        // This is safer than eval() but effectively evaluates the object literal
         try {
-            const firstBrace = clean.indexOf('{');
-            const lastBrace = clean.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                const objectStr = clean.substring(firstBrace, lastBrace + 1);
-                // Safe evaluation of object literal
-                const fn = new Function(`return ${objectStr};`);
-                const result = fn();
-                if (result && result.apiKey) return result;
-            }
+            // We wrap in parenthesis to ensure it evaluates as an expression, not a block
+            const fn = new Function(`return (${clean});`);
+            const result = fn();
+            if (result && result.apiKey) return result;
         } catch (e) {
-            console.warn("Parse Strategy A failed, trying Regex...", e);
+            // console.warn("Parse Strategy A failed", e);
         }
 
-        // STRATEGY B: JSON Parse (Best for valid JSON)
+        // STRATEGY B: JSON Parse (Strict)
         try {
              const jsonAttempt = JSON.parse(clean);
              if (jsonAttempt && jsonAttempt.apiKey) return jsonAttempt;
@@ -68,10 +70,9 @@ export const SettingsModal: React.FC = () => {
         }
 
         // STRATEGY C: Regex Extraction (Brute Force - Fallback)
-        // This extracts values even if the syntax is broken (e.g. missing commas)
         try {
             const extract = (key: string) => {
-                // Matches key: "value" or key: 'value'
+                // Matches key: "value" or key: 'value' or "key": "value"
                 const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'i');
                 const match = clean.match(regex);
                 return match ? match[1] : undefined;
