@@ -37,7 +37,7 @@ export const SettingsModal: React.FC = () => {
         if (!input) return null;
 
         try {
-            // 1. Remove comments (// ... and /* ... */)
+            // 1. Remove comments (// ... and /* ... */) to clean up input
             let clean = input.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
             // 2. Extract ONLY the object part (between the first { and last })
@@ -45,24 +45,18 @@ export const SettingsModal: React.FC = () => {
             const lastBrace = clean.lastIndexOf('}');
 
             if (firstBrace === -1 || lastBrace === -1) {
-                // Try strict parse in case it's a flat string, though unlikely here
+                // Try strict parse in case it's a flat string or simple JSON
                 return JSON.parse(clean);
             }
 
-            let objectStr = clean.substring(firstBrace, lastBrace + 1);
+            const objectStr = clean.substring(firstBrace, lastBrace + 1);
 
-            // 3. Convert JS Object syntax to JSON
-            // Quote keys:  apiKey: -> "apiKey":
-            // Regex: find words followed by a colon, but ignore if already quoted
-            objectStr = objectStr.replace(/([a-zA-Z0-9_]+)\s*:/g, '"$1":');
-
-            // Swap single quotes for double quotes (values)
-            objectStr = objectStr.replace(/'/g, '"');
-
-            // Remove trailing commas before closing braces/brackets
-            objectStr = objectStr.replace(/,(\s*[}\]])/g, '$1');
-
-            return JSON.parse(objectStr);
+            // 3. Use Function constructor to evaluate as a JS expression.
+            // This is safer than eval() but still allows standard JS object syntax 
+            // (unquoted keys, single quotes, trailing commas) which JSON.parse fails on.
+            // Since this is client-side config entered by the user, this is acceptable.
+            const fn = new Function(`return ${objectStr};`);
+            return fn();
         } catch (e) {
             console.error("Parse error", e);
             return null;
