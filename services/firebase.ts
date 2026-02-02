@@ -14,8 +14,7 @@ let db: any = null;
 let auth: any = null;
 let currentUnsubscribe: any = null;
 
-// PLACEHOLDER CONFIG - This is likely what is causing the "configuration-not-found" error if used directly
-// The user MUST provide their own config via the Settings UI if this fails.
+// PLACEHOLDER CONFIG
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   apiKey: "AIzaSyAC0BL8gZCzOZeHuSBXTljs2Zs0v4MA070",
   authDomain: "project-eclipse-fa3c3.firebaseapp.com",
@@ -54,16 +53,23 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
         return false;
     }
 
-    // 3. Initialize Services (Defensively)
-    // We try/catch individual services so one failure doesn't break the whole app
+    // 3. Initialize Services (AGGRESSIVE MODE)
     try {
+        // Always try to re-init DB if it's null, specifically passing the URL
         if (app && !db) {
             if (!activeConfig.databaseURL) {
                 console.warn("[Cloud] Config is missing databaseURL. Cloud Save Disabled.");
                 db = null;
             } else {
-                db = getDatabase(app);
-                console.log("[Cloud] Database Service Initialized");
+                // FIX: Pass the URL explicitly to getDatabase. 
+                // This fixes the issue where the app instance didn't pick up the URL correctly.
+                try {
+                    db = getDatabase(app, activeConfig.databaseURL);
+                    console.log("[Cloud] Database Service Initialized with Explicit URL");
+                } catch (dbError) {
+                    console.error("[Cloud] Failed to init DB with explicit URL, trying default...", dbError);
+                    db = getDatabase(app);
+                }
             }
         }
     } catch (e) {
@@ -104,21 +110,14 @@ export const loginWithGoogle = async (): Promise<any> => {
     } catch (error: any) {
         console.error("[Auth] Login Error Full:", error);
         
-        // Handle specific errors for the user
         if (error.code === 'auth/configuration-not-found') {
-            throw new Error("CLOUD CONFIG ERROR: This project ID is not set up for Google Login. Please create your own Firebase project, enable Google Auth, and paste the config in Settings > Cloud Save.");
+            throw new Error("CLOUD CONFIG ERROR: Project not set up. Check Firebase Console.");
         }
         if (error.code === 'auth/popup-blocked') {
-            throw new Error("Popup blocked by browser. Please allow popups for this site.");
-        }
-        if (error.code === 'auth/popup-closed-by-user') {
-            throw new Error("Login cancelled.");
-        }
-        if (error.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
-             throw new Error("INVALID API KEY. Please update your config in Settings.");
+            throw new Error("Popup blocked by browser.");
         }
         if (error.code === 'auth/unauthorized-domain') {
-             throw new Error("DOMAIN UNAUTHORIZED. Go to Firebase Console > Auth > Settings > Authorized Domains and add your Vercel URL.");
+             throw new Error("DOMAIN UNAUTHORIZED. Add vercel.app to Firebase Console > Auth > Settings.");
         }
         throw error;
     }
@@ -129,25 +128,16 @@ export const logout = async () => {
 };
 
 export const subscribeToAuth = (callback: (user: any) => void) => {
-    // Attempt init if not ready
     if (!auth) initFirebase();
-    
-    if (!auth) {
-        console.warn("[Auth] Cannot subscribe - Auth service missing");
-        return () => {};
-    }
+    if (!auth) return () => {};
     return onAuthStateChanged(auth, callback);
 };
 
 // --- DATA FUNCTIONS ---
 
 export const pushToCloud = async (roomId: string, state: GameState) => {
-    if (!db) {
-        // Silent fail if DB failed to init, to avoid spamming console
-        return;
-    }
+    if (!db) return; // Silent fail
     
-    // Clean transient state before pushing to cloud
     const cleanState = {
         ...state,
         effects: [],
@@ -172,9 +162,9 @@ export const pushToCloud = async (roomId: string, state: GameState) => {
 };
 
 export const subscribeToCloud = (roomId: string, onData: (data: GameState) => void) => {
+    if (!db) initFirebase(); // Try init if missing
     if (!db) return;
 
-    // Unsubscribe previous if exists
     if (currentUnsubscribe) {
         off(ref(db, `timelines/${roomId}`));
     }
@@ -191,19 +181,24 @@ export const subscribeToCloud = (roomId: string, onData: (data: GameState) => vo
 };
 
 export const disconnect = () => {
-    if (db && currentUnsubscribe) {
-        currentUnsubscribe = null;
-    }
+    if (db && currentUnsubscribe) currentUnsubscribe = null;
     db = null;
 };
 
 export const testConnection = async (roomId: string): Promise<{success: boolean, message: string}> => {
-    if (!db) return { success: false, message: "DB Service not running. Missing databaseURL in config?" };
+    // Auto-retry init if db is missing
+    if (!db) {
+        console.log("[Test] DB missing, attempting re-init...");
+        initFirebase();
+    }
+    
+    if (!db) return { success: false, message: "DB Service not running. Config might be missing databaseURL." };
+    
     try {
         await set(ref(db, `timelines/${roomId}/_connection_test`), Date.now());
         return { success: true, message: "Write successful" };
     } catch (e: any) {
         console.error("Test Connection Failed", e);
-        return { success: false, message: e.message || "Write failed" };
+        return { success: false, message: e.message || "Write failed (Check Rules)" };
     }
 }
