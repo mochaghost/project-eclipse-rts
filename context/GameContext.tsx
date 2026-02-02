@@ -227,6 +227,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    // RESTORED: Delete Task
+    const deleteTask = (taskId: string) => {
+        playSfx('UI_CLICK');
+        setState(prev => {
+            // Remove task
+            const nextTasks = prev.tasks.filter(t => t.id !== taskId);
+            // Remove associated enemies
+            const nextEnemies = prev.enemies.filter(e => e.taskId !== taskId);
+            
+            const next: GameState = {
+                ...prev,
+                tasks: nextTasks,
+                enemies: nextEnemies,
+                selectedEnemyId: prev.selectedEnemyId === taskId ? null : prev.selectedEnemyId, // Deselect if selected
+                // Optional: Log it
+                history: [{ 
+                    id: generateId(), 
+                    type: 'RITUAL', 
+                    timestamp: Date.now(), 
+                    message: "Banishment", 
+                    details: "A task was erased from existence." 
+                } as HistoryLog, ...prev.history].slice(0, 500)
+            };
+            syncNow(next);
+            return next;
+        });
+    };
+
     // CALENDAR FUNCTION: CRITICAL
     const moveTask = (taskId: string, newStartTime: number) => {
         ensureAudio();
@@ -725,6 +753,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             addTask,
             editTask,
             moveTask,
+            deleteTask, // <--- EXPOSED IN PROVIDER
             completeTask,
             completeSubtask,
             failTask,

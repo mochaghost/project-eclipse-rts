@@ -301,7 +301,8 @@ export interface GameContextType {
   state: GameState;
   addTask: (title: string, startTime: number, deadline: number, priority: TaskPriority, subtasks: SubtaskDraft[], durationMinutes: number, description?: string, parentId?: string) => void;
   editTask: (taskId: string, data: TaskUpdateData) => void; 
-  moveTask: (taskId: string, newStartTime: number) => void; // UPDATED: Now takes startTime to shift entire block
+  moveTask: (taskId: string, newStartTime: number) => void;
+  deleteTask: (taskId: string) => void; // <--- RESTORED: Critical for calendar management
   completeTask: (taskId: string) => void;
   completeSubtask: (taskId: string, subtaskId: string) => void;
   failTask: (taskId: string) => void;

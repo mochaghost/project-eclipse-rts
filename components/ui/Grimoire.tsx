@@ -12,7 +12,7 @@ type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
 export const Grimoire: React.FC = () => {
   // @ts-ignore
-  const { state, toggleGrimoire, addTask, editTask, moveTask, completeRitual, resolveFailedTask } = useGame();
+  const { state, toggleGrimoire, addTask, editTask, moveTask, deleteTask, completeRitual, resolveFailedTask } = useGame();
   
   // Navigation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -164,6 +164,13 @@ export const Grimoire: React.FC = () => {
       setSelectedDate(startDate); 
       setStartTimeStr(startDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: false}));
       setEndTimeStr(deadlineDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: false}));
+  };
+
+  const handleDeleteTask = () => {
+      if (editingTaskId && confirm("Are you sure you want to banish this enemy?")) {
+          deleteTask(editingTaskId);
+          resetForm();
+      }
   };
 
   const resetForm = () => {
@@ -411,6 +418,11 @@ export const Grimoire: React.FC = () => {
                 <>
                     <div className="h-14 border-b border-[#292524] flex items-center justify-center">
                         <span className={`font-serif tracking-widest font-bold ${isEditing ? 'text-blue-400' : 'text-yellow-700'}`}>{isEditing ? 'EDITING FATE' : 'SUMMONING'}</span>
+                        {isEditing && (
+                            <button onClick={handleDeleteTask} className="absolute right-4 text-red-500 hover:text-red-400 bg-red-950/30 p-2 rounded-full border border-red-900" title="Banish Enemy (Delete)">
+                                <Trash2 size={16} />
+                            </button>
+                        )}
                     </div>
                     <form onSubmit={handleSubmit} className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar">
                         {isEditing && renderLorePanel()}
