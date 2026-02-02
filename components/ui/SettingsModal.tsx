@@ -11,27 +11,32 @@ export const SettingsModal: React.FC = () => {
     const [importData, setImportData] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     
-    // Config state - prefill with defaults if empty
-    const [config, setConfig] = useState(DEFAULT_FIREBASE_CONFIG);
-    const [jsonPaste, setJsonPaste] = useState('');
-
+    // Config state
+    const [configJson, setConfigJson] = useState('');
     const [visionMode, setVisionMode] = useState<'DIRECT' | 'SHEET'>('DIRECT');
 
     // Load saved config from local storage on mount
     useEffect(() => {
         const savedConfig = localStorage.getItem('ECLIPSE_FIREBASE_CONFIG');
         if (savedConfig) {
-            try {
-                setConfig(JSON.parse(savedConfig));
-            } catch (e) { 
-                setConfig(DEFAULT_FIREBASE_CONFIG);
-            }
+            setConfigJson(savedConfig);
         } else {
-            setConfig(DEFAULT_FIREBASE_CONFIG);
+            // Beautify default config for display
+            setConfigJson(JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2));
         }
     }, []);
 
-    // MANUAL SYNC HANDLERS
+    const handleSaveConfig = () => {
+        try {
+            const parsed = JSON.parse(configJson);
+            localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(parsed));
+            alert("Configuration Saved. Please reload the page to initialize with new keys.");
+            window.location.reload();
+        } catch (e) {
+            alert("Invalid JSON Format. Please copy the object exactly from Firebase Console.");
+        }
+    };
+
     const handleForcePush = () => {
         if (!state.syncConfig?.roomId) return;
         if (confirm("FORCE UPLOAD: This will overwrite the Cloud data with the data on THIS device. Are you sure?")) {
@@ -47,7 +52,7 @@ export const SettingsModal: React.FC = () => {
             await loginWithGoogle();
         } catch (e: any) {
             console.error("Login Handler Caught Error:", e);
-            alert("LOGIN ERROR: " + (e.message || "Unknown Error. Check Console."));
+            alert("LOGIN FAILED: " + (e.message || "Unknown Error."));
         } finally {
             setIsLoggingIn(false);
         }
@@ -99,17 +104,15 @@ export const SettingsModal: React.FC = () => {
                                         onChange={(e) => updateSettings({ masterVolume: parseFloat(e.target.value) })}
                                         className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-yellow-600 mb-2"
                                     />
-                                    <p className="text-[10px] text-stone-600">Controls ambient drone, interface sounds, and music.</p>
                                 </div>
                              </div>
 
-                             {/* INTERFACE ADJUSTMENTS */}
+                             {/* INTERFACE */}
                              <div>
                                 <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-4 flex items-center gap-2 border-b border-stone-800 pb-2">
-                                    <Smartphone size={14} /> Interface Adjustments
+                                    <Smartphone size={14} /> Interface
                                 </h3>
                                 <div className="bg-[#151210] p-5 border border-stone-800 space-y-6">
-                                    {/* UI SCALE */}
                                     <div>
                                         <div className="flex justify-between text-stone-300 text-sm mb-2 font-mono">
                                             <span>UI Scale</span>
@@ -122,10 +125,7 @@ export const SettingsModal: React.FC = () => {
                                             onChange={(e) => updateSettings({ uiScale: parseFloat(e.target.value) })}
                                             className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                         />
-                                        <p className="text-[10px] text-stone-600">Shrink UI for small screens if elements overlap.</p>
                                     </div>
-
-                                    {/* SAFE AREA */}
                                     <div>
                                         <div className="flex justify-between text-stone-300 text-sm mb-2 font-mono">
                                             <span>Safe Area Padding</span>
@@ -138,159 +138,61 @@ export const SettingsModal: React.FC = () => {
                                             onChange={(e) => updateSettings({ safeAreaPadding: parseInt(e.target.value) })}
                                             className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                         />
-                                        <p className="text-[10px] text-stone-600">Add empty space around edges (useful for notches/rounded corners).</p>
-                                    </div>
-                                </div>
-                             </div>
-
-                             {/* GRAPHICS */}
-                             <div>
-                                <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-4 flex items-center gap-2 border-b border-stone-800 pb-2">
-                                    <Monitor size={14} /> Graphics
-                                </h3>
-                                <div className="bg-[#151210] p-5 border border-stone-800 grid grid-cols-2 gap-4">
-                                    <button 
-                                        onClick={() => updateSettings({ graphicsQuality: 'LOW' })}
-                                        className={`p-4 border text-center transition-all ${settings.graphicsQuality === 'LOW' ? 'border-yellow-600 bg-yellow-900/10 text-yellow-500' : 'border-stone-700 text-stone-500 hover:border-stone-500'}`}
-                                    >
-                                        <div className="font-bold mb-1 text-sm">Performance</div>
-                                        <div className="text-[10px] opacity-70">No Shadows, Basic Effects</div>
-                                    </button>
-                                    <button 
-                                        onClick={() => updateSettings({ graphicsQuality: 'HIGH' })}
-                                        className={`p-4 border text-center transition-all ${settings.graphicsQuality === 'HIGH' ? 'border-yellow-600 bg-yellow-900/10 text-yellow-500' : 'border-stone-700 text-stone-500 hover:border-stone-500'}`}
-                                    >
-                                        <div className="font-bold mb-1 text-sm">Quality</div>
-                                        <div className="text-[10px] opacity-70">Soft Shadows, Bloom, Particles</div>
-                                    </button>
-                                </div>
-                             </div>
-
-                             {/* VISION MIRROR */}
-                             <div>
-                                <h3 className="text-purple-400 text-xs uppercase font-bold tracking-widest mb-4 flex items-center gap-2 border-b border-purple-900/30 pb-2">
-                                    <Eye size={14} /> Vision Mirror Source
-                                </h3>
-                                <div className="bg-[#151210] p-1 border border-stone-800">
-                                    {/* Sub-tabs for Vision Source */}
-                                    <div className="flex gap-1 mb-4 bg-black p-1">
-                                        <button 
-                                            onClick={() => setVisionMode('DIRECT')} 
-                                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${visionMode === 'DIRECT' ? 'bg-[#2a1a35] text-purple-300 border border-purple-500/30' : 'text-stone-600 hover:text-stone-400'}`}
-                                        >
-                                            <Link size={12} /> Direct Link
-                                        </button>
-                                        <button 
-                                            onClick={() => setVisionMode('SHEET')} 
-                                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${visionMode === 'SHEET' ? 'bg-[#2a1a35] text-purple-300 border border-purple-500/30' : 'text-stone-600 hover:text-stone-400'}`}
-                                        >
-                                            <Table size={12} /> Google Sheet
-                                        </button>
-                                    </div>
-
-                                    <div className="px-4 pb-4">
-                                        {visionMode === 'DIRECT' ? (
-                                            <div className="space-y-3 animate-fade-in">
-                                                <p className="text-[10px] text-stone-400">
-                                                    Paste a link below. This overrides the Google Sheet.
-                                                </p>
-                                                <div className="bg-blue-900/20 p-2 border border-blue-900/50 rounded mb-2">
-                                                    <p className="text-[10px] text-blue-200 font-bold mb-1">PRO TIP FOR PINTEREST:</p>
-                                                    <ul className="text-[9px] text-stone-400 list-disc pl-4 space-y-1">
-                                                        <li><strong>For Image Mode:</strong> Right-Click the image -&gt; "Copy Image Address" (ends in .jpg/.png).</li>
-                                                        <li><strong>For Portal Mode:</strong> Copy the URL from the browser bar.</li>
-                                                    </ul>
-                                                </div>
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="e.g., https://i.pinimg.com/.../image.jpg" 
-                                                    value={settings.directVisionUrl || ''}
-                                                    onChange={(e) => updateSettings({ directVisionUrl: e.target.value })}
-                                                    className="w-full bg-black border border-stone-700 p-3 text-white text-xs font-mono focus:border-purple-500 outline-none"
-                                                />
-                                                {settings.directVisionUrl && (
-                                                    <div className={`text-[10px] flex items-center gap-1 ${directUrlValid ? 'text-green-500' : 'text-yellow-500'}`}>
-                                                        {directUrlValid ? <CheckCircle2 size={10}/> : <Info size={10}/>}
-                                                        {directUrlValid ? 'Direct Image detected. Will render in 3D.' : 'Webpage detected. Will render as Portal Card.'}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-3 animate-fade-in">
-                                                <p className="text-[10px] text-stone-400">
-                                                    Paste your <strong>Google Sheet ID</strong> OR the full <strong>"Published to Web" Link</strong>.
-                                                </p>
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="e.g. 2PACX-... or https://docs.google.com/.../pubhtml" 
-                                                    value={settings.googleSheetId || ''}
-                                                    onChange={(e) => updateSettings({ googleSheetId: e.target.value })}
-                                                    className="w-full bg-black border border-stone-700 p-3 text-white text-xs font-mono focus:border-purple-500 outline-none"
-                                                />
-                                                <div className="text-[10px] text-stone-600 italic">
-                                                    * Ensure the sheet is published via File &gt; Share &gt; Publish to web.
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="mt-6 pt-4 border-t border-stone-800 flex justify-end">
-                                            <button 
-                                                onClick={() => { toggleSettings(); setTimeout(() => triggerEvent('VISION_RITUAL'), 100); }} 
-                                                className="bg-purple-900/50 text-purple-300 border border-purple-500 px-6 py-2 text-xs font-bold hover:bg-purple-900 hover:text-white transition-colors flex items-center gap-2"
-                                            >
-                                                <Eye size={14} /> TEST VISION
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
                              </div>
                         </div>
                     ) : (
                         // Cloud / Data Tab
-                        user ? (
-                            <div className="text-center py-6 animate-fade-in">
-                                <div className="text-green-500 text-xl font-bold mb-2 font-serif tracking-widest">SOUL LINK ACTIVE</div>
-                                <div className="flex flex-col items-center mb-8">
-                                    <div className="w-16 h-16 rounded-full bg-blue-900/30 border-2 border-blue-500 flex items-center justify-center mb-2">
-                                        <span className="text-2xl text-blue-300 font-serif font-bold">{user.displayName?.[0] || 'A'}</span>
+                        <div className="space-y-8">
+                            {/* API CONFIG SECTION */}
+                            <div className="bg-[#151210] p-6 border border-stone-800">
+                                <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest">
+                                    <Key size={14}/> Firebase Configuration
+                                </h4>
+                                <p className="text-[10px] text-stone-500 mb-4">
+                                    To enable Cloud Save, create a project at <strong>console.firebase.google.com</strong>, enable "Google Auth", and paste your JSON config object below.
+                                </p>
+                                <textarea 
+                                    value={configJson}
+                                    onChange={(e) => setConfigJson(e.target.value)}
+                                    className="w-full h-32 bg-black border border-stone-700 p-2 text-green-400 text-[10px] font-mono outline-none focus:border-yellow-600 mb-2"
+                                    placeholder='{ "apiKey": "...", "authDomain": "..." }'
+                                />
+                                <button 
+                                    onClick={handleSaveConfig}
+                                    className="w-full bg-stone-800 text-stone-300 py-2 text-xs font-bold border border-stone-600 hover:bg-stone-700"
+                                >
+                                    SAVE CONFIG & RELOAD
+                                </button>
+                            </div>
+
+                            {user ? (
+                                <div className="text-center py-6 animate-fade-in border border-green-900/30 bg-green-950/10">
+                                    <div className="text-green-500 text-xl font-bold mb-2 font-serif tracking-widest">SOUL LINK ACTIVE</div>
+                                    <div className="flex flex-col items-center mb-8">
+                                        <div className="w-16 h-16 rounded-full bg-blue-900/30 border-2 border-blue-500 flex items-center justify-center mb-2">
+                                            <span className="text-2xl text-blue-300 font-serif font-bold">{user.displayName?.[0] || 'A'}</span>
+                                        </div>
+                                        <div className="text-stone-300 font-bold">{user.displayName || 'Anonymous Soul'}</div>
+                                        <div className="text-[10px] text-stone-600">{user.email}</div>
                                     </div>
-                                    <div className="text-stone-300 font-bold">{user.displayName || 'Anonymous Soul'}</div>
-                                    <div className="text-[10px] text-stone-600">{user.email}</div>
-                                    <div className="mt-2 text-[10px] font-mono bg-black px-2 py-1 border border-stone-800 text-stone-500">ID: {user.uid.substring(0,8)}...</div>
-                                </div>
-                                
-                                <div className="max-w-xs mx-auto mb-8 text-left space-y-6">
-                                    {/* MANUAL SYNC ACTIONS */}
-                                    <div className="bg-[#151210] p-4 border border-stone-800 space-y-3">
-                                        <p className="text-[9px] text-stone-500 uppercase font-bold text-center mb-2 flex items-center justify-center gap-2">
-                                            <AlertTriangle size={10} className="text-yellow-600"/> Data Conflicts
-                                        </p>
-                                        
+                                    
+                                    <div className="max-w-xs mx-auto mb-8 space-y-3">
                                         <button 
                                             onClick={handleForcePush}
                                             className="w-full bg-blue-900/30 border border-blue-800 text-blue-300 py-2 text-xs font-bold hover:bg-blue-900/50 flex items-center justify-center gap-2"
                                         >
                                             <UploadCloud size={14} /> FORCE PUSH LOCAL TO CLOUD
                                         </button>
-                                        <p className="text-[9px] text-stone-600 text-center leading-tight">
-                                            Use this ONLY if you made progress offline and want to overwrite the cloud save.
-                                        </p>
+                                        <button onClick={logout} className="w-full bg-red-900/30 text-red-500 px-6 py-2 border border-red-900 hover:bg-red-900/50 font-bold text-xs">
+                                            SEVER LINK (LOGOUT)
+                                        </button>
                                     </div>
                                 </div>
-
-                                <div>
-                                    <button onClick={logout} className="bg-red-900/30 text-red-500 px-6 py-2 border border-red-900 hover:bg-red-900/50 font-bold text-xs">SEVER LINK (LOGOUT)</button>
-                                </div>
-                            </div>
-                        ) : (
-                             <div className="space-y-6 h-full flex flex-col justify-center pb-20">
+                            ) : (
                                 <div className="bg-[#151210] p-8 border border-stone-800 text-center">
-                                    <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center justify-center gap-2 uppercase tracking-widest"><Cloud size={14}/> Cloud Sync (Google)</h4>
-                                    <p className="text-[10px] text-stone-500 mb-6 leading-relaxed">
-                                        Connect your Google account to enable cross-device saves. <br/>
-                                        Your world will be stored in the cloud.
-                                    </p>
-                                    
+                                    <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center justify-center gap-2 uppercase tracking-widest"><Cloud size={14}/> Cloud Connect</h4>
                                     <button 
                                         onClick={handleLogin}
                                         disabled={isLoggingIn}
@@ -300,22 +202,22 @@ export const SettingsModal: React.FC = () => {
                                         {isLoggingIn ? "CONNECTING..." : "LOGIN WITH GOOGLE"}
                                     </button>
                                 </div>
+                            )}
 
-                                <div className="bg-[#151210] p-6 border border-stone-800">
-                                    <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest"><Database size={14}/> Manual Backup</h4>
-                                    <div className="space-y-4">
-                                        <p className="text-[10px] text-stone-500">Transfer raw timeline data manually.</p>
-                                        <textarea value={importData} onChange={e => setImportData(e.target.value)} className="w-full h-20 bg-black border border-stone-700 p-2 text-stone-300 text-[10px] font-mono outline-none focus:border-yellow-600" placeholder="Paste save string..." />
-                                        <div className="flex gap-2">
-                                            <button onClick={() => importSave(importData)} className="flex-1 bg-yellow-900/30 text-yellow-500 py-2 border border-yellow-800 hover:bg-yellow-900/50 text-xs font-bold">IMPORT</button>
-                                            <button onClick={() => navigator.clipboard.writeText(exportSave())} className="flex-1 bg-stone-800 text-stone-300 py-2 border border-stone-600 hover:bg-stone-700 text-xs font-bold">COPY EXPORT</button>
-                                        </div>
-                                        <hr className="border-stone-800"/>
-                                        <button onClick={clearSave} className="w-full text-red-500 border border-red-900/50 py-2 hover:bg-red-950/30 text-xs font-bold uppercase">Hard Reset (Wipe Data)</button>
+                            {/* Manual Backup */}
+                            <div className="bg-[#151210] p-6 border border-stone-800">
+                                <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest"><Database size={14}/> Manual Backup</h4>
+                                <div className="space-y-4">
+                                    <textarea value={importData} onChange={e => setImportData(e.target.value)} className="w-full h-20 bg-black border border-stone-700 p-2 text-stone-300 text-[10px] font-mono outline-none focus:border-yellow-600" placeholder="Paste save string..." />
+                                    <div className="flex gap-2">
+                                        <button onClick={() => importSave(importData)} className="flex-1 bg-yellow-900/30 text-yellow-500 py-2 border border-yellow-800 hover:bg-yellow-900/50 text-xs font-bold">IMPORT</button>
+                                        <button onClick={() => navigator.clipboard.writeText(exportSave())} className="flex-1 bg-stone-800 text-stone-300 py-2 border border-stone-600 hover:bg-stone-700 text-xs font-bold">COPY EXPORT</button>
                                     </div>
+                                    <hr className="border-stone-800"/>
+                                    <button onClick={clearSave} className="w-full text-red-500 border border-red-900/50 py-2 hover:bg-red-950/30 text-xs font-bold uppercase">Hard Reset (Wipe Data)</button>
                                 </div>
                             </div>
-                        )
+                        </div>
                     )}
                 </div>
             </div>
