@@ -1,39 +1,77 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Monitor, Eye, Info, Link, Table, CheckCircle2, FileJson, Copy, Smartphone, Move, Share2, UploadCloud, DownloadCloud, AlertTriangle, Key, LogIn, Loader2 } from 'lucide-react';
-import { convertToEmbedUrl } from '../../utils/generators';
+import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
-    const { state, toggleSettings, exportSave, importSave, clearSave, connectToCloud, disconnectCloud, updateSettings, triggerEvent, loginWithGoogle, logout } = useGame();
+    const { state, toggleSettings, exportSave, importSave, clearSave, updateSettings, loginWithGoogle, logout } = useGame();
     const [tab, setTab] = useState<'GENERAL' | 'CLOUD'>('GENERAL');
     const [importData, setImportData] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     
     // Config state
-    const [configJson, setConfigJson] = useState('');
-    const [visionMode, setVisionMode] = useState<'DIRECT' | 'SHEET'>('DIRECT');
+    const [configInput, setConfigInput] = useState('');
+    const [configStatus, setConfigStatus] = useState<'VALID' | 'INVALID' | 'EMPTY'>('EMPTY');
 
     // Load saved config from local storage on mount
     useEffect(() => {
         const savedConfig = localStorage.getItem('ECLIPSE_FIREBASE_CONFIG');
         if (savedConfig) {
-            setConfigJson(savedConfig);
+            setConfigInput(savedConfig);
+            validateConfig(savedConfig);
         } else {
-            // Beautify default config for display
-            setConfigJson(JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2));
+            const def = JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2);
+            setConfigInput(def);
+            validateConfig(def);
         }
     }, []);
 
+    const validateConfig = (input: string) => {
+        try {
+            // Try strict parse first
+            JSON.parse(input);
+            setConfigStatus('VALID');
+        } catch (e) {
+            try {
+                // Try "Loose" parse (add quotes to keys) common in JS objects
+                const loose = input.replace(/(\w+):/g, '"$1":').replace(/'/g, '"');
+                JSON.parse(loose);
+                setConfigStatus('VALID');
+            } catch (e2) {
+                setConfigStatus('INVALID');
+            }
+        }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setConfigInput(e.target.value);
+        validateConfig(e.target.value);
+    };
+
     const handleSaveConfig = () => {
         try {
-            const parsed = JSON.parse(configJson);
+            let parsed;
+            try {
+                parsed = JSON.parse(configInput);
+            } catch (e) {
+                // Auto-fix JS object notation to JSON
+                const loose = configInput.replace(/(\w+):/g, '"$1":').replace(/'/g, '"');
+                parsed = JSON.parse(loose);
+            }
+            
+            // Check for required fields
+            if (!parsed.apiKey || !parsed.projectId) {
+                alert("Config looks incomplete. Missing 'apiKey' or 'projectId'.");
+                return;
+            }
+
             localStorage.setItem('ECLIPSE_FIREBASE_CONFIG', JSON.stringify(parsed));
-            alert("Configuration Saved. Please reload the page to initialize with new keys.");
-            window.location.reload();
+            if (confirm("Configuration Saved! The page must reload to initialize the new connection. Reload now?")) {
+                window.location.reload();
+            }
         } catch (e) {
-            alert("Invalid JSON Format. Please copy the object exactly from Firebase Console.");
+            alert("Could not parse configuration. Please ensure you copied the object correctly from Firebase.");
         }
     };
 
@@ -41,18 +79,17 @@ export const SettingsModal: React.FC = () => {
         if (!state.syncConfig?.roomId) return;
         if (confirm("FORCE UPLOAD: This will overwrite the Cloud data with the data on THIS device. Are you sure?")) {
             pushToCloud(state.syncConfig.roomId, state);
-            alert("Data pushed to Cloud. Other devices should update shortly.");
+            alert("Data pushed to Cloud.");
         }
     };
 
     const handleLogin = async () => {
         setIsLoggingIn(true);
-        console.log("Starting Login Flow...");
         try {
             await loginWithGoogle();
         } catch (e: any) {
-            console.error("Login Handler Caught Error:", e);
-            alert("LOGIN FAILED: " + (e.message || "Unknown Error."));
+            console.error(e);
+            alert("LOGIN FAILED: " + (e.message || "Unknown Error. Check Console."));
         } finally {
             setIsLoggingIn(false);
         }
@@ -61,7 +98,6 @@ export const SettingsModal: React.FC = () => {
     if (!state.isSettingsOpen) return null;
 
     const settings = state.settings || { masterVolume: 0.2, graphicsQuality: 'HIGH', uiScale: 1, safeAreaPadding: 0 };
-    const directUrlValid = settings.directVisionUrl ? !!convertToEmbedUrl(settings.directVisionUrl) : false;
     const user = state.syncConfig?.user;
 
     return (
@@ -146,25 +182,33 @@ export const SettingsModal: React.FC = () => {
                         // Cloud / Data Tab
                         <div className="space-y-8">
                             {/* API CONFIG SECTION */}
-                            <div className="bg-[#151210] p-6 border border-stone-800">
-                                <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest">
-                                    <Key size={14}/> Firebase Configuration
-                                </h4>
-                                <p className="text-[10px] text-stone-500 mb-4">
-                                    To enable Cloud Save, create a project at <strong>console.firebase.google.com</strong>, enable "Google Auth", and paste your JSON config object below.
-                                </p>
+                            <div className={`p-6 border transition-colors ${configStatus === 'VALID' ? 'bg-green-950/10 border-green-900/50' : 'bg-[#151210] border-stone-800'}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <h4 className="text-stone-300 text-sm font-bold flex items-center gap-2 uppercase tracking-widest">
+                                        <Key size={14}/> Firebase Config
+                                    </h4>
+                                    {configStatus === 'VALID' ? 
+                                        <span className="text-[10px] text-green-500 flex items-center gap-1 font-bold"><CheckCircle2 size={12}/> VALID FORMAT</span> : 
+                                        <span className="text-[10px] text-red-500 flex items-center gap-1 font-bold"><AlertTriangle size={12}/> INVALID</span>
+                                    }
+                                </div>
+                                
                                 <textarea 
-                                    value={configJson}
-                                    onChange={(e) => setConfigJson(e.target.value)}
-                                    className="w-full h-32 bg-black border border-stone-700 p-2 text-green-400 text-[10px] font-mono outline-none focus:border-yellow-600 mb-2"
-                                    placeholder='{ "apiKey": "...", "authDomain": "..." }'
+                                    value={configInput}
+                                    onChange={handleInputChange}
+                                    className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-red-300 border-red-900/50'}`}
+                                    placeholder='Paste the "firebaseConfig" object from Firebase Console here...'
                                 />
                                 <button 
                                     onClick={handleSaveConfig}
-                                    className="w-full bg-stone-800 text-stone-300 py-2 text-xs font-bold border border-stone-600 hover:bg-stone-700"
+                                    disabled={configStatus !== 'VALID'}
+                                    className={`w-full py-2 text-xs font-bold border transition-all ${configStatus === 'VALID' ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40' : 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed'}`}
                                 >
-                                    SAVE CONFIG & RELOAD
+                                    SAVE & RELOAD
                                 </button>
+                                <p className="text-[10px] text-stone-500 mt-2 italic text-center">
+                                    Paste the object found in Project Settings {`{ apiKey: "...", ... }`}
+                                </p>
                             </div>
 
                             {user ? (
@@ -195,12 +239,15 @@ export const SettingsModal: React.FC = () => {
                                     <h4 className="text-stone-300 text-sm font-bold mb-4 flex items-center justify-center gap-2 uppercase tracking-widest"><Cloud size={14}/> Cloud Connect</h4>
                                     <button 
                                         onClick={handleLogin}
-                                        disabled={isLoggingIn}
-                                        className={`w-full text-black font-bold py-4 px-6 flex items-center justify-center gap-3 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.2)] ${isLoggingIn ? 'bg-gray-400 cursor-wait' : 'bg-white hover:bg-gray-200'}`}
+                                        disabled={isLoggingIn || configStatus !== 'VALID'}
+                                        className={`w-full text-black font-bold py-4 px-6 flex items-center justify-center gap-3 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.2)] ${isLoggingIn ? 'bg-gray-400 cursor-wait' : configStatus !== 'VALID' ? 'bg-stone-700 cursor-not-allowed opacity-50' : 'bg-white hover:bg-gray-200'}`}
                                     >
                                         {isLoggingIn ? <Loader2 size={20} className="animate-spin" /> : <LogIn size={20} />}
                                         {isLoggingIn ? "CONNECTING..." : "LOGIN WITH GOOGLE"}
                                     </button>
+                                    {configStatus !== 'VALID' && (
+                                        <p className="text-red-500 text-[10px] mt-2 font-mono">Valid Config Required First</p>
+                                    )}
                                 </div>
                             )}
 
