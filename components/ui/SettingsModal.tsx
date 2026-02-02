@@ -32,35 +32,70 @@ export const SettingsModal: React.FC = () => {
         }
     }, []);
 
-    // --- SMART PARSER ---
+    // --- SMART PARSER (ROBUST) ---
     const parseLooseJson = (input: string) => {
         if (!input) return null;
 
+        let clean = input;
+        // 1. Remove comments
         try {
-            // 1. Remove comments (// ... and /* ... */) to clean up input
-            let clean = input.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+            clean = input.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+        } catch (e) {
+            // regex fail, continue with raw
+        }
 
-            // 2. Extract ONLY the object part (between the first { and last })
+        // STRATEGY A: Function Constructor (Best for standard JS objects)
+        try {
             const firstBrace = clean.indexOf('{');
             const lastBrace = clean.lastIndexOf('}');
-
-            if (firstBrace === -1 || lastBrace === -1) {
-                // Try strict parse in case it's a flat string or simple JSON
-                return JSON.parse(clean);
+            if (firstBrace !== -1 && lastBrace !== -1) {
+                const objectStr = clean.substring(firstBrace, lastBrace + 1);
+                // Safe evaluation of object literal
+                const fn = new Function(`return ${objectStr};`);
+                const result = fn();
+                if (result && result.apiKey) return result;
             }
-
-            const objectStr = clean.substring(firstBrace, lastBrace + 1);
-
-            // 3. Use Function constructor to evaluate as a JS expression.
-            // This is safer than eval() but still allows standard JS object syntax 
-            // (unquoted keys, single quotes, trailing commas) which JSON.parse fails on.
-            // Since this is client-side config entered by the user, this is acceptable.
-            const fn = new Function(`return ${objectStr};`);
-            return fn();
         } catch (e) {
-            console.error("Parse error", e);
-            return null;
+            console.warn("Parse Strategy A failed, trying Regex...", e);
         }
+
+        // STRATEGY B: JSON Parse (Best for valid JSON)
+        try {
+             const jsonAttempt = JSON.parse(clean);
+             if (jsonAttempt && jsonAttempt.apiKey) return jsonAttempt;
+        } catch (e) {
+             // Ignore
+        }
+
+        // STRATEGY C: Regex Extraction (Brute Force - Fallback)
+        // This extracts values even if the syntax is broken (e.g. missing commas)
+        try {
+            const extract = (key: string) => {
+                // Matches key: "value" or key: 'value'
+                const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'i');
+                const match = clean.match(regex);
+                return match ? match[1] : undefined;
+            };
+
+            const extracted = {
+                apiKey: extract('apiKey'),
+                authDomain: extract('authDomain'),
+                databaseURL: extract('databaseURL'),
+                projectId: extract('projectId'),
+                storageBucket: extract('storageBucket'),
+                messagingSenderId: extract('messagingSenderId'),
+                appId: extract('appId'),
+                measurementId: extract('measurementId')
+            };
+
+            if (extracted.apiKey && extracted.projectId) {
+                return extracted;
+            }
+        } catch (e) {
+            console.error("All parsing strategies failed", e);
+        }
+
+        return null;
     }
 
     const validateConfig = (input: string) => {
@@ -281,7 +316,7 @@ export const SettingsModal: React.FC = () => {
                                                 onClick={handleForcePush}
                                                 className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-600 py-3 text-xs font-bold hover:bg-yellow-900/30 flex items-center justify-center gap-2"
                                             >
-                                                <UploadCloud size={14} /> FORCE PUSH LOCAL -&gt; CLOUD (OVERWRITE)
+                                                <UploadCloud size={14} /> FORCE PUSH LOCAL to CLOUD (OVERWRITE)
                                             </button>
                                             <button onClick={logout} className="w-full bg-red-900/30 text-red-500 px-6 py-2 border border-red-900 hover:bg-red-900/50 font-bold text-xs">
                                                 SEVER LINK (LOGOUT)
