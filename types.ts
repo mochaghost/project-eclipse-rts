@@ -24,7 +24,7 @@ export enum EntityType {
   DECORATION_TREE = 'DECORATION_TREE',
   DECORATION_ROCK = 'DECORATION_ROCK',
   ANIMAL = 'ANIMAL',
-  PEASANT = 'PEASANT' // New entity for humiliation
+  PEASANT = 'PEASANT'
 }
 
 export enum TaskPriority {
@@ -85,9 +85,9 @@ export interface EnemyEntity {
   
   // Render Props
   position: Vector3;
-  initialPosition: Vector3; // Added for Deadline March calculation
+  initialPosition: Vector3; 
   taskId: string; 
-  subtaskId?: string; // If this enemy represents a subtask
+  subtaskId?: string; 
   scale: number; 
 }
 
@@ -103,15 +103,24 @@ export interface Subtask {
   id: string;
   title: string;
   completed: boolean;
-  startTime?: number; // New: When this specific minion appears
-  deadline?: number; // New: When this specific minion must die
+  startTime?: number; 
+  deadline?: number; 
+}
+
+export interface TaskTemplate {
+    id: string;
+    title: string;
+    description: string;
+    priority: TaskPriority;
+    subtasks: SubtaskDraft[];
+    estimatedDuration: number;
 }
 
 export interface Task {
   id: string;
   title: string;
   description?: string; 
-  startTime: number; // New: When the main enemy spawns
+  startTime: number; 
   deadline: number;
   estimatedDuration: number;
   createdAt: number;
@@ -122,7 +131,7 @@ export interface Task {
   parentId?: string; 
   crisisTriggered: boolean; 
   hubris: boolean; 
-  foresightBonus?: number; // 0 to 2.0 multiplier based on planning ahead
+  foresightBonus?: number; 
 }
 
 export interface HistoryLog {
@@ -140,6 +149,7 @@ export interface ShopItem {
     cost: number;
     type: 'HEAL_HERO' | 'HEAL_BASE' | 'MERCENARY' | 'UPGRADE_FORGE' | 'UPGRADE_WALLS' | 'UPGRADE_LIBRARY';
     value: number; 
+    tier?: number; // 1, 2, 3
 }
 
 // --- DEEP SIMULATION TYPES ---
@@ -159,7 +169,7 @@ export interface NPC {
     stats: { strength: number, intellect: number, loyalty: number };
     status: 'ALIVE' | 'DEAD' | 'MARRIED' | 'EXILED' | 'HEROIC' | 'MAD';
     mood: 'HOPEFUL' | 'NEUTRAL' | 'TERRIFIED' | 'REBELLIOUS' | 'MANIC' | 'INSPIRED';
-    sanity: number; // 0-100. At 0, they transform or die.
+    sanity: number; // 0-100.
     
     // Deep Sim
     hunger: number; // 0-100
@@ -180,14 +190,24 @@ export interface FactionReputation {
 }
 
 export interface Structures {
-    forgeLevel: number; // Affects Hero Damage
-    wallsLevel: number; // Affects Base HP Max
-    libraryLevel: number; // Affects XP Gain
-    marketLevel: number; // Affects Gold Gain
+    forgeLevel: number; // Affects Hero Damage. 0-3
+    wallsLevel: number; // Affects Base HP Max. 0-3
+    libraryLevel: number; // Affects XP Gain. 0-3
+    marketLevel: number; // Affects Gold Gain. 0-3
+}
+
+export interface Item {
+    id: string;
+    type: 'WEAPON' | 'ARMOR' | 'RELIC';
+    name: string;
+    lore: string;
+    value: number;
+    acquiredAt: number;
+    isEquipped: boolean;
 }
 
 export interface HeroEquipment {
-    weapon: string;
+    weapon: string; // Legacy String for backward compatibility (display name)
     armor: string;
     relic: string;
 }
@@ -236,7 +256,7 @@ export interface GameState {
   minions: MinionEntity[];
   effects: VisualEffect[]; 
   era: Era;
-  weather: WeatherType; // New Dynamic Weather State
+  weather: WeatherType; 
   sageMessage: string;
   vazarothMessage: string; 
   winStreak: number;
@@ -258,6 +278,7 @@ export interface GameState {
   activeRumor: { id: string, message: string, details: string, timestamp: number } | null; 
   activeMapEvent: MapEventType;
   activeVisionVideo: string | null; 
+  visionQueue: string[]; 
   
   // Advanced Simulation
   population: NPC[];
@@ -265,6 +286,8 @@ export interface GameState {
   structures: Structures; 
   factions: FactionReputation[]; 
   heroEquipment: HeroEquipment; 
+  inventory: Item[]; 
+  templates: TaskTemplate[]; // NEW: Saved Templates
   
   // Graveyard for Nemesis System
   nemesisGraveyard: { name: string, clan: string, deathTime: number, killer: 'HERO' | 'TIME' }[];
@@ -303,7 +326,7 @@ export interface GameContextType {
   addTask: (title: string, startTime: number, deadline: number, priority: TaskPriority, subtasks: SubtaskDraft[], durationMinutes: number, description?: string, parentId?: string) => void;
   editTask: (taskId: string, data: TaskUpdateData) => void; 
   moveTask: (taskId: string, newStartTime: number) => void;
-  deleteTask: (taskId: string) => void; // <--- RESTORED: Critical for calendar management
+  deleteTask: (taskId: string) => void; 
   completeTask: (taskId: string) => void;
   completeSubtask: (taskId: string, subtaskId: string) => void;
   failTask: (taskId: string) => void;
@@ -323,6 +346,8 @@ export interface GameContextType {
   toggleDiplomacy: () => void; 
   interactWithFaction: (factionId: FactionKey, action: 'GIFT' | 'TRADE' | 'INSULT' | 'PROPAGANDA') => void;
   buyItem: (itemId: string) => void;
+  sellItem: (itemId: string) => void; 
+  equipItem: (itemId: string) => void; 
   clearSave: () => void; 
   exportSave: () => string; 
   importSave: (data: string) => boolean; 
@@ -338,4 +363,6 @@ export interface GameContextType {
   castSpell: (spellId: string) => void; 
   testCloudConnection: () => Promise<{success: boolean, message: string}>;
   forcePull: () => void;
+  saveTemplate: (template: Omit<TaskTemplate, 'id'>) => void; // NEW
+  deleteTemplate: (templateId: string) => void; // NEW
 }

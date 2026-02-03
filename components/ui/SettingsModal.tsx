@@ -211,17 +211,16 @@ export const SettingsModal: React.FC = () => {
 
                                     <div>
                                         <label className="flex items-center gap-2 text-[10px] uppercase text-stone-500 font-bold mb-1">
-                                            <LinkIcon size={12} /> Direct Focus Link (Overrides Sheet)
+                                            <LinkIcon size={12} /> Direct Focus Links (Overrides Sheet)
                                         </label>
-                                        <input 
-                                            type="text" 
+                                        <textarea
                                             value={settings.directVisionUrl || ''} 
                                             onChange={(e) => updateSettings({ directVisionUrl: e.target.value })}
-                                            className="w-full bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500"
-                                            placeholder="Paste a specific YouTube, Image, or Web URL here"
+                                            className="w-full h-24 bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500 resize-none"
+                                            placeholder="Paste YouTube, Pinterest, or Image URLs here.&#10;One per line, or separated by commas.&#10;Example:&#10;https://youtu.be/...&#10;https://pinterest.com/..."
                                         />
                                         <p className="text-[9px] text-stone-600 mt-1">
-                                            If set, the Vision Mirror will always show this link. Clear it to use random pulls from the Sheet.
+                                            Enter multiple links (comma or newline separated) to create a custom shuffled deck.
                                         </p>
                                     </div>
                                 </div>

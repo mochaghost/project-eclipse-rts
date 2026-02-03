@@ -16,6 +16,15 @@ export const generateSpawnPosition = (minRadius: number, maxRadius: number): Vec
   };
 };
 
+export const shuffleArray = <T>(array: T[]): T[] => {
+    const newArr = [...array];
+    for (let i = newArr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+    }
+    return newArr;
+};
+
 export const generateHeroEquipment = (level: number): HeroEquipment => {
     const weapon = [...EQUIPMENT_LORE.WEAPONS].reverse().find(w => level >= w.min) || EQUIPMENT_LORE.WEAPONS[0];
     const armor = [...EQUIPMENT_LORE.ARMOR].reverse().find(a => level >= a.min) || EQUIPMENT_LORE.ARMOR[0];
@@ -342,9 +351,24 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
 };
 
 export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
+    // --- UPDATED: HANDLE MULTIPLE DIRECT LINKS ---
     if (directUrl && directUrl.trim().length > 0) {
-        const result = convertToEmbedUrl(directUrl);
-        if (result) return [result];
+        // Split by newlines, commas, or semicolons
+        const rawLinks = directUrl.split(/[\n,;]+/).map(s => s.trim()).filter(s => s.length > 0);
+        const results: VisionContent[] = [];
+        
+        rawLinks.forEach(link => {
+            const res = convertToEmbedUrl(link);
+            // Deduplicate basic check
+            if (res && !results.some(r => r.originalUrl === res.originalUrl)) {
+                results.push(res);
+            }
+        });
+
+        // If we found any valid links, return them (Shuffle Deck will handle the rest)
+        if (results.length > 0) {
+            return results;
+        }
     }
 
     let fetchUrl = "";

@@ -66,7 +66,7 @@ export const setVolume = (val: number) => {
     }
 };
 
-export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY' | 'FAILURE' | 'ERROR' | 'MAGIC') => {
+export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY' | 'FAILURE' | 'ERROR' | 'MAGIC' | 'COINS') => {
     if (!audioCtx || !masterGain) {
         initAudio();
         if (!audioCtx || !masterGain) return;
@@ -174,6 +174,30 @@ export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY'
             
             osc.start(now);
             osc.stop(now + 1.0);
+            break;
+
+         case 'COINS':
+            // Metallic clink
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, now);
+            osc.frequency.exponentialRampToValueAtTime(1600, now + 0.1);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            osc.start(now);
+            osc.stop(now + 0.15);
+            
+            // Subtle echo
+            const eOsc = audioCtx.createOscillator();
+            const eGain = audioCtx.createGain();
+            eOsc.connect(eGain);
+            eGain.connect(masterGain);
+            
+            eOsc.type = 'sine';
+            eOsc.frequency.setValueAtTime(1400, now + 0.05);
+            eGain.gain.setValueAtTime(0.1, now + 0.05);
+            eGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            eOsc.start(now + 0.05);
+            eOsc.stop(now + 0.2);
             break;
     }
 };

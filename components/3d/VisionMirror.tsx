@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Html, Float, Sparkles, ContactShadows, Billboard } from '@react-three/drei';
 import { useGame } from '../../context/GameContext';
-import { X, ExternalLink, RefreshCcw, SignalHigh, Instagram, Youtube, Image as ImageIcon, Globe, Loader2 } from 'lucide-react';
+import { X, ExternalLink, RefreshCcw, SignalHigh, Instagram, Youtube, Image as ImageIcon, Globe, Loader2, SkipForward, AlertTriangle } from 'lucide-react';
 import { VisionContent } from '../../utils/generators';
 
 export const VisionMirror: React.FC = () => {
@@ -27,7 +27,8 @@ export const VisionMirror: React.FC = () => {
 
     const isVisible = state.activeMapEvent === 'VISION_RITUAL';
 
-    const handleReroll = () => {
+    const handleReroll = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         setLoading(true);
         rerollVision();
         // Fake delay for effect
@@ -60,9 +61,14 @@ export const VisionMirror: React.FC = () => {
                     <SignalHigh size={64} className="text-stone-700 mb-4 animate-pulse" />
                     <h2 className="text-xl text-stone-500 font-serif font-bold tracking-widest mb-2">NO SIGNAL</h2>
                     <p className="text-stone-600 text-xs font-mono mb-6">The Void could not retrieve your visions.</p>
-                    <button onClick={() => { closeVision(); toggleSettings(); }} className="px-4 py-2 border border-stone-600 text-stone-400 text-xs hover:bg-stone-800 transition-colors z-10 cursor-pointer pointer-events-auto">
-                        CHECK SETTINGS
-                    </button>
+                    <div className="flex flex-col gap-2 w-full max-w-[180px] z-20">
+                        <button onClick={handleReroll} className="px-4 py-2 border border-purple-500 text-purple-400 text-xs hover:bg-purple-900/20 transition-colors cursor-pointer pointer-events-auto flex items-center justify-center gap-2">
+                            <RefreshCcw size={14}/> RETRY SIGNAL
+                        </button>
+                        <button onClick={() => { closeVision(); toggleSettings(); }} className="px-4 py-2 border border-stone-600 text-stone-400 text-xs hover:bg-stone-800 transition-colors cursor-pointer pointer-events-auto">
+                            CHECK SETTINGS
+                        </button>
+                    </div>
                 </div>
             );
         }
@@ -107,6 +113,13 @@ export const VisionMirror: React.FC = () => {
         if (isInsta) { cardColor = "text-pink-300"; cardBorder = "border-pink-500/30"; cardBg = "bg-pink-900/10"; }
         if (isTikTok) { cardColor = "text-cyan-300"; cardBorder = "border-cyan-500/30"; cardBg = "bg-cyan-900/10"; }
 
+        // VALIDATION: Ensure URL is absolute for browser safety
+        let safeUrl = content.originalUrl;
+        if (safeUrl && !safeUrl.startsWith('http')) {
+            safeUrl = `https://${safeUrl}`;
+        }
+        const isValidUrl = safeUrl && safeUrl.length > 10 && safeUrl.includes('.');
+
         return (
             <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] relative p-6">
                 <div className="absolute inset-0 bg-gradient-to-b from-black via-[#1a1025] to-black pointer-events-none"></div>
@@ -126,17 +139,32 @@ export const VisionMirror: React.FC = () => {
                     {isPin ? "Use 'Copy Image Address' for a direct view." : "Open the portal to view it."}
                 </p>
 
-                <a 
-                    href={content.originalUrl} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="group relative px-6 py-3 bg-stone-900/80 text-white font-serif font-bold tracking-widest uppercase border border-stone-600 hover:bg-stone-800 transition-all shadow-lg flex items-center gap-2 pointer-events-auto cursor-pointer z-50 hover:scale-105"
-                >
-                        OPEN PORTAL <ExternalLink size={14}/>
-                </a>
+                <div className="flex flex-col gap-3 w-full max-w-[200px] z-50">
+                    {isValidUrl ? (
+                        <a 
+                            href={safeUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="group relative px-6 py-3 bg-stone-900/80 text-white font-serif font-bold tracking-widest uppercase border border-stone-600 hover:bg-stone-800 transition-all shadow-lg flex items-center justify-center gap-2 pointer-events-auto cursor-pointer hover:scale-105 hover:border-yellow-600"
+                        >
+                                OPEN PORTAL <ExternalLink size={14}/>
+                        </a>
+                    ) : (
+                        <div className="px-6 py-3 bg-red-950/50 text-red-400 font-bold border border-red-900 flex items-center justify-center gap-2 cursor-not-allowed">
+                            <AlertTriangle size={14} /> BROKEN LINK
+                        </div>
+                    )}
+
+                    <button 
+                        onClick={handleReroll}
+                        className="group relative px-6 py-3 bg-purple-900/20 text-purple-300 font-serif font-bold tracking-widest uppercase border border-purple-900/50 hover:bg-purple-900/40 transition-all shadow-lg flex items-center justify-center gap-2 pointer-events-auto cursor-pointer hover:scale-105"
+                    >
+                        NEXT SIGNAL <SkipForward size={14} />
+                    </button>
+                </div>
                 
                 <div className="absolute bottom-16 text-[10px] text-stone-700 font-mono break-all max-w-[90%] text-center z-10 opacity-50">
-                    {content.originalUrl.substring(0, 40)}...
+                    {isValidUrl ? safeUrl.substring(0, 40) + '...' : 'INVALID_URL_DATA'}
                 </div>
             </div>
         );
@@ -181,17 +209,6 @@ export const VisionMirror: React.FC = () => {
                         >
                             <div className="w-full h-full relative group bg-black border-2 border-purple-900/50 overflow-hidden">
                                 {renderContent()}
-
-                                {/* Controls */}
-                                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-auto">
-                                    <button 
-                                        onClick={handleReroll} 
-                                        className="bg-black/80 text-yellow-500 border border-yellow-600 p-3 rounded-full hover:bg-yellow-900/50 hover:scale-110 transition-all shadow-lg cursor-pointer" 
-                                        title="Next Vision"
-                                    >
-                                        <RefreshCcw size={24} className={loading ? 'animate-spin' : ''} />
-                                    </button>
-                                </div>
 
                                 <button onClick={closeVision} className="absolute top-2 right-2 bg-red-900/90 text-white p-2 rounded-full border border-red-500 hover:bg-red-700 shadow-lg pointer-events-auto z-50 cursor-pointer">
                                     <X size={20} />

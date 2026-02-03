@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star } from 'lucide-react';
+import { TaskPriority, Task, AlertType, SubtaskDraft, TaskTemplate } from '../../types';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star, Bookmark, Book, RotateCcw, Check, Sparkles } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -12,7 +12,7 @@ type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
 export const Grimoire: React.FC = () => {
   // @ts-ignore
-  const { state, toggleGrimoire, addTask, editTask, moveTask, deleteTask, completeRitual, resolveFailedTask } = useGame();
+  const { state, toggleGrimoire, addTask, editTask, moveTask, deleteTask, completeRitual, resolveFailedTask, saveTemplate, deleteTemplate } = useGame();
   
   // Navigation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -20,6 +20,9 @@ export const Grimoire: React.FC = () => {
   
   // View Options
   const [showFantasy, setShowFantasy] = useState(true);
+  
+  // Template Manager View
+  const [showTemplates, setShowTemplates] = useState(false);
 
   // Drag State
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -35,12 +38,21 @@ export const Grimoire: React.FC = () => {
   const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
   const [parentId, setParentId] = useState<string>(''); 
+  const [saveStatus, setSaveStatus] = useState<string>(''); // For feedback
   
   // Failed Task Resolution State
   const [resolvingTaskId, setResolvingTaskId] = useState<string | null>(null);
 
   const isEditing = !!editingTaskId;
   const isResolving = !!resolvingTaskId;
+
+  // Clear save feedback after delay
+  useEffect(() => {
+      if(saveStatus) {
+          const t = setTimeout(() => setSaveStatus(''), 3000);
+          return () => clearTimeout(t);
+      }
+  }, [saveStatus]);
 
   // --- ACTIONS & HANDLERS ---
 
@@ -95,6 +107,16 @@ export const Grimoire: React.FC = () => {
       setSubtasks([]);
       setParentId("");
       setPriority(TaskPriority.LOW);
+  };
+
+  const handleClearForm = () => {
+      setEditingTaskId(null);
+      setTitle("");
+      setNotes("");
+      setSubtasks([]);
+      setParentId("");
+      setPriority(TaskPriority.LOW);
+      setSaveStatus("Form Reset");
   };
 
   const handleTaskClick = (task: Task) => {
@@ -183,6 +205,53 @@ export const Grimoire: React.FC = () => {
         setResolvingTaskId(null);
         handleSelectSlot(new Date());
         setTitle(`Redemption: ${oldTitle}`);
+  };
+
+  // --- TEMPLATE LOGIC ---
+  const handleSaveAsTemplate = () => {
+      if (!title.trim()) {
+          setSaveStatus("Error: Title required");
+          return;
+      }
+      const [sh, sm] = startTimeStr.split(':').map(Number);
+      const [eh, em] = endTimeStr.split(':').map(Number);
+      let duration = (eh * 60 + em) - (sh * 60 + sm);
+      if (duration <= 0) duration = 60;
+
+      try {
+          saveTemplate({
+              title,
+              description: notes,
+              priority,
+              subtasks,
+              estimatedDuration: duration
+          });
+          setSaveStatus("Saved to Archive");
+      } catch (e) {
+          setSaveStatus("Error: Failed to save");
+          console.error(e);
+      }
+  };
+
+  const handleLoadTemplate = (t: TaskTemplate) => {
+      setTitle(t.title);
+      setNotes(t.description);
+      setPriority(t.priority);
+      
+      // DEEP COPY subtasks to prevent mutation of the saved template
+      setSubtasks(t.subtasks ? t.subtasks.map(s => ({...s})) : []);
+      
+      // Calculate new end time based on template duration
+      const [sh, sm] = startTimeStr.split(':').map(Number);
+      const startTotal = sh * 60 + sm;
+      const endTotal = startTotal + t.estimatedDuration;
+      
+      const newEh = Math.floor(endTotal / 60) % 24;
+      const newEm = endTotal % 60;
+      
+      setEndTimeStr(`${newEh.toString().padStart(2,'0')}:${newEm.toString().padStart(2,'0')}`);
+      setShowTemplates(false);
+      setSaveStatus("Scroll loaded");
   };
 
   const calculatePotentialBonus = () => {
@@ -483,97 +552,168 @@ export const Grimoire: React.FC = () => {
 
       return (
           <>
-            <div className="h-14 border-b border-[#292524] flex items-center justify-center relative">
+            <div className="h-14 border-b border-[#292524] flex items-center justify-between px-4 relative bg-[#0c0a09]">
                 <span className={`font-serif tracking-widest font-bold ${isEditing ? 'text-blue-400' : 'text-yellow-700'}`}>{isEditing ? 'EDITING FATE' : 'SUMMONING'}</span>
-                {isEditing && (
-                    <button onClick={handleDeleteTask} className="absolute right-4 text-red-500 hover:text-red-400 bg-red-950/30 p-2 rounded-full border border-red-900" title="Banish Enemy (Delete)">
-                        <Trash2 size={16} />
+                
+                <div className="flex gap-2">
+                    {isEditing && (
+                        <button onClick={handleDeleteTask} className="text-red-500 hover:text-red-400 bg-red-950/30 p-2 rounded-full border border-red-900" title="Banish Enemy (Delete)">
+                            <Trash2 size={16} />
+                        </button>
+                    )}
+                    {/* TOGGLE: The Bookmark acts as the switch between Form and List */}
+                    <button 
+                        onClick={() => setShowTemplates(!showTemplates)} 
+                        className={`p-2 rounded-full border transition-all relative ${showTemplates ? 'bg-purple-900 text-white border-purple-500' : 'bg-stone-900 text-stone-400 border-stone-700'}`} 
+                        title="Ritual Scrolls (Templates)"
+                    >
+                        <Bookmark size={16} />
+                        {saveStatus && !showTemplates && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
+                        )}
                     </button>
-                )}
+                </div>
             </div>
             
-            <form onSubmit={handleSubmit} className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar">
-                {selectedEnemy && (
-                    <div className="mb-4 bg-[#151210] border border-stone-800 p-3">
-                        <h4 className="text-[10px] text-yellow-700 uppercase font-bold mb-2 flex items-center gap-2 border-b border-stone-800 pb-1"><Scroll size={10} /> Nemesis Intel</h4>
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-stone-300 font-serif font-bold text-sm">{selectedEnemy.name}</span>
-                            <span className="text-[9px] text-stone-500 uppercase">{selectedEnemy.race}</span>
-                        </div>
-                        <p className="text-[10px] text-stone-400 italic mb-2">"{selectedEnemy.lore}"</p>
-                    </div>
-                )}
+            {showTemplates ? (
+                <div className="flex-1 p-4 overflow-y-auto bg-[#0a0a0a] space-y-4 custom-scrollbar">
+                    {/* Explicit Return Button for better UX */}
+                    <button onClick={() => setShowTemplates(false)} className="w-full py-3 bg-stone-900 border border-stone-700 text-stone-300 font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-stone-800 transition-colors">
+                        <Plus size={16} /> Create New Ritual
+                    </button>
 
-                <div className="bg-[#151210] p-4 border border-[#292524] text-center">
-                    <input type="date" value={selectedDate.toISOString().split('T')[0]} onChange={e => { const d=new Date(e.target.value); const n=new Date(selectedDate); n.setFullYear(d.getFullYear(), d.getMonth(), d.getDate()); setSelectedDate(n); }} className="bg-black text-stone-300 font-serif text-xs border border-stone-800 p-1 mb-2 block mx-auto"/>
-                    <div className="flex justify-center gap-2">
-                        <input type="time" value={startTimeStr} onChange={e => setStartTimeStr(e.target.value)} className="bg-black border border-[#292524] text-stone-300 font-mono text-sm p-1 w-20 text-center" />
-                        <span className="text-stone-600">-</span>
-                        <input type="time" value={endTimeStr} onChange={e => setEndTimeStr(e.target.value)} className="bg-black border border-yellow-900/30 text-yellow-500 font-mono text-sm p-1 w-20 text-center" />
+                    <div className="flex items-center gap-2 text-stone-500 uppercase font-bold text-xs tracking-widest border-b border-stone-800 pb-2 mt-4">
+                        <Book size={14} /> Ritual Archives ({state.templates?.length || 0})
                     </div>
-                    
-                    {/* FORESIGHT INDICATOR */}
-                    {!isEditing && foresight && (
-                        <div className="mt-3 bg-purple-900/20 border border-purple-500/50 p-2 text-center animate-pulse">
-                            <div className="text-[10px] text-purple-300 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
-                                {foresight.label === 'PROPHETIC' ? <Crown size={12}/> : <Telescope size={12}/>}
-                                {foresight.label} BONUS ACTIVE
-                            </div>
-                            <div className="text-xs text-purple-200">+{foresight.amount}% Rewards for planning ahead.</div>
-                        </div>
+                    {(!state.templates || state.templates.length === 0) && (
+                        <p className="text-stone-600 text-xs text-center py-8 italic">No scrolls inscribed yet.<br/>Create a task and click the save icon.</p>
                     )}
-                </div>
-
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#151210] border-b border-[#292524] p-3 text-stone-200 font-serif text-lg outline-none" placeholder="Enemy Name..." />
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full bg-[#151210] border border-[#292524] p-3 text-stone-400 text-xs min-h-[80px]" placeholder="Description..." />
-                
-                {/* HIERARCHY SELECTOR */}
-                <div className="border border-[#292524] p-3 bg-[#0a0a0a]">
-                    <label className="text-[10px] text-stone-500 uppercase font-bold flex items-center gap-2 mb-2"><LinkIcon size={10} /> Bind to Overlord (Parent Task)</label>
-                    <select 
-                        value={parentId} 
-                        onChange={(e) => setParentId(e.target.value)}
-                        className="w-full bg-[#151210] border border-stone-800 text-stone-300 text-xs p-2 outline-none"
-                    >
-                        <option value="">-- Independent (No Parent) --</option>
-                        {state.tasks
-                            .filter(t => t.id !== editingTaskId) 
-                            .map(t => (
-                                <option key={t.id} value={t.id}>{t.title}</option>
-                            ))
-                        }
-                    </select>
-                </div>
-
-                <div className="border border-[#292524] p-3 bg-[#0a0a0a]">
-                    <div className="flex justify-between items-center mb-2">
-                        <label className="text-[10px] text-stone-500 uppercase font-bold flex items-center gap-2"><Network size={10} /> Minions (Subtasks)</label>
-                        <span className="text-[9px] text-stone-600">{subtasks.length} active</span>
-                    </div>
-                    <div className="space-y-2 mb-2">
-                        {subtasks.map((st, i) => (
-                            <div key={i} className="flex items-center gap-2 text-xs text-stone-300 bg-[#151210] p-1 border border-stone-800">
-                                <span className="text-stone-600">{i+1}.</span>
-                                <span className="flex-1 truncate">{st.title}</span>
-                                <button type="button" onClick={() => setSubtasks(subtasks.filter((_, idx) => idx !== i))} className="text-red-900 hover:text-red-500"><X size={10}/></button>
+                    {state.templates?.map(t => (
+                        <div key={t.id} className="bg-[#151210] border border-stone-700 p-3 hover:border-yellow-600 transition-colors group relative">
+                            <div onClick={() => handleLoadTemplate(t)} className="cursor-pointer">
+                                <div className="font-serif font-bold text-stone-300 text-sm mb-1 group-hover:text-yellow-500">{t.title}</div>
+                                <div className="text-[10px] text-stone-500 flex gap-2">
+                                    <span>{t.estimatedDuration}m</span>
+                                    <span>•</span>
+                                    <span className={t.priority === 3 ? 'text-red-500' : t.priority === 2 ? 'text-yellow-600' : 'text-stone-600'}>
+                                        Priority {t.priority === 3 ? 'III' : t.priority === 2 ? 'II' : 'I'}
+                                    </span>
+                                </div>
+                                {t.subtasks && t.subtasks.length > 0 && (
+                                    <div className="mt-2 pl-2 border-l border-stone-800 text-[10px] text-stone-600">
+                                        {t.subtasks.length} subtasks
+                                    </div>
+                                )}
                             </div>
-                        ))}
-                    </div>
-                    <div className="flex gap-1">
-                        <input type="text" value={newSubtask} onChange={e => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSubtask(e)} className="flex-1 bg-black border border-stone-800 p-1 text-xs text-stone-300" placeholder="Add minion..." />
-                        <button type="button" onClick={handleAddSubtask} className="bg-stone-800 text-stone-400 px-2 hover:text-white"><Plus size={12} /></button>
-                    </div>
-                </div>
-
-                <div className="flex gap-0 border border-[#292524]">
-                    {[1,2,3].map(p => (
-                        <button key={p} type="button" onClick={() => setPriority(p as TaskPriority)} className={`flex-1 py-3 text-sm font-serif font-bold ${priority === p ? 'bg-yellow-900/20 text-yellow-500' : 'bg-[#0c0a09] text-stone-600'}`}>{p === 3 ? 'III' : p === 2 ? 'II' : 'I'}</button>
+                            <button onClick={(e) => {e.stopPropagation(); deleteTemplate(t.id)}} className="absolute top-2 right-2 text-stone-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
                     ))}
                 </div>
-            </form>
-            <div className="p-4 border-t border-[#292524]">
-                <button onClick={handleSubmit} className="w-full bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-4 font-serif font-bold tracking-widest uppercase hover:bg-[#5c3a22] transition-colors">{isEditing ? 'REWRITE FATE' : 'MANIFEST ENEMY'}</button>
-            </div>
+            ) : (
+                <form onSubmit={handleSubmit} className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar">
+                    {selectedEnemy && (
+                        <div className="mb-4 bg-[#151210] border border-stone-800 p-3">
+                            <h4 className="text-[10px] text-yellow-700 uppercase font-bold mb-2 flex items-center gap-2 border-b border-stone-800 pb-1"><Scroll size={10} /> Nemesis Intel</h4>
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-stone-300 font-serif font-bold text-sm">{selectedEnemy.name}</span>
+                                <span className="text-[9px] text-stone-500 uppercase">{selectedEnemy.race}</span>
+                            </div>
+                            <p className="text-[10px] text-stone-400 italic mb-2">"{selectedEnemy.lore}"</p>
+                        </div>
+                    )}
+
+                    <div className="bg-[#151210] p-4 border border-[#292524] text-center relative group">
+                        <input type="date" value={selectedDate.toISOString().split('T')[0]} onChange={e => { const d=new Date(e.target.value); const n=new Date(selectedDate); n.setFullYear(d.getFullYear(), d.getMonth(), d.getDate()); setSelectedDate(n); }} className="bg-black text-stone-300 font-serif text-xs border border-stone-800 p-1 mb-2 block mx-auto"/>
+                        <div className="flex justify-center gap-2">
+                            <input type="time" value={startTimeStr} onChange={e => setStartTimeStr(e.target.value)} className="bg-black border border-[#292524] text-stone-300 font-mono text-sm p-1 w-20 text-center" />
+                            <span className="text-stone-600">-</span>
+                            <input type="time" value={endTimeStr} onChange={e => setEndTimeStr(e.target.value)} className="bg-black border border-yellow-900/30 text-yellow-500 font-mono text-sm p-1 w-20 text-center" />
+                        </div>
+                        
+                        {/* FORESIGHT INDICATOR */}
+                        {!isEditing && foresight && (
+                            <div className="mt-3 bg-purple-900/20 border border-purple-500/50 p-2 text-center animate-pulse">
+                                <div className="text-[10px] text-purple-300 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                                    {foresight.label === 'PROPHETIC' ? <Crown size={12}/> : <Telescope size={12}/>}
+                                    {foresight.label} BONUS ACTIVE
+                                </div>
+                                <div className="text-xs text-purple-200">+{foresight.amount}% Rewards for planning ahead.</div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="relative">
+                        <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#151210] border-b border-[#292524] p-3 text-stone-200 font-serif text-lg outline-none pr-8" placeholder="Enemy Name..." />
+                        {!isEditing && title.trim().length > 0 && (
+                            <button type="button" onClick={handleSaveAsTemplate} className="absolute right-2 top-3 text-stone-500 hover:text-purple-400 hover:scale-110 transition-transform" title="Inscribe as Ritual Scroll (Save Template)">
+                                <Save size={16} />
+                            </button>
+                        )}
+                        {saveStatus && (
+                            <div className="absolute right-0 -top-8 text-[10px] text-green-400 font-bold bg-green-950/90 px-2 py-1 border border-green-800 animate-in fade-in zoom-in slide-in-from-bottom-2 shadow-lg z-20">
+                                {saveStatus}
+                            </div>
+                        )}
+                    </div>
+
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full bg-[#151210] border border-[#292524] p-3 text-stone-400 text-xs min-h-[80px]" placeholder="Description..." />
+                    
+                    {/* HIERARCHY SELECTOR */}
+                    <div className="border border-[#292524] p-3 bg-[#0a0a0a]">
+                        <label className="text-[10px] text-stone-500 uppercase font-bold flex items-center gap-2 mb-2"><LinkIcon size={10} /> Bind to Overlord (Parent Task)</label>
+                        <select 
+                            value={parentId} 
+                            onChange={(e) => setParentId(e.target.value)}
+                            className="w-full bg-[#151210] border border-stone-800 text-stone-300 text-xs p-2 outline-none"
+                        >
+                            <option value="">-- Independent (No Parent) --</option>
+                            {state.tasks
+                                .filter(t => t.id !== editingTaskId) 
+                                .map(t => (
+                                    <option key={t.id} value={t.id}>{t.title}</option>
+                                ))
+                            }
+                        </select>
+                    </div>
+
+                    <div className="border border-[#292524] p-3 bg-[#0a0a0a]">
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-[10px] text-stone-500 uppercase font-bold flex items-center gap-2"><Network size={10} /> Minions (Subtasks)</label>
+                            <span className="text-[9px] text-stone-600">{subtasks.length} active</span>
+                        </div>
+                        <div className="space-y-2 mb-2">
+                            {subtasks.map((st, i) => (
+                                <div key={i} className="flex items-center gap-2 text-xs text-stone-300 bg-[#151210] p-1 border border-stone-800">
+                                    <span className="text-stone-600">{i+1}.</span>
+                                    <span className="flex-1 truncate">{st.title}</span>
+                                    <button type="button" onClick={() => setSubtasks(subtasks.filter((_, idx) => idx !== i))} className="text-red-900 hover:text-red-500"><X size={10}/></button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-1">
+                            <input type="text" value={newSubtask} onChange={e => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSubtask(e)} className="flex-1 bg-black border border-stone-800 p-1 text-xs text-stone-300" placeholder="Add minion..." />
+                            <button type="button" onClick={handleAddSubtask} className="bg-stone-800 text-stone-400 px-2 hover:text-white"><Plus size={12} /></button>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-0 border border-[#292524]">
+                        {[1,2,3].map(p => (
+                            <button key={p} type="button" onClick={() => setPriority(p as TaskPriority)} className={`flex-1 py-3 text-sm font-serif font-bold ${priority === p ? 'bg-yellow-900/20 text-yellow-500' : 'bg-[#0c0a09] text-stone-600'}`}>{p === 3 ? 'III' : p === 2 ? 'II' : 'I'}</button>
+                        ))}
+                    </div>
+                </form>
+            )}
+            
+            {!showTemplates && (
+                <div className="p-4 border-t border-[#292524] flex gap-2">
+                    <button type="button" onClick={handleClearForm} className="bg-stone-900 border border-stone-700 text-stone-500 p-4 hover:text-white" title="Reset Form">
+                        <RotateCcw size={20} />
+                    </button>
+                    <button onClick={handleSubmit} className="flex-1 bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-4 font-serif font-bold tracking-widest uppercase hover:bg-[#5c3a22] transition-colors">{isEditing ? 'REWRITE FATE' : 'MANIFEST ENEMY'}</button>
+                </div>
+            )}
           </>
       )
   };

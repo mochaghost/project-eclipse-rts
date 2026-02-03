@@ -4,7 +4,7 @@ import { generateId } from './generators';
 import { FACTIONS } from '../constants';
 
 const SAVE_KEY = 'PROJECT_ECLIPSE_SAVE_V1';
-const CURRENT_VERSION = 8; // Increment for Magic System
+const CURRENT_VERSION = 10; // Increment for Templates
 
 interface SaveFile {
     version: number;
@@ -42,6 +42,7 @@ const DEFAULT_STATE: GameState = {
   activeRumor: null,
   activeMapEvent: 'NONE',
   activeVisionVideo: null,
+  visionQueue: [],
   population: [],
   realmStats: { hope: 50, fear: 10, order: 50 },
   structures: { forgeLevel: 0, wallsLevel: 0, libraryLevel: 0, marketLevel: 0 },
@@ -56,6 +57,8 @@ const DEFAULT_STATE: GameState = {
       { id: 'GEAR', name: 'The Machina', reputation: 0, status: 'NEUTRAL' }
   ],
   heroEquipment: { weapon: 'Rusty Blade', armor: 'Tattered Rags', relic: 'None' },
+  inventory: [],
+  templates: [],
   nemesisGraveyard: [],
   worldGenerationDay: 0,
   isAuditOpen: false,
@@ -129,7 +132,10 @@ export const loadGame = (): GameState => {
             factions: loadedState.factions || DEFAULT_STATE.factions,
             heroEquipment: loadedState.heroEquipment || DEFAULT_STATE.heroEquipment,
             nemesisGraveyard: Array.isArray(loadedState.nemesisGraveyard) ? loadedState.nemesisGraveyard : [],
-            settings: loadedState.settings || DEFAULT_STATE.settings
+            settings: loadedState.settings || DEFAULT_STATE.settings,
+            inventory: Array.isArray(loadedState.inventory) ? loadedState.inventory : [],
+            visionQueue: Array.isArray(loadedState.visionQueue) ? loadedState.visionQueue : [],
+            templates: Array.isArray(loadedState.templates) ? loadedState.templates : []
         };
 
     } catch (e) {
@@ -167,5 +173,9 @@ const performMigration = (state: any, fromVersion: number): GameState => {
         migrated.mana = 100;
         migrated.maxMana = 100;
     }
+    if (!migrated.inventory) migrated.inventory = [];
+    if (!migrated.visionQueue) migrated.visionQueue = [];
+    if (!migrated.templates) migrated.templates = [];
+    
     return migrated;
 };
