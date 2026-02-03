@@ -41,6 +41,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [state, setState] = useState<GameState>(loadGame());
     const stateRef = useRef(state); 
     const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastTickRef = useRef<number>(Date.now());
     
     useEffect(() => {
         stateRef.current = state;
@@ -60,56 +61,46 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, 120000); 
     };
 
-    // --- GAME LOOP (HEARTBEAT) ---
-    // Processes Real-Time Combat, NPC Needs, and Regeneration
+    // --- GAME LOOP (HEARTBEAT) - OPTIMIZED ---
     useEffect(() => {
-        const tickRate = 1000; // 1 second ticks
+        const tickRate = 2000; // Increased to 2 seconds for stability
         const loop = setInterval(() => {
             const now = Date.now();
             const current = stateRef.current;
             
-            // Only run logic if not paused/in menu (optional, but keeps background alive)
             if (current.isGrimoireOpen || current.isSettingsOpen) return;
 
             let hpDamage = 0;
             let baseDamage = 0;
             let needsUpdate = false;
 
-            // 1. COMBAT: Enemies damage Base
+            // Combat calculation (compensated for slower tick rate)
             current.enemies.forEach(enemy => {
                 const task = current.tasks.find(t => t.id === enemy.taskId);
-                // Only if task is started and not future
                 if (task && task.startTime <= now && !task.completed && !task.failed) {
-                    // Damage scales with Rank and Priority
-                    const dps = (enemy.rank * 0.05) * (enemy.priority); 
+                    const dps = (enemy.rank * 0.1) * (enemy.priority); // Scaled up slightly
                     baseDamage += dps;
                 }
             });
 
-            // 2. REGEN: Walls regenerate Base HP
-            const regen = (current.structures.wallsLevel || 0) * 0.1;
+            const regen = (current.structures.wallsLevel || 0) * 0.2;
             baseDamage -= regen;
 
-            // 3. NPC SIMULATION (Micro-updates)
-            // We don't want to map the whole population every second if it's huge, 
-            // but for <100 NPCs it's fine.
+            // NPC Simulation - Only run if sufficient time passed
             let newPop = current.population;
-            if (now % 5000 < 1000) { // Every 5 seconds roughly
+            // Only update population logic every 3rd tick (approx 6 seconds)
+            if (Math.random() > 0.66) { 
                 needsUpdate = true;
                 newPop = current.population.map(p => ({
                     ...p,
-                    hunger: Math.min(100, p.hunger + 0.5),
-                    fatigue: Math.min(100, p.fatigue + 0.2)
+                    hunger: Math.min(100, p.hunger + 1),
+                    fatigue: Math.min(100, p.fatigue + 0.5)
                 }));
             }
 
-            // APPLY UPDATES
             if (baseDamage !== 0 || needsUpdate) {
                 setState(prev => {
                     const newBaseHp = Math.max(0, Math.min(prev.maxBaseHp, prev.baseHp - baseDamage));
-                    
-                    // Fail Condition check could go here
-                    
                     return {
                         ...prev,
                         baseHp: newBaseHp,
@@ -131,7 +122,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => clearInterval(t);
     }, []);
 
-    // Cleanup & Garbage Collection
+    // Cleanup
     useEffect(() => {
         const cleanupInterval = setInterval(() => {
             setState(prev => {
@@ -139,10 +130,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const activeEffects = prev.effects.filter(e => now - e.timestamp < 3000);
                 
                 let currentMinions = prev.minions || [];
-                if (currentMinions.length > 40) currentMinions = currentMinions.slice(currentMinions.length - 40);
+                if (currentMinions.length > 20) currentMinions = currentMinions.slice(currentMinions.length - 20); // Stricter cap
 
                 let currentHistory = prev.history;
-                if (currentHistory.length > 500) currentHistory = currentHistory.slice(0, 500);
+                if (currentHistory.length > 100) currentHistory = currentHistory.slice(0, 100); // Stricter cap
 
                 if (activeEffects.length !== prev.effects.length || 
                     currentMinions.length !== (prev.minions || []).length ||

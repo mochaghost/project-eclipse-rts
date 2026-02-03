@@ -2,12 +2,12 @@
 import React, { useMemo, Suspense, useRef, useLayoutEffect, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { MapControls, Stars, Ring, Sparkles, Html, Float, Line } from '@react-three/drei';
-import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
 import { VisualEffectsRenderer } from './VisualEffects';
 import { VazarothEffects } from './VazarothEffects'; 
-import { EntityType, Era, AlertType, WeatherType, Vector3, EnemyEntity } from '../../types';
+import { EntityType, Era, AlertType, WeatherType, Vector3, EnemyEntity, NPC, Task, MinionEntity, GameState } from '../../types';
 import { VazarothTitan, BonePile, VoidCrystal, RuinedColumn, Torch, TwistedTree, GlowingMushroom, GhostWisp } from './Assets'; 
 import * as THREE from 'three';
 
@@ -19,8 +19,9 @@ const VegetationSystem = React.memo(() => {
     const grassRef = useRef<THREE.InstancedMesh>(null);
     const rockRef = useRef<THREE.InstancedMesh>(null);
     
-    const GRASS_COUNT = 2500; 
-    const ROCK_COUNT = 250;
+    // REDUCED COUNT FOR STABILITY
+    const GRASS_COUNT = 1500; 
+    const ROCK_COUNT = 150;
 
     useLayoutEffect(() => {
         const dummy = new THREE.Object3D();
@@ -84,7 +85,8 @@ const StaticDecorations = React.memo(({ level }: { level: number }) => {
     
     const decorations = useMemo(() => {
         const items = [];
-        for(let i=0; i<80; i++) { 
+        // REDUCED DECORATION COUNT
+        for(let i=0; i<50; i++) { 
              const angle = Math.random() * Math.PI * 2;
              const dist = 15 + (Math.random() * 120); 
              const x = Math.cos(angle) * dist;
@@ -125,69 +127,45 @@ const StaticDecorations = React.memo(({ level }: { level: number }) => {
 });
 
 const WeatherSystem = React.memo(({ type }: { type: WeatherType }) => {
-    if (type === 'CLEAR') return <Sparkles count={100} scale={60} size={2} opacity={0.3} color="#fff" />;
+    if (type === 'CLEAR') return <Sparkles count={50} scale={60} size={2} opacity={0.3} color="#fff" />;
     if (type === 'RAIN') return (
         <group position={[0, 10, 0]}>
-            <Sparkles count={500} scale={[50, 20, 50]} size={2} speed={5} opacity={0.4} color="#60a5fa" noise={0} />
+            <Sparkles count={200} scale={[50, 20, 50]} size={2} speed={5} opacity={0.4} color="#60a5fa" noise={0} />
             <directionalLight position={[10, 10, 5]} intensity={0.2} color="#60a5fa" />
         </group>
     );
     if (type === 'ASH_STORM') return (
         <group position={[0, 10, 0]}>
-            <Sparkles count={300} scale={60} size={6} speed={0.5} opacity={0.6} color="#450a0a" noise={1} />
+            <Sparkles count={150} scale={60} size={6} speed={0.5} opacity={0.6} color="#450a0a" noise={1} />
             <ambientLight intensity={0.5} color="#7f1d1d" />
         </group>
     );
-    if (type === 'VOID_MIST') return <Sparkles count={200} scale={40} size={10} speed={0.1} opacity={0.2} color="#a855f7" />;
+    if (type === 'VOID_MIST') return <Sparkles count={100} scale={40} size={10} speed={0.1} opacity={0.2} color="#a855f7" />;
     return null;
 });
 
-const GlobalLighting = ({ isRitual, weather }: { isRitual: boolean, weather: WeatherType }) => {
-    const [now, setNow] = useState(new Date());
-    
-    useEffect(() => {
-        const t = setInterval(() => setNow(new Date()), 60000); 
-        return () => clearInterval(t);
-    }, []);
-
-    const hours = now.getHours() + now.getMinutes() / 60;
-    const isNight = hours < 6 || hours > 18;
-    const isDawn = hours >= 5 && hours < 8;
-    const isDusk = hours >= 17 && hours < 20;
-
-    let sunColor = '#fbbf24'; 
-    let fogColor = '#bae6fd'; 
-    let intensity = 1.5; 
-    let groundColor = '#292524';
-
-    if (isDawn) { sunColor = '#f97316'; fogColor = '#fed7aa'; intensity = 1.0; groundColor = '#451a03'; }
-    else if (isDusk) { sunColor = '#ef4444'; fogColor = '#4c1d95'; intensity = 0.8; groundColor = '#2e1065'; }
-    else if (isNight) { sunColor = '#93c5fd'; fogColor = '#1e1b4b'; intensity = 0.4; groundColor = '#0f172a'; }
-
-    if (isRitual) { sunColor = '#a855f7'; fogColor = '#2e1065'; intensity = 0.6; }
-
-    const fogDensity = weather === 'VOID_MIST' ? 0.05 : isNight ? 0.02 : 0.015;
-
+const GlobalLighting = React.memo(({ isRitual, weather }: { isRitual: boolean, weather: WeatherType }) => {
+    // Memoized to prevent rapid light updates
     return (
         <>
-            <color attach="background" args={[fogColor]} />
-            <fogExp2 attach="fog" args={[fogColor, fogDensity]} />
+            <color attach="background" args={isRitual ? ['#2e1065'] : ['#0f172a']} />
+            <fogExp2 attach="fog" args={[isRitual ? '#2e1065' : '#0f172a', weather === 'VOID_MIST' ? 0.05 : 0.015]} />
             <directionalLight 
                 position={[50, 50, 20]} 
-                intensity={intensity} 
+                intensity={isRitual ? 0.5 : 1.2} 
                 castShadow 
                 shadow-mapSize={[1024, 1024]} 
-                color={sunColor} 
+                color={isRitual ? '#a855f7' : '#fbbf24'} 
                 shadow-bias={-0.0005} 
             />
-            <ambientLight intensity={isNight ? 0.4 : 0.6} color={sunColor} />
+            <ambientLight intensity={0.4} color={isRitual ? '#a855f7' : '#93c5fd'} />
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
                 <planeGeometry args={[500, 500]} />
-                <meshStandardMaterial color={groundColor} roughness={1} metalness={0} />
+                <meshStandardMaterial color="#1c1917" roughness={1} metalness={0} />
             </mesh>
         </>
     );
-};
+});
 
 const PortalRift: React.FC<{ position: Vector3 }> = ({ position }) => {
     const r1 = useRef<THREE.Mesh>(null);
@@ -208,9 +186,7 @@ const PortalRift: React.FC<{ position: Vector3 }> = ({ position }) => {
     )
 }
 
-// Draws lines between parent and children
-const HierarchyLines = ({ enemies }: { enemies: EnemyEntity[] }) => {
-    // Find all children
+const HierarchyLines = React.memo(({ enemies }: { enemies: EnemyEntity[] }) => {
     const links = useMemo(() => {
         const lines: any[] = [];
         const children = enemies.filter(e => e.subtaskId);
@@ -218,7 +194,6 @@ const HierarchyLines = ({ enemies }: { enemies: EnemyEntity[] }) => {
         children.forEach(child => {
             const parent = enemies.find(e => e.taskId === child.taskId && !e.subtaskId);
             if (parent) {
-                // Adjust heights for visuals
                 const start = new THREE.Vector3(parent.position.x, 2, parent.position.z);
                 const end = new THREE.Vector3(child.position.x, 1, child.position.z);
                 lines.push({ start, end, key: child.id });
@@ -243,115 +218,138 @@ const HierarchyLines = ({ enemies }: { enemies: EnemyEntity[] }) => {
             ))}
         </group>
     )
-}
+});
 
 const LoaderFallback = () => <Html center><div className="text-yellow-600 font-serif text-sm animate-pulse">LOADING WORLD...</div></Html>;
 
+// --- ISOLATED GAME WORLD COMPONENT ---
+// This component only re-renders when GAMEPLAY data changes, not UI state.
+const GameWorld = React.memo(({ 
+    state, 
+    selectEnemy, 
+    interactWithNPC 
+}: { 
+    state: GameState, 
+    selectEnemy: any, 
+    interactWithNPC: any 
+}) => {
+    
+    const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
+    const isHighQuality = (state.settings?.graphicsQuality || 'HIGH') === 'HIGH';
+    const now = Date.now();
+
+    return (
+        <>
+            <GlobalLighting isRitual={isRitual} weather={state.weather || 'CLEAR'} />
+            <WeatherSystem type={state.weather || 'CLEAR'} />
+            
+            <VegetationSystem />
+            <StaticDecorations level={state.playerLevel} />
+            
+            {isHighQuality && <Stars radius={150} depth={50} count={1000} factor={4} saturation={0} fade speed={0.2} />}
+            <VazarothTitan />
+
+            {/* DYNAMIC ENTITIES */}
+            <EntityRenderer 
+                type={EntityType.BUILDING_BASE} 
+                variant={state.era} 
+                position={[0, 0, 0]} 
+                stats={{ hp: state.baseHp || 100, maxHp: state.maxBaseHp || 100 }}
+            />
+
+            <EntityRenderer 
+                type={EntityType.HERO} 
+                variant={state.playerLevel as any} 
+                position={[4, 0, 4]} 
+                winStreak={state.winStreak}
+            />
+
+            {state.minions?.map(minion => (
+                <EntityRenderer key={minion.id} type={EntityType.MINION} position={[minion.position.x, minion.position.y, minion.position.z]} />
+            ))}
+
+            {state.enemies?.map(enemy => {
+                const task = state.tasks.find(t => t.id === enemy.taskId);
+                let startTime = task ? task.startTime : 0;
+                if (enemy.subtaskId && task) {
+                    const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
+                    if (sub && sub.startTime) startTime = sub.startTime;
+                }
+
+                if (now < startTime) return <PortalRift key={enemy.id} position={enemy.position} />;
+
+                return (
+                    <EntityRenderer
+                        key={enemy.id}
+                        type={EntityType.ENEMY}
+                        variant={enemy.priority}
+                        position={[enemy.position.x, enemy.position.y, enemy.position.z]}
+                        name={enemy.name}
+                        onClick={() => selectEnemy(enemy.id)}
+                        isSelected={state.selectedEnemyId === enemy.id}
+                        scale={enemy.scale || 1}
+                        archetype={enemy.race === 'HUMAN' || enemy.race === 'DWARF' ? 'KNIGHT' : 'MONSTER'}
+                        race={enemy.race}
+                        failed={task?.failed}
+                    />
+                );
+            })}
+            
+            <HierarchyLines enemies={state.enemies} />
+
+            {state.population?.map((npc, i) => {
+                const angle = (i * 137.5) * (Math.PI / 180);
+                const r = 6 + (i % 5); 
+                return (
+                    <EntityRenderer
+                        key={npc.id}
+                        type={EntityType.VILLAGER}
+                        variant={npc.role}
+                        name={npc.name}
+                        position={[Math.cos(angle)*r, 0, Math.sin(angle)*r]}
+                        npcStatus={npc.status}
+                        npcAction={npc.currentAction} 
+                        onClick={() => interactWithNPC(npc.id)}
+                    />
+                );
+            })}
+
+            <VisualEffectsRenderer />
+            <VazarothEffects />
+            
+            <MapControls makeDefault maxPolarAngle={Math.PI / 2.2} />
+
+            {isHighQuality && (
+                <EffectComposer disableNormalPass>
+                    <Bloom luminanceThreshold={1.2} mipmapBlur intensity={0.8} radius={0.4} />
+                    <Vignette eskil={false} offset={0.1} darkness={0.5} />
+                </EffectComposer>
+            )}
+        </>
+    )
+}, (prev, next) => {
+    // CUSTOM COMPARISON FUNCTION TO PREVENT RE-RENDERS ON UI CHANGES
+    // Only re-render if gameplay-affecting state changes
+    return (
+        prev.state.enemies === next.state.enemies &&
+        prev.state.population === next.state.population &&
+        prev.state.baseHp === next.state.baseHp &&
+        prev.state.weather === next.state.weather &&
+        prev.state.effects === next.state.effects &&
+        prev.state.activeMapEvent === next.state.activeMapEvent &&
+        prev.state.selectedEnemyId === next.state.selectedEnemyId
+    );
+});
+
 export const Scene: React.FC = () => {
   const { state, selectEnemy, interactWithNPC } = useGame();
-  
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-      const t = setInterval(() => setNow(Date.now()), 2000);
-      return () => clearInterval(t);
-  }, []);
 
   if (!state) return null;
-
-  const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
-  const isHighQuality = (state.settings?.graphicsQuality || 'HIGH') === 'HIGH';
 
   return (
     <Canvas shadows={false} dpr={[1, 1.5]} gl={{ antialias: false, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: 1.2 }} camera={{ position: [15, 15, 15], fov: 45 }}>
       <Suspense fallback={<LoaderFallback />}>
-          
-          <GlobalLighting isRitual={isRitual} weather={state.weather || 'CLEAR'} />
-          <WeatherSystem type={state.weather || 'CLEAR'} />
-          
-          {/* OPTIMIZED ENVIRONMENT */}
-          <VegetationSystem />
-          <StaticDecorations level={state.playerLevel} />
-          
-          {isHighQuality && <Stars radius={150} depth={50} count={1000} factor={4} saturation={0} fade speed={0.2} />}
-          <VazarothTitan />
-
-          {/* DYNAMIC ENTITIES */}
-          <EntityRenderer 
-            type={EntityType.BUILDING_BASE} 
-            variant={state.era} 
-            position={[0, 0, 0]} 
-            stats={{ hp: state.baseHp || 100, maxHp: state.maxBaseHp || 100 }}
-          />
-
-          <EntityRenderer 
-            type={EntityType.HERO} 
-            variant={state.playerLevel as any} 
-            position={[4, 0, 4]} 
-            winStreak={state.winStreak}
-          />
-
-          {state.minions?.map(minion => (
-              <EntityRenderer key={minion.id} type={EntityType.MINION} position={[minion.position.x, minion.position.y, minion.position.z]} />
-          ))}
-
-          {state.enemies?.map(enemy => {
-            const task = state.tasks.find(t => t.id === enemy.taskId);
-            let startTime = task ? task.startTime : 0;
-            if (enemy.subtaskId && task) {
-                const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
-                if (sub && sub.startTime) startTime = sub.startTime;
-            }
-
-            if (now < startTime) return <PortalRift key={enemy.id} position={enemy.position} />;
-
-            return (
-                <EntityRenderer
-                    key={enemy.id}
-                    type={EntityType.ENEMY}
-                    variant={enemy.priority}
-                    position={[enemy.position.x, enemy.position.y, enemy.position.z]}
-                    name={enemy.name}
-                    onClick={() => selectEnemy(enemy.id)}
-                    isSelected={state.selectedEnemyId === enemy.id}
-                    scale={enemy.scale || 1}
-                    archetype={enemy.race === 'HUMAN' || enemy.race === 'DWARF' ? 'KNIGHT' : 'MONSTER'}
-                    race={enemy.race}
-                    failed={task?.failed}
-                />
-            );
-          })}
-          
-          <HierarchyLines enemies={state.enemies} />
-
-          {state.population?.map((npc, i) => {
-              const angle = (i * 137.5) * (Math.PI / 180);
-              const r = 6 + (i % 5); 
-              return (
-                <EntityRenderer
-                    key={npc.id}
-                    type={EntityType.VILLAGER}
-                    variant={npc.role}
-                    name={npc.name}
-                    position={[Math.cos(angle)*r, 0, Math.sin(angle)*r]}
-                    npcStatus={npc.status}
-                    npcAction={npc.currentAction} 
-                    onClick={() => interactWithNPC(npc.id)}
-                />
-              );
-          })}
-
-          <VisualEffectsRenderer />
-          <VazarothEffects />
-          
-          <MapControls makeDefault maxPolarAngle={Math.PI / 2.2} />
-
-          {/* LIGHTWEIGHT POST-PROCESSING */}
-          {isHighQuality && (
-              <EffectComposer disableNormalPass>
-                  <Bloom luminanceThreshold={1.2} mipmapBlur intensity={0.8} radius={0.4} />
-                  <Vignette eskil={false} offset={0.1} darkness={0.5} />
-              </EffectComposer>
-          )}
+          <GameWorld state={state} selectEnemy={selectEnemy} interactWithNPC={interactWithNPC} />
       </Suspense>
     </Canvas>
   );
