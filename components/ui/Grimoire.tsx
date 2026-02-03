@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft, TaskTemplate } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star, Bookmark, Book, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star, Bookmark, Book, RotateCcw, Check, Sparkles, MousePointerClick } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -89,6 +89,9 @@ export const Grimoire: React.FC = () => {
   };
 
   const handleSelectSlot = (date: Date, hour?: number) => {
+      // IMPORTANT: Ensure we exit template mode so the user sees the form they are populating
+      setShowTemplates(false);
+      
       setEditingTaskId(null);
       const d = new Date(date);
       if (hour !== undefined) {
@@ -102,6 +105,8 @@ export const Grimoire: React.FC = () => {
           setEndTimeStr("10:00");
       }
       setSelectedDate(d);
+      
+      // Reset form fields
       setTitle("");
       setNotes("");
       setSubtasks([]);
@@ -120,6 +125,7 @@ export const Grimoire: React.FC = () => {
   };
 
   const handleTaskClick = (task: Task) => {
+      setShowTemplates(false); // Ensure form is visible
       setEditingTaskId(task.id);
       setTitle(task.title);
       setNotes(task.description || "");
@@ -234,9 +240,9 @@ export const Grimoire: React.FC = () => {
   };
 
   const handleLoadTemplate = (t: TaskTemplate) => {
-      setTitle(t.title);
-      setNotes(t.description);
-      setPriority(t.priority);
+      setTitle(t.title || "");
+      setNotes(t.description || "");
+      setPriority(t.priority || TaskPriority.LOW);
       
       // DEEP COPY subtasks to prevent mutation of the saved template
       setSubtasks(t.subtasks ? t.subtasks.map(s => ({...s})) : []);
@@ -244,14 +250,14 @@ export const Grimoire: React.FC = () => {
       // Calculate new end time based on template duration
       const [sh, sm] = startTimeStr.split(':').map(Number);
       const startTotal = sh * 60 + sm;
-      const endTotal = startTotal + t.estimatedDuration;
+      const endTotal = startTotal + (t.estimatedDuration || 60);
       
       const newEh = Math.floor(endTotal / 60) % 24;
       const newEm = endTotal % 60;
       
       setEndTimeStr(`${newEh.toString().padStart(2,'0')}:${newEm.toString().padStart(2,'0')}`);
       setShowTemplates(false);
-      setSaveStatus("Scroll loaded");
+      setSaveStatus("Template Loaded");
   };
 
   const calculatePotentialBonus = () => {
@@ -387,7 +393,11 @@ export const Grimoire: React.FC = () => {
               <div className="flex-1 relative overflow-y-auto custom-scrollbar">
                   <div className="absolute inset-0 w-full h-[1920px]"> 
                     {HOURS.map(h => (
-                        <div key={h} onClick={() => handleSelectSlot(date, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, date, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] w-full"></div>
+                        <div key={h} onClick={() => handleSelectSlot(date, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, date, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] w-full cursor-pointer group">
+                            <div className="hidden group-hover:flex items-center justify-center h-full opacity-50">
+                                <Plus size={24} className="text-stone-600" />
+                            </div>
+                        </div>
                     ))}
                     
                     {isToday && (
@@ -445,7 +455,7 @@ export const Grimoire: React.FC = () => {
                       return (
                           <div key={colIndex} className="flex-1 border-r border-[#1c1917] relative min-w-[80px]">
                               {HOURS.map(h => (
-                                  <div key={h} onClick={() => handleSelectSlot(d, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, d, h)} className="h-16 border-b border-[#1c1917] hover:bg-[#151210]"></div>
+                                  <div key={h} onClick={() => handleSelectSlot(d, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, d, h)} className="h-16 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>
                               ))}
                               {dayTasks.map(t => {
                                   const date = new Date(t.startTime);
@@ -589,8 +599,8 @@ export const Grimoire: React.FC = () => {
                         <p className="text-stone-600 text-xs text-center py-8 italic">No scrolls inscribed yet.<br/>Create a task and click the save icon.</p>
                     )}
                     {state.templates?.map(t => (
-                        <div key={t.id} className="bg-[#151210] border border-stone-700 p-3 hover:border-yellow-600 transition-colors group relative">
-                            <div onClick={() => handleLoadTemplate(t)} className="cursor-pointer">
+                        <div key={t.id} className="bg-[#151210] border border-stone-700 p-3 hover:border-yellow-600 transition-colors group relative flex flex-col gap-2">
+                            <div className="flex-1">
                                 <div className="font-serif font-bold text-stone-300 text-sm mb-1 group-hover:text-yellow-500">{t.title}</div>
                                 <div className="text-[10px] text-stone-500 flex gap-2">
                                     <span>{t.estimatedDuration}m</span>
@@ -600,14 +610,27 @@ export const Grimoire: React.FC = () => {
                                     </span>
                                 </div>
                                 {t.subtasks && t.subtasks.length > 0 && (
-                                    <div className="mt-2 pl-2 border-l border-stone-800 text-[10px] text-stone-600">
+                                    <div className="mt-1 text-[10px] text-stone-600">
                                         {t.subtasks.length} subtasks
                                     </div>
                                 )}
                             </div>
-                            <button onClick={(e) => {e.stopPropagation(); deleteTemplate(t.id)}} className="absolute top-2 right-2 text-stone-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Trash2 size={14} />
-                            </button>
+                            
+                            <div className="flex gap-2 mt-1">
+                                <button 
+                                    onClick={() => handleLoadTemplate(t)} 
+                                    className="flex-1 py-1.5 bg-purple-900/30 border border-purple-800/50 text-purple-300 text-[10px] uppercase font-bold hover:bg-purple-900/50 transition-colors flex items-center justify-center gap-1"
+                                >
+                                    <Sparkles size={12} /> Summon
+                                </button>
+                                <button 
+                                    onClick={(e) => {e.stopPropagation(); deleteTemplate(t.id)}} 
+                                    className="px-2 py-1.5 bg-red-950/20 border border-red-900/30 text-red-500 text-[10px] hover:bg-red-900/40"
+                                    title="Burn Scroll"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
