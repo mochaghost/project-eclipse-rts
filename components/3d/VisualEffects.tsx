@@ -57,7 +57,7 @@ const Particle: React.FC<{ velocity: {x:number, y:number, z:number, rotX:number,
 };
 
 const Explosion: React.FC<{ position: { x: number, y: number, z: number } }> = ({ position }) => {
-    const velocities = useMemo(() => new Array(12).fill(0).map(() => ({
+    const velocities = useMemo(() => new Array(8).fill(0).map(() => ({ // Reduced count 12->8
         x: (Math.random() - 0.5) * 0.3,
         y: (Math.random() * 0.4) + 0.1,
         z: (Math.random() - 0.5) * 0.3,
@@ -75,9 +75,10 @@ const Explosion: React.FC<{ position: { x: number, y: number, z: number } }> = (
 export const VisualEffectsRenderer: React.FC = () => {
     const { state } = useGame();
     
-    // SAFETY LIMIT: Only render the last 10 text effects to prevent DOM overflow on mobile
-    const textEffects = state.effects.filter(e => e.type.startsWith('TEXT')).slice(-10);
-    const explosions = state.effects.filter(e => e.type === 'EXPLOSION').slice(-5);
+    // SAFETY LIMIT: Only render the last 8 text effects to prevent DOM overflow on mobile/iOS
+    // This is crucial to prevent the "Bridge" crash in React Fiber on iOS
+    const textEffects = state.effects.filter(e => e.type.startsWith('TEXT')).slice(-8);
+    const explosions = state.effects.filter(e => e.type === 'EXPLOSION').slice(-4);
 
     return (
         <>

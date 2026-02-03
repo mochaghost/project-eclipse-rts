@@ -39,15 +39,13 @@ export const useGame = () => {
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, setState] = useState<GameState>(loadGame());
-    const stateRef = useRef(state); // Ref to hold latest state for interval closures
+    const stateRef = useRef(state); 
     const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     
-    // Update Ref whenever state changes
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
 
-    // Init Audio on first user interaction if possible, or lazily
     const ensureAudio = () => {
         initAudio();
         setVolume(state.settings?.masterVolume ?? 0.2);
@@ -56,14 +54,76 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const resetIdleTimer = () => {
         if (idleTimer.current) clearTimeout(idleTimer.current);
         idleTimer.current = setTimeout(() => {
-             // Idle logic could go here
              if (Math.random() > 0.7) {
                  setState(prev => ({ ...prev, vazarothMessage: getVazarothLine('IDLE') }));
              }
-        }, 120000); // 2 mins
+        }, 120000); 
     };
 
-    // OPTIMIZED AUTO-SAVE: Does NOT depend on [state], preventing infinite re-renders
+    // --- GAME LOOP (HEARTBEAT) ---
+    // Processes Real-Time Combat, NPC Needs, and Regeneration
+    useEffect(() => {
+        const tickRate = 1000; // 1 second ticks
+        const loop = setInterval(() => {
+            const now = Date.now();
+            const current = stateRef.current;
+            
+            // Only run logic if not paused/in menu (optional, but keeps background alive)
+            if (current.isGrimoireOpen || current.isSettingsOpen) return;
+
+            let hpDamage = 0;
+            let baseDamage = 0;
+            let needsUpdate = false;
+
+            // 1. COMBAT: Enemies damage Base
+            current.enemies.forEach(enemy => {
+                const task = current.tasks.find(t => t.id === enemy.taskId);
+                // Only if task is started and not future
+                if (task && task.startTime <= now && !task.completed && !task.failed) {
+                    // Damage scales with Rank and Priority
+                    const dps = (enemy.rank * 0.05) * (enemy.priority); 
+                    baseDamage += dps;
+                }
+            });
+
+            // 2. REGEN: Walls regenerate Base HP
+            const regen = (current.structures.wallsLevel || 0) * 0.1;
+            baseDamage -= regen;
+
+            // 3. NPC SIMULATION (Micro-updates)
+            // We don't want to map the whole population every second if it's huge, 
+            // but for <100 NPCs it's fine.
+            let newPop = current.population;
+            if (now % 5000 < 1000) { // Every 5 seconds roughly
+                needsUpdate = true;
+                newPop = current.population.map(p => ({
+                    ...p,
+                    hunger: Math.min(100, p.hunger + 0.5),
+                    fatigue: Math.min(100, p.fatigue + 0.2)
+                }));
+            }
+
+            // APPLY UPDATES
+            if (baseDamage !== 0 || needsUpdate) {
+                setState(prev => {
+                    const newBaseHp = Math.max(0, Math.min(prev.maxBaseHp, prev.baseHp - baseDamage));
+                    
+                    // Fail Condition check could go here
+                    
+                    return {
+                        ...prev,
+                        baseHp: newBaseHp,
+                        population: needsUpdate ? newPop : prev.population
+                    };
+                });
+            }
+
+        }, tickRate);
+
+        return () => clearInterval(loop);
+    }, []);
+
+    // Auto-save
     useEffect(() => {
         const t = setInterval(() => {
             saveGame(stateRef.current);
@@ -71,34 +131,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => clearInterval(t);
     }, []);
 
-    // --- RECOLECCIÓN DE BASURA (Versión Segura) ---
-    // Limpia efectos visuales para salvar GPU, pero es conservador con los datos.
+    // Cleanup & Garbage Collection
     useEffect(() => {
         const cleanupInterval = setInterval(() => {
             setState(prev => {
                 const now = Date.now();
-                
-                // 1. Limpieza Visual (Solo efectos expirados)
-                // Reducimos el tiempo de vida a 3s para liberar DOM más rápido
                 const activeEffects = prev.effects.filter(e => now - e.timestamp < 3000);
                 
-                // 2. Limite Ejército (Visual) - Solo si hay demasiados
                 let currentMinions = prev.minions || [];
-                if (currentMinions.length > 40) {
-                    currentMinions = currentMinions.slice(currentMinions.length - 40);
-                }
+                if (currentMinions.length > 40) currentMinions = currentMinions.slice(currentMinions.length - 40);
 
-                // 3. Historial (Texto) - Limite alto para no perder lore
                 let currentHistory = prev.history;
-                if (currentHistory.length > 500) {
-                    currentHistory = currentHistory.slice(0, 500);
-                }
+                if (currentHistory.length > 500) currentHistory = currentHistory.slice(0, 500);
 
-                // Solo actualizar si hay cambios reales para evitar re-render innecesario
                 if (activeEffects.length !== prev.effects.length || 
                     currentMinions.length !== (prev.minions || []).length ||
                     currentHistory.length !== prev.history.length) {
-                    
                     return {
                         ...prev,
                         effects: activeEffects,
@@ -109,7 +157,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 return prev;
             });
         }, 5000);
-
         return () => clearInterval(cleanupInterval);
     }, []);
 
@@ -181,10 +228,31 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
 
             const graveyard = prev.nemesisGraveyard || [];
+            
+            // GENERATE MAIN ENEMY
             const enemy = generateNemesis(taskId, priority, graveyard, prev.winStreak, undefined, undefined, durationMinutes);
 
-            const subEnemies = newSubtasks.map(st => {
-                return generateNemesis(taskId, TaskPriority.LOW, [], 0, st.id, st.title, durationMinutes / newSubtasks.length);
+            // GENERATE SUB-ENEMIES (HIERARCHY POSITIONING)
+            const subEnemies = newSubtasks.map((st, index) => {
+                // HIERARCHY LOGIC: Spawn in a ring around the parent
+                const angle = (index / newSubtasks.length) * Math.PI * 2;
+                const radius = 3 + (Math.random() * 2); // 3-5 units away from parent
+                const offsetX = Math.cos(angle) * radius;
+                const offsetZ = Math.sin(angle) * radius;
+                
+                const childPos = {
+                    x: enemy.position.x + offsetX,
+                    y: enemy.position.y,
+                    z: enemy.position.z + offsetZ
+                };
+
+                const subEnemy = generateNemesis(taskId, TaskPriority.LOW, [], 0, st.id, st.title, durationMinutes / newSubtasks.length);
+                
+                // Override position to lock to parent
+                subEnemy.position = childPos;
+                subEnemy.initialPosition = childPos;
+                
+                return subEnemy;
             });
 
             const next: GameState = {
@@ -196,7 +264,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     type: 'RITUAL', 
                     timestamp: Date.now(), 
                     message: `Oath Sworn: ${title}`, 
-                    details: `A new enemy manifests in the ${enemy.factionId} territory.` 
+                    details: `A Commander and ${subEnemies.length} minions manifest.` 
                 } as HistoryLog, ...prev.history].slice(0, 500),
                 isGrimoireOpen: false
             };
@@ -234,21 +302,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // RESTORED: Delete Task
     const deleteTask = (taskId: string) => {
         playSfx('UI_CLICK');
         setState(prev => {
-            // Remove task
             const nextTasks = prev.tasks.filter(t => t.id !== taskId);
-            // Remove associated enemies
             const nextEnemies = prev.enemies.filter(e => e.taskId !== taskId);
             
             const next: GameState = {
                 ...prev,
                 tasks: nextTasks,
                 enemies: nextEnemies,
-                selectedEnemyId: prev.selectedEnemyId === taskId ? null : prev.selectedEnemyId, // Deselect if selected
-                // Optional: Log it
+                selectedEnemyId: prev.selectedEnemyId === taskId ? null : prev.selectedEnemyId,
                 history: [{ 
                     id: generateId(), 
                     type: 'RITUAL', 
@@ -262,21 +326,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // CALENDAR FUNCTION: CRITICAL
     const moveTask = (taskId: string, newStartTime: number) => {
         ensureAudio();
         setState(prev => {
             const task = prev.tasks.find(t => t.id === taskId);
-            if (!task) {
-                console.warn("Attempted to move non-existent task:", taskId);
-                return prev;
-            }
+            if (!task) return prev;
             
             const duration = task.deadline - task.startTime;
             const newDeadline = newStartTime + duration;
             
-            console.log(`[Calendar] Moving task "${task.title}" to ${new Date(newStartTime).toLocaleTimeString()}`);
-
             const nextTasks = prev.tasks.map(t => t.id === taskId ? { ...t, startTime: newStartTime, deadline: newDeadline } : t);
             
             const next = { ...prev, tasks: nextTasks };
@@ -760,7 +818,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             addTask,
             editTask,
             moveTask,
-            deleteTask, // <--- EXPOSED IN PROVIDER
+            deleteTask,
             completeTask,
             completeSubtask,
             failTask,
