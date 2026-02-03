@@ -19,7 +19,7 @@ export const Grimoire: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('WEEK');
   
   // View Options
-  const [showFantasy, setShowFantasy] = useState(true); // TOGGLE RESTORED
+  const [showFantasy, setShowFantasy] = useState(true);
 
   // Drag State
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -31,7 +31,6 @@ export const Grimoire: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [startTimeStr, setStartTimeStr] = useState("09:00");
   const [endTimeStr, setEndTimeStr] = useState("10:00");
-  const [duration, setDuration] = useState(60); 
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.LOW);
   const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
@@ -44,6 +43,32 @@ export const Grimoire: React.FC = () => {
   const isResolving = !!resolvingTaskId;
 
   // --- ACTIONS & HANDLERS ---
+
+  const handleNav = (direction: number) => {
+      const d = new Date(currentDate);
+      if (viewMode === 'DAY') d.setDate(d.getDate() + direction);
+      if (viewMode === 'WEEK') d.setDate(d.getDate() + (direction * 7));
+      if (viewMode === 'MONTH') d.setMonth(d.getMonth() + direction);
+      if (viewMode === 'YEAR') d.setFullYear(d.getFullYear() + direction);
+      setCurrentDate(d);
+  };
+
+  const getHeaderTitle = () => {
+      if (viewMode === 'DAY') return currentDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      if (viewMode === 'WEEK') {
+          const start = new Date(currentDate);
+          start.setDate(currentDate.getDate() - currentDate.getDay());
+          const end = new Date(start);
+          end.setDate(start.getDate() + 6);
+          if (start.getFullYear() === end.getFullYear()) {
+             return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${start.getFullYear()}`;
+          }
+          return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      }
+      if (viewMode === 'MONTH') return currentDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      if (viewMode === 'YEAR') return currentDate.getFullYear().toString();
+      return "";
+  };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) {
@@ -166,15 +191,12 @@ export const Grimoire: React.FC = () => {
   // --- HELPER: TASK CARD COMPONENT ---
   const TaskCard = ({ task, style, onClick, onDragStart }: { task: Task, style?: React.CSSProperties, onClick: (e:any)=>void, onDragStart: (e:any)=>void }) => {
       const enemy = state.enemies.find(e => e.taskId === task.id && !e.subtaskId);
-      
-      // TOGGLE LOGIC: Show Fantasy Title vs Real Title
       const displayName = showFantasy ? (enemy ? enemy.title : task.title) : task.title;
-      
       const lead = task.startTime - task.createdAt;
+      
       let borderClass = "border-stone-700";
       let bgClass = "bg-stone-800/90 text-stone-200";
       
-      // Priority Visuals
       if (task.priority === TaskPriority.HIGH) { borderClass = "border-red-600"; bgClass = "bg-red-950/90 text-red-100"; }
       else if (task.priority === TaskPriority.MEDIUM) { borderClass = "border-yellow-600"; bgClass = "bg-yellow-950/90 text-yellow-100"; }
 
@@ -202,7 +224,6 @@ export const Grimoire: React.FC = () => {
                   {icon}
               </div>
               
-              {/* Hierarchy / Subtask Indicator */}
               {subtaskCount > 0 && (
                   <div className="mt-auto flex items-center gap-1 text-[9px] opacity-80">
                       <Network size={10} />
@@ -213,7 +234,6 @@ export const Grimoire: React.FC = () => {
                   </div>
               )}
 
-              {/* Parent Link Indicator */}
               {task.parentId && (
                   <div className="absolute top-0 right-0 p-0.5 bg-blue-900 text-blue-200 rounded-bl">
                       <LinkIcon size={8}/>
@@ -267,7 +287,6 @@ export const Grimoire: React.FC = () => {
           if (!placed) columns.push([task]);
       });
 
-      // "NOW" INDICATOR CALCULATION
       const now = new Date();
       const isToday = now.toDateString() === date.toDateString();
       const nowTop = isToday ? (now.getHours() + now.getMinutes()/60) * 80 : -1;
@@ -286,7 +305,6 @@ export const Grimoire: React.FC = () => {
                         <div key={h} onClick={() => handleSelectSlot(date, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, date, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] w-full"></div>
                     ))}
                     
-                    {/* CURRENT TIME LINE (Restored) */}
                     {isToday && (
                         <div className="absolute w-full border-t-2 border-red-500 z-20 pointer-events-none flex items-center" style={{ top: `${nowTop}px` }}>
                             <div className="w-2 h-2 rounded-full bg-red-500 -ml-1"></div>
@@ -316,7 +334,6 @@ export const Grimoire: React.FC = () => {
   const renderWeekView = () => {
       const startOfWeek = new Date(currentDate);
       startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
-      
       const weekDays = Array.from({length: 7}, (_, i) => {
           const d = new Date(startOfWeek);
           d.setDate(startOfWeek.getDate() + i);
@@ -334,15 +351,12 @@ export const Grimoire: React.FC = () => {
                       </div>
                   ))}
               </div>
-              
               <div className="flex-1 overflow-y-auto custom-scrollbar flex relative">
                   <div className="w-10 bg-[#0c0a09] border-r border-[#292524] shrink-0">
                       {HOURS.map(h => (<div key={h} className="h-16 text-[9px] text-stone-600 text-right pr-1 pt-1 border-b border-[#1c1917]">{h}</div>))}
                   </div>
-
                   {weekDays.map((d, colIndex) => {
                       const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === d.toDateString());
-                      
                       return (
                           <div key={colIndex} className="flex-1 border-r border-[#1c1917] relative min-w-[80px]">
                               {HOURS.map(h => (
@@ -352,15 +366,7 @@ export const Grimoire: React.FC = () => {
                                   const date = new Date(t.startTime);
                                   const startH = date.getHours() + (date.getMinutes()/60);
                                   const durHrs = (t.deadline - t.startTime) / 3600000;
-                                  return (
-                                      <TaskCard 
-                                        key={t.id} 
-                                        task={t} 
-                                        style={{ top: `${startH * 64}px`, height: `${Math.max(24, durHrs * 64)}px`, width: '95%', left: '2.5%' }}
-                                        onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }}
-                                        onDragStart={(e) => handleDragStart(e, t)}
-                                      />
-                                  )
+                                  return <TaskCard key={t.id} task={t} style={{ top: `${startH * 64}px`, height: `${Math.max(24, durHrs * 64)}px`, width: '95%', left: '2.5%' }} onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} onDragStart={(e) => handleDragStart(e, t)} />
                               })}
                           </div>
                       )
@@ -375,7 +381,6 @@ export const Grimoire: React.FC = () => {
       const month = currentDate.getMonth();
       const firstDay = new Date(year, month, 1).getDay();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
       const cells = [];
       for(let i=0; i<firstDay; i++) cells.push(null);
       for(let i=1; i<=daysInMonth; i++) cells.push(new Date(year, month, i));
@@ -388,18 +393,10 @@ export const Grimoire: React.FC = () => {
               <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto">
                   {cells.map((date, i) => {
                       if (!date) return <div key={i} className="border border-[#1c1917] bg-[#0a0a0a]"></div>;
-                      
                       const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === date.toDateString());
                       const isToday = date.toDateString() === new Date().toDateString();
-
                       return (
-                          <div 
-                            key={i} 
-                            onClick={() => handleSelectSlot(date)}
-                            onDragOver={handleDragOver} 
-                            onDrop={(e) => handleDrop(e, date)}
-                            className={`border border-[#1c1917] p-1 flex flex-col hover:bg-[#151210] cursor-pointer min-h-[80px] ${isToday ? 'bg-yellow-950/10' : ''}`}
-                          >
+                          <div key={i} onClick={() => handleSelectSlot(date)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, date)} className={`border border-[#1c1917] p-1 flex flex-col hover:bg-[#151210] cursor-pointer min-h-[80px] ${isToday ? 'bg-yellow-950/10' : ''}`}>
                               <div className={`text-right text-xs font-bold mb-1 ${isToday ? 'text-yellow-500' : 'text-stone-600'}`}>{date.getDate()}</div>
                               <div className="flex-1 flex flex-col gap-1 overflow-hidden">
                                   {dayTasks.map(t => (
@@ -421,34 +418,20 @@ export const Grimoire: React.FC = () => {
       return (
           <div className="grid grid-cols-3 md:grid-cols-4 gap-4 p-4 overflow-y-auto h-full bg-[#050202]">
               {MONTHS.map((m, monthIndex) => {
-                  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
                   const monthTasks = state.tasks.filter(t => {
                       const d = new Date(t.startTime);
                       return d.getFullYear() === year && d.getMonth() === monthIndex;
                   });
-                  
-                  // Heatmap visual based on priority sum, not just count
                   const prioritySum = monthTasks.reduce((acc, t) => acc + t.priority, 0);
-                  const intensity = Math.min(1, prioritySum / 30); // Cap at 30 priority points
-
-                  const bgStyle = {
-                      backgroundColor: `rgba(127, 29, 29, ${intensity * 0.5})`
-                  };
+                  const intensity = Math.min(1, prioritySum / 30);
+                  const bgStyle = { backgroundColor: `rgba(127, 29, 29, ${intensity * 0.5})` };
 
                   return (
-                      <div 
-                        key={m} 
-                        onClick={() => { setCurrentDate(new Date(year, monthIndex, 1)); setViewMode('MONTH'); }} 
-                        className="border border-[#292524] bg-[#0c0a09] p-3 hover:border-yellow-700 cursor-pointer flex flex-col h-32 relative overflow-hidden group transition-all"
-                        style={bgStyle}
-                      >
+                      <div key={m} onClick={() => { setCurrentDate(new Date(year, monthIndex, 1)); setViewMode('MONTH'); }} className="border border-[#292524] bg-[#0c0a09] p-3 hover:border-yellow-700 cursor-pointer flex flex-col h-32 relative overflow-hidden group transition-all" style={bgStyle}>
                           <div className="text-sm font-bold text-stone-400 font-serif uppercase z-10">{m}</div>
                           <div className="text-[10px] text-stone-600 z-10">{monthTasks.length} Enemies</div>
-                          
                           <div className="absolute inset-0 flex flex-wrap content-end p-1 gap-0.5 opacity-30">
-                              {monthTasks.map(t => (
-                                  <div key={t.id} className={`w-2 h-2 rounded-full ${t.failed ? 'bg-red-500' : t.completed ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                              ))}
+                              {monthTasks.map(t => <div key={t.id} className={`w-2 h-2 rounded-full ${t.failed ? 'bg-red-500' : t.completed ? 'bg-green-500' : 'bg-yellow-500'}`}></div>)}
                           </div>
                       </div>
                   )
@@ -517,7 +500,7 @@ export const Grimoire: React.FC = () => {
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#151210] border-b border-[#292524] p-3 text-stone-200 font-serif text-lg outline-none" placeholder="Enemy Name..." />
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full bg-[#151210] border border-[#292524] p-3 text-stone-400 text-xs min-h-[80px]" placeholder="Description..." />
                 
-                {/* HIERARCHY SELECTOR (RESTORED) */}
+                {/* HIERARCHY SELECTOR */}
                 <div className="border border-[#292524] p-3 bg-[#0a0a0a]">
                     <label className="text-[10px] text-stone-500 uppercase font-bold flex items-center gap-2 mb-2"><LinkIcon size={10} /> Bind to Overlord (Parent Task)</label>
                     <select 
@@ -527,7 +510,7 @@ export const Grimoire: React.FC = () => {
                     >
                         <option value="">-- Independent (No Parent) --</option>
                         {state.tasks
-                            .filter(t => t.id !== editingTaskId && !t.parentId) // Prevent circular or double nesting for simplicity
+                            .filter(t => t.id !== editingTaskId) 
                             .map(t => (
                                 <option key={t.id} value={t.id}>{t.title}</option>
                             ))
@@ -568,22 +551,6 @@ export const Grimoire: React.FC = () => {
       )
   };
 
-  const handleNav = (dir: -1 | 1) => {
-        const newDate = new Date(currentDate);
-        if (viewMode === 'DAY') newDate.setDate(newDate.getDate() + dir);
-        if (viewMode === 'WEEK') newDate.setDate(newDate.getDate() + (dir * 7));
-        if (viewMode === 'MONTH') newDate.setMonth(newDate.getMonth() + dir);
-        if (viewMode === 'YEAR') newDate.setFullYear(newDate.getFullYear() + dir);
-        setCurrentDate(newDate);
-  };
-
-  const getHeaderTitle = () => {
-      if (viewMode === 'DAY') return `${DAYS[currentDate.getDay()]}, ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]}`;
-      if (viewMode === 'WEEK') return `Week of ${MONTHS[currentDate.getMonth()]} ${currentDate.getDate()}`;
-      if (viewMode === 'MONTH') return `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
-      return `${currentDate.getFullYear()}`;
-  };
-
   return (
     <div 
         className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md md:p-4 pointer-events-auto"
@@ -604,7 +571,6 @@ export const Grimoire: React.FC = () => {
                 </div>
                 
                 <div className="flex gap-4 items-center">
-                    {/* TOGGLE FANTASY/REALITY BUTTON */}
                     <button 
                         onClick={() => setShowFantasy(!showFantasy)} 
                         className="text-stone-500 hover:text-yellow-500 transition-colors"

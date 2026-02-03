@@ -1,12 +1,13 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Html, Float, Sparkles, ContactShadows, Billboard } from '@react-three/drei';
 import { useGame } from '../../context/GameContext';
-import { X, ExternalLink, RefreshCcw, SignalHigh, Instagram, Youtube, Image as ImageIcon, Globe } from 'lucide-react';
+import { X, ExternalLink, RefreshCcw, SignalHigh, Instagram, Youtube, Image as ImageIcon, Globe, Loader2 } from 'lucide-react';
 import { VisionContent } from '../../utils/generators';
 
 export const VisionMirror: React.FC = () => {
     const { state, closeVision, rerollVision, toggleSettings } = useGame();
+    const [loading, setLoading] = useState(false);
     
     let content: VisionContent | null = null;
 
@@ -17,7 +18,6 @@ export const VisionMirror: React.FC = () => {
             } else if (state.activeVisionVideo.startsWith("{")) {
                 content = JSON.parse(state.activeVisionVideo);
             } else {
-                // Legacy support
                 content = { type: 'VIDEO', embedUrl: state.activeVisionVideo, originalUrl: state.activeVisionVideo, platform: 'YOUTUBE' };
             }
         }
@@ -27,25 +27,46 @@ export const VisionMirror: React.FC = () => {
 
     const isVisible = state.activeMapEvent === 'VISION_RITUAL';
 
+    const handleReroll = () => {
+        setLoading(true);
+        rerollVision();
+        // Fake delay for effect
+        setTimeout(() => setLoading(false), 800);
+    }
+
+    // Effect to stop loading when content changes
+    useEffect(() => {
+        setLoading(false);
+    }, [state.activeVisionVideo]);
+
     if (!isVisible) return null;
 
     // --- RENDER CONTENT BASED ON TYPE ---
     const renderContent = () => {
+        if (loading) {
+            return (
+                <div className="w-full h-full bg-black flex flex-col items-center justify-center relative overflow-hidden">
+                    {/* Static Noise CSS */}
+                    <div className="absolute inset-0 opacity-20 bg-[url('https://media.giphy.com/media/oEI9uBYSzLpBK/giphy.gif')] bg-cover pointer-events-none"></div>
+                    <Loader2 size={48} className="text-purple-500 animate-spin relative z-10" />
+                    <div className="text-purple-400 font-mono text-xs mt-4 tracking-widest relative z-10">TUNING VOID FREQUENCY...</div>
+                </div>
+            )
+        }
+
         if (!content) {
             return (
                  <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[#0a0a0a] relative">
                     <SignalHigh size={64} className="text-stone-700 mb-4 animate-pulse" />
                     <h2 className="text-xl text-stone-500 font-serif font-bold tracking-widest mb-2">NO SIGNAL</h2>
                     <p className="text-stone-600 text-xs font-mono mb-6">The Void could not retrieve your visions.</p>
-                    <button onClick={() => { closeVision(); toggleSettings(); }} className="px-4 py-2 border border-stone-600 text-stone-400 text-xs hover:bg-stone-800 transition-colors z-10 cursor-pointer">
+                    <button onClick={() => { closeVision(); toggleSettings(); }} className="px-4 py-2 border border-stone-600 text-stone-400 text-xs hover:bg-stone-800 transition-colors z-10 cursor-pointer pointer-events-auto">
                         CHECK SETTINGS
                     </button>
                 </div>
             );
         }
 
-        // VIDEO (YouTube Embeds work fine)
-        // Strictly only render iframe for explicit VIDEO type
         if (content.type === 'VIDEO') {
             return (
                 <iframe 
@@ -58,8 +79,6 @@ export const VisionMirror: React.FC = () => {
             );
         }
 
-        // DIRECT IMAGE
-        // This supports Pinterest Image Links (if ending in .jpg/.png), Discord images, etc.
         if (content.type === 'IMAGE') {
             return (
                 <div className="w-full h-full bg-black flex flex-col items-center justify-center relative overflow-hidden">
@@ -68,7 +87,6 @@ export const VisionMirror: React.FC = () => {
                         alt="Vision" 
                         className="max-w-full max-h-full object-contain z-10" 
                     />
-                    {/* Blurred background for aesthetic */}
                     <div 
                         className="absolute inset-0 bg-cover bg-center blur-xl opacity-30 z-0"
                         style={{ backgroundImage: `url(${content.embedUrl})` }}
@@ -77,8 +95,6 @@ export const VisionMirror: React.FC = () => {
             )
         }
 
-        // SOCIAL PORTAL CARD (Default Fallback)
-        // Used for Instagram Posts, Pinterest BOARDS/PINS (webpages), TikTok, or ANY unknown link
         const isInsta = content.platform === 'INSTAGRAM';
         const isPin = content.platform === 'PINTEREST';
         const isTikTok = content.platform === 'TIKTOK';
@@ -95,7 +111,6 @@ export const VisionMirror: React.FC = () => {
             <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] relative p-6">
                 <div className="absolute inset-0 bg-gradient-to-b from-black via-[#1a1025] to-black pointer-events-none"></div>
                 
-                {/* Icon */}
                 <div className={`mb-6 p-4 rounded-full border-2 ${cardBorder} ${cardBg} shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10`}>
                     {isInsta ? <Instagram size={48} className="text-pink-500" /> : 
                         isPin ? <div className="text-red-500 font-bold text-4xl font-serif">P</div> : 
@@ -136,7 +151,13 @@ export const VisionMirror: React.FC = () => {
                 <pointLight position={[0, 0, 2]} intensity={2} color="#a855f7" distance={10} />
                 <Float speed={2} rotationIntensity={0.1} floatIntensity={0.5}>
                     <group>
-                        {/* Frame */}
+                        {/* Frame Glow */}
+                        <mesh position={[0, 0, -0.2]}>
+                            <planeGeometry args={[4.5, 7]} />
+                            <meshBasicMaterial color="#a855f7" transparent opacity={0.1} />
+                        </mesh>
+
+                        {/* Frame Structure */}
                         <mesh position={[0, 0, -0.1]}>
                             <boxGeometry args={[3.8, 6.4, 0.2]} />
                             <meshStandardMaterial color="#0f0518" roughness={0.2} metalness={0.8} />
@@ -164,11 +185,11 @@ export const VisionMirror: React.FC = () => {
                                 {/* Controls */}
                                 <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-auto">
                                     <button 
-                                        onClick={rerollVision} 
+                                        onClick={handleReroll} 
                                         className="bg-black/80 text-yellow-500 border border-yellow-600 p-3 rounded-full hover:bg-yellow-900/50 hover:scale-110 transition-all shadow-lg cursor-pointer" 
                                         title="Next Vision"
                                     >
-                                        <RefreshCcw size={24} />
+                                        <RefreshCcw size={24} className={loading ? 'animate-spin' : ''} />
                                     </button>
                                 </div>
 

@@ -183,12 +183,17 @@ const SpellBar: React.FC = () => {
 
 export const HUD: React.FC = () => {
   // @ts-ignore
-  const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, toggleDiplomacy } = useGame();
+  const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, rerollVision, triggerEvent, toggleDiplomacy } = useGame();
   const [cinematic, setCinematic] = useState(false);
   
   const isConnected = state.syncConfig?.isConnected;
   const hpPercent = (state.heroHp / state.maxHeroHp) * 100;
   const basePercent = (state.baseHp / state.maxBaseHp) * 100;
+
+  const handleSummonMirror = () => {
+      rerollVision(); // Pre-fetch content
+      triggerEvent('VISION_RITUAL');
+  };
 
   if (cinematic) {
       return (
@@ -250,6 +255,8 @@ export const HUD: React.FC = () => {
         
         {/* TOOLBAR */}
         <div className="flex gap-1 md:gap-2">
+             <button onClick={handleSummonMirror} className="bg-purple-950/50 border border-purple-800 text-purple-300 p-2 md:p-3 hover:bg-purple-900 hover:text-white" title="Summon Vision Mirror (Focus)"><Eye size={16} /></button>
+             <div className="w-px bg-stone-800 mx-1"></div>
              <button onClick={() => setCinematic(true)} className="bg-stone-950 border border-stone-800 text-stone-500 p-2 md:p-3 hover:bg-stone-900 hover:text-white" title="Cinematic Mode"><Maximize2 size={16} /></button>
              <button onClick={toggleSettings} className={`border p-2 md:p-3 hover:bg-stone-800 ${isConnected ? 'bg-stone-900 border-stone-600 text-stone-400' : 'bg-red-950/30 border-red-900 text-red-500 animate-pulse'}`} title="Settings"><Settings size={16} /></button>
              <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Audit"><PieChart size={16} /></button>

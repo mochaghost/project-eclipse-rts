@@ -186,21 +186,43 @@ const PortalRift: React.FC<{ position: Vector3 }> = ({ position }) => {
     )
 }
 
-const HierarchyLines = React.memo(({ enemies }: { enemies: EnemyEntity[] }) => {
+const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[], tasks: Task[] }) => {
     const links = useMemo(() => {
         const lines: any[] = [];
-        const children = enemies.filter(e => e.subtaskId);
-        
-        children.forEach(child => {
-            const parent = enemies.find(e => e.taskId === child.taskId && !e.subtaskId);
-            if (parent) {
-                const start = new THREE.Vector3(parent.position.x, 2, parent.position.z);
-                const end = new THREE.Vector3(child.position.x, 1, child.position.z);
-                lines.push({ start, end, key: child.id });
+
+        // 1. Minion to Commander Links (Subtasks)
+        const minions = enemies.filter(e => e.subtaskId);
+        minions.forEach(minion => {
+            const commander = enemies.find(e => e.taskId === minion.taskId && !e.subtaskId);
+            if (commander) {
+                lines.push({
+                    start: new THREE.Vector3(commander.position.x, 2, commander.position.z),
+                    end: new THREE.Vector3(minion.position.x, 1, minion.position.z),
+                    key: `minion-${minion.id}`,
+                    color: '#4c1d95' // Purple
+                });
             }
         });
+
+        // 2. Commander to Overlord Links (Task Hierarchy)
+        const commanders = enemies.filter(e => !e.subtaskId);
+        commanders.forEach(childCmdr => {
+            const task = tasks.find(t => t.id === childCmdr.taskId);
+            if (task && task.parentId) {
+                const parentCmdr = enemies.find(e => e.taskId === task.parentId && !e.subtaskId);
+                if (parentCmdr) {
+                    lines.push({
+                        start: new THREE.Vector3(parentCmdr.position.x, 4, parentCmdr.position.z), // Higher up
+                        end: new THREE.Vector3(childCmdr.position.x, 2, childCmdr.position.z),
+                        key: `overlord-${childCmdr.id}`,
+                        color: '#b91c1c' // Red for Hierarchy
+                    });
+                }
+            }
+        });
+
         return lines;
-    }, [enemies]);
+    }, [enemies, tasks]);
 
     return (
         <group>
@@ -208,11 +230,11 @@ const HierarchyLines = React.memo(({ enemies }: { enemies: EnemyEntity[] }) => {
                 <Line 
                     key={l.key} 
                     points={[l.start, l.end]} 
-                    color="#4c1d95" 
+                    color={l.color} 
                     lineWidth={1} 
                     dashed 
                     dashScale={2} 
-                    opacity={0.3} 
+                    opacity={0.4} 
                     transparent 
                 />
             ))}
@@ -295,7 +317,7 @@ const GameWorld = React.memo(({
                 );
             })}
             
-            <HierarchyLines enemies={state.enemies} />
+            <HierarchyLines enemies={state.enemies} tasks={state.tasks} />
 
             {state.population?.map((npc, i) => {
                 const angle = (i * 137.5) * (Math.PI / 180);
@@ -332,6 +354,7 @@ const GameWorld = React.memo(({
     // Only re-render if gameplay-affecting state changes
     return (
         prev.state.enemies === next.state.enemies &&
+        prev.state.tasks === next.state.tasks && // Added check for tasks update
         prev.state.population === next.state.population &&
         prev.state.baseHp === next.state.baseHp &&
         prev.state.weather === next.state.weather &&
