@@ -102,7 +102,8 @@ export const Grimoire: React.FC = () => {
       setTitle(task.title);
       setNotes(task.description || "");
       setPriority(task.priority);
-      setSubtasks(task.subtasks.map(s => ({ title: s.title, startTime: s.startTime, deadline: s.deadline })));
+      // FIX: CRITICAL SAFETY CHECK FOR SUBTASKS
+      setSubtasks((task.subtasks || []).map(s => ({ title: s.title, startTime: s.startTime, deadline: s.deadline })));
       
       const d = new Date(task.startTime);
       setSelectedDate(d);

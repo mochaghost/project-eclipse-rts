@@ -257,6 +257,11 @@ export interface VisionContent {
 
 export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
     if (!rawUrl) return null;
+    
+    // Ignore internal Google Sheet links or non-urls
+    if (rawUrl.includes("google.com") || rawUrl.includes("docs.google")) return null;
+    if (rawUrl.length < 10) return null;
+
     let clean = rawUrl.trim();
     if (clean.startsWith('"') && clean.endsWith('"')) clean = clean.slice(1, -1);
     
@@ -307,7 +312,11 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
         };
 
     } catch (e) { 
-        return { type: 'SOCIAL', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
+        // Fallback for non-standard but valid looking URLs
+        if (clean.startsWith('http')) {
+             return { type: 'SOCIAL', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
+        }
+        return null;
     }
 };
 
@@ -318,26 +327,37 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
     }
 
     let fetchUrl = "";
-    const sheetInput = customSheetId || DEFAULT_SHEET_ID;
-
-    if (sheetInput.includes("/e/2PACX-")) {
-        const parts = sheetInput.split('/pubhtml');
-        const base = parts[0]; 
-        fetchUrl = `${base}/pub?output=csv`;
+    let sheetInput = customSheetId || DEFAULT_SHEET_ID;
+    
+    // Robust detection for Published 2PACX Sheets
+    if (sheetInput.includes("2PACX-")) {
+        // If it's a full URL e.g. .../pubhtml
+        if (sheetInput.includes("http")) {
+             // Strip trailing parts like /pubhtml and append /pub?output=csv
+             const parts = sheetInput.split('/pub');
+             fetchUrl = `${parts[0]}/pub?output=csv`;
+        } else {
+             // It's just the ID starting with 2PACX-
+             fetchUrl = `https://docs.google.com/spreadsheets/d/e/${sheetInput}/pub?output=csv`;
+        }
     } 
+    // Detection for Standard Edit IDs (which use gviz)
     else if (!sheetInput.includes("http") && sheetInput.length > 20) {
         fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetInput}/gviz/tq?tqx=out:csv`;
     } 
+    // Fallback if full URL provided but not 2PACX
     else if (sheetInput.includes("/d/")) {
          const match = sheetInput.match(/\/d\/([a-zA-Z0-9-_]+)/);
          const id = match ? match[1] : sheetInput;
          fetchUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
     }
     else {
+        // Default sheet
         fetchUrl = `https://docs.google.com/spreadsheets/d/${DEFAULT_SHEET_ID}/gviz/tq?tqx=out:csv`;
     }
 
     try {
+        console.log("[Vision] Fetching from:", fetchUrl);
         const response = await fetch(fetchUrl);
         if (response.ok) {
             const text = await response.text();
@@ -353,7 +373,10 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
                 });
             }
 
-            if (validItems.length > 0) return validItems;
+            if (validItems.length > 0) {
+                console.log(`[Vision] Found ${validItems.length} items`);
+                return validItems;
+            }
         } 
     } catch (e) { 
         console.warn("[Vision] Network error", e); 
