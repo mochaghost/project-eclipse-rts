@@ -258,11 +258,13 @@ export interface VisionContent {
 export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
     if (!rawUrl) return null;
     
-    // Ignore internal Google Sheet links or non-urls
-    if (rawUrl.includes("google.com") || rawUrl.includes("docs.google")) return null;
-    if (rawUrl.length < 10) return null;
-
+    // 1. Basic cleanup of the raw string
     let clean = rawUrl.trim();
+    
+    // Decode HTML entities (common in scraped Google Sheet data)
+    clean = clean.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    
+    // Remove wrapping quotes if present
     if (clean.startsWith('"') && clean.endsWith('"')) clean = clean.slice(1, -1);
     
     // Auto-fix missing protocol
@@ -274,10 +276,12 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
         const urlObj = new URL(clean);
         const lowerUrl = clean.toLowerCase();
 
-        if (lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/)) {
+        // 2. IMAGE DETECTION
+        if (lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('pinimg.com')) {
              return { type: 'IMAGE', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
         }
 
+        // 3. YOUTUBE DETECTION
         if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
             let id = '';
             if (urlObj.pathname.includes('/shorts/')) {
@@ -298,9 +302,26 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
             }
         }
 
+        // 4. INSTAGRAM DETECTION (Reels/Posts)
+        // Supported formats: instagram.com/p/ID, instagram.com/reel/ID, instagram.com/tv/ID
+        if (urlObj.hostname.includes('instagram.com')) {
+            // Extract the ID
+            const match = clean.match(/\/(p|reel|tv)\/([a-zA-Z0-9_-]+)/);
+            if (match && match[2]) {
+                const id = match[2];
+                return {
+                    type: 'VIDEO', // Treat as VIDEO to use Iframe
+                    // Append /embed/captioned/ to force embed mode regardless of platform
+                    embedUrl: `https://www.instagram.com/p/${id}/embed/captioned/`, 
+                    originalUrl: clean,
+                    platform: 'INSTAGRAM'
+                };
+            }
+        }
+
+        // 5. OTHER PLATFORMS
         let platform: any = 'OTHER';
-        if (urlObj.hostname.includes('instagram')) platform = 'INSTAGRAM';
-        else if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) platform = 'PINTEREST';
+        if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) platform = 'PINTEREST';
         else if (urlObj.hostname.includes('tiktok')) platform = 'TIKTOK';
         else if (urlObj.hostname.includes('twitter') || urlObj.hostname.includes('x.com')) platform = 'TWITTER';
 
@@ -331,17 +352,16 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
     
     // Robust detection for Published 2PACX Sheets
     if (sheetInput.includes("2PACX-")) {
-        // If it's a full URL e.g. .../pubhtml
         if (sheetInput.includes("http")) {
              // Strip trailing parts like /pubhtml and append /pub?output=csv
              const parts = sheetInput.split('/pub');
              fetchUrl = `${parts[0]}/pub?output=csv`;
         } else {
-             // It's just the ID starting with 2PACX-
+             // It's just the ID
              fetchUrl = `https://docs.google.com/spreadsheets/d/e/${sheetInput}/pub?output=csv`;
         }
     } 
-    // Detection for Standard Edit IDs (which use gviz)
+    // Standard Sheets
     else if (!sheetInput.includes("http") && sheetInput.length > 20) {
         fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetInput}/gviz/tq?tqx=out:csv`;
     } 
@@ -352,7 +372,6 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
          fetchUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
     }
     else {
-        // Default sheet
         fetchUrl = `https://docs.google.com/spreadsheets/d/${DEFAULT_SHEET_ID}/gviz/tq?tqx=out:csv`;
     }
 
@@ -362,14 +381,19 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
         if (response.ok) {
             const text = await response.text();
             
-            const urlRegex = /(https?:\/\/[^\s",]+)/g;
+            // ROBUST EXTRACTION: Look for https:// until we hit a " or , or whitespace or <
+            // This handles CSV quotes, HTML tags, etc.
+            const urlRegex = /(https?:\/\/[^\s",<]+)/g;
             const allMatches = text.match(urlRegex);
             const validItems: VisionContent[] = [];
             
             if (allMatches) {
                 allMatches.forEach(rawUrl => {
                     const result = convertToEmbedUrl(rawUrl);
-                    if (result) validItems.push(result);
+                    // Filter duplicates and nulls
+                    if (result && !validItems.some(v => v.originalUrl === result.originalUrl)) {
+                        validItems.push(result);
+                    }
                 });
             }
 
