@@ -342,7 +342,7 @@ const GameWorld = React.memo(({
             <MapControls makeDefault maxPolarAngle={Math.PI / 2.2} />
 
             {isHighQuality && (
-                <EffectComposer disableNormalPass>
+                <EffectComposer enableNormalPass={false}>
                     <Bloom luminanceThreshold={1.2} mipmapBlur intensity={0.8} radius={0.4} />
                     <Vignette eskil={false} offset={0.1} darkness={0.5} />
                 </EffectComposer>
