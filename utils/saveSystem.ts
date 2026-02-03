@@ -4,7 +4,7 @@ import { generateId } from './generators';
 import { FACTIONS } from '../constants';
 
 const SAVE_KEY = 'PROJECT_ECLIPSE_SAVE_V1';
-const CURRENT_VERSION = 10; // Increment for Templates
+const CURRENT_VERSION = 11; // Increment to force template migration
 
 interface SaveFile {
     version: number;
@@ -135,6 +135,7 @@ export const loadGame = (): GameState => {
             settings: loadedState.settings || DEFAULT_STATE.settings,
             inventory: Array.isArray(loadedState.inventory) ? loadedState.inventory : [],
             visionQueue: Array.isArray(loadedState.visionQueue) ? loadedState.visionQueue : [],
+            // CRITICAL FIX: Ensure templates is an array if missing
             templates: Array.isArray(loadedState.templates) ? loadedState.templates : []
         };
 
@@ -175,7 +176,11 @@ const performMigration = (state: any, fromVersion: number): GameState => {
     }
     if (!migrated.inventory) migrated.inventory = [];
     if (!migrated.visionQueue) migrated.visionQueue = [];
-    if (!migrated.templates) migrated.templates = [];
+    
+    // V11 Fix: Initialize templates if they don't exist
+    if (!migrated.templates || !Array.isArray(migrated.templates)) {
+        migrated.templates = [];
+    }
     
     return migrated;
 };

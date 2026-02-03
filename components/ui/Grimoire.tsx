@@ -265,11 +265,18 @@ export const Grimoire: React.FC = () => {
       if (duration <= 0) duration = 60;
 
       try {
+          // CLEAN SUBTASKS: Remove IDs and completion status when saving as template
+          const cleanSubtasks = subtasks.map(s => ({
+              title: s.title,
+              startTime: undefined,
+              deadline: undefined
+          }));
+
           saveTemplate({
               title,
               description: notes,
               priority,
-              subtasks,
+              subtasks: cleanSubtasks,
               estimatedDuration: duration
           });
           setSaveStatus("Saved to Archive");
@@ -284,8 +291,12 @@ export const Grimoire: React.FC = () => {
       setNotes(t.description || "");
       setPriority(t.priority || TaskPriority.LOW);
       
-      // DEEP COPY subtasks to prevent mutation of the saved template
-      setSubtasks(t.subtasks ? t.subtasks.map(s => ({...s, completed: false})) : []);
+      // DEEP COPY & RESET: Load subtasks as fresh items (no IDs, no completion)
+      setSubtasks(t.subtasks ? t.subtasks.map(s => ({
+          title: s.title,
+          completed: false,
+          // We don't copy start/deadlines from templates as they are relative
+      })) : []);
       
       // Calculate new end time based on template duration
       const [sh, sm] = startTimeStr.split(':').map(Number);
@@ -621,6 +632,10 @@ export const Grimoire: React.FC = () => {
                         {saveStatus && !showTemplates && (
                             <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
                         )}
+                        {/* Dot indicator if templates exist */}
+                        {state.templates?.length > 0 && !showTemplates && (
+                            <span className="absolute top-0 right-0 w-2 h-2 bg-purple-500 rounded-full border border-black"></span>
+                        )}
                     </button>
                 </div>
             </div>
@@ -709,7 +724,8 @@ export const Grimoire: React.FC = () => {
 
                     <div className="relative">
                         <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#151210] border-b border-[#292524] p-3 text-stone-200 font-serif text-lg outline-none pr-8" placeholder="Enemy Name..." />
-                        {!isEditing && title.trim().length > 0 && (
+                        {/* ALLOW SAVING EVEN WHEN EDITING - REMOVED !isEditing check */}
+                        {title.trim().length > 0 && (
                             <button type="button" onClick={handleSaveAsTemplate} className="absolute right-2 top-3 text-stone-500 hover:text-purple-400 hover:scale-110 transition-transform" title="Inscribe as Ritual Scroll (Save Template)">
                                 <Save size={16} />
                             </button>
