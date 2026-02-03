@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft, TaskTemplate } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star, Bookmark, Book, RotateCcw, Check, Sparkles, MousePointerClick } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star, Bookmark, Book, RotateCcw, Check, Sparkles, MousePointerClick, Square, Swords } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -10,9 +10,12 @@ const HOURS = Array.from({length: 24}, (_, i) => i);
 
 type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
+// Extended draft type for local state to handle completion toggling
+type LocalSubtaskState = SubtaskDraft & { id?: string; completed?: boolean };
+
 export const Grimoire: React.FC = () => {
   // @ts-ignore
-  const { state, toggleGrimoire, addTask, editTask, moveTask, deleteTask, completeRitual, resolveFailedTask, saveTemplate, deleteTemplate } = useGame();
+  const { state, toggleGrimoire, addTask, editTask, moveTask, deleteTask, completeTask, completeSubtask, resolveFailedTask, saveTemplate, deleteTemplate } = useGame();
   
   // Navigation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -35,7 +38,10 @@ export const Grimoire: React.FC = () => {
   const [startTimeStr, setStartTimeStr] = useState("09:00");
   const [endTimeStr, setEndTimeStr] = useState("10:00");
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.LOW);
-  const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([]);
+  
+  // Updated state type to handle IDs and Completion
+  const [subtasks, setSubtasks] = useState<LocalSubtaskState[]>([]);
+  
   const [newSubtask, setNewSubtask] = useState('');
   const [parentId, setParentId] = useState<string>(''); 
   const [saveStatus, setSaveStatus] = useState<string>(''); // For feedback
@@ -130,8 +136,15 @@ export const Grimoire: React.FC = () => {
       setTitle(task.title);
       setNotes(task.description || "");
       setPriority(task.priority);
-      // FIX: CRITICAL SAFETY CHECK FOR SUBTASKS
-      setSubtasks((task.subtasks || []).map(s => ({ title: s.title, startTime: s.startTime, deadline: s.deadline })));
+      
+      // FIX: Preserve ID and Completed status when loading into form
+      setSubtasks((task.subtasks || []).map(s => ({ 
+          id: s.id, 
+          title: s.title, 
+          completed: s.completed,
+          startTime: s.startTime, 
+          deadline: s.deadline 
+      })));
       
       const d = new Date(task.startTime);
       setSelectedDate(d);
@@ -151,8 +164,35 @@ export const Grimoire: React.FC = () => {
   const handleAddSubtask = (e: any) => {
       e.preventDefault();
       if (newSubtask.trim()) {
-          setSubtasks([...subtasks, { title: newSubtask }]);
+          setSubtasks([...subtasks, { title: newSubtask, completed: false }]);
           setNewSubtask("");
+      }
+  };
+
+  const handleToggleSubtask = (index: number) => {
+      const s = subtasks[index];
+      // If we are editing a real task and this subtask has an ID, verify it in the backend
+      if (editingTaskId && s.id && !s.completed) {
+          completeSubtask(editingTaskId, s.id);
+          // Optimistically update UI
+          const newSubs = [...subtasks];
+          newSubs[index].completed = true;
+          setSubtasks(newSubs);
+      } else {
+          // If creating new task, just toggle locally
+          const newSubs = [...subtasks];
+          newSubs[index].completed = !newSubs[index].completed;
+          setSubtasks(newSubs);
+      }
+  };
+
+  const handleCompleteTask = () => {
+      if (editingTaskId) {
+          completeTask(editingTaskId);
+          setEditingTaskId(null);
+          setTitle("");
+          setNotes("");
+          setSubtasks([]);
       }
   };
 
@@ -245,7 +285,7 @@ export const Grimoire: React.FC = () => {
       setPriority(t.priority || TaskPriority.LOW);
       
       // DEEP COPY subtasks to prevent mutation of the saved template
-      setSubtasks(t.subtasks ? t.subtasks.map(s => ({...s})) : []);
+      setSubtasks(t.subtasks ? t.subtasks.map(s => ({...s, completed: false})) : []);
       
       // Calculate new end time based on template duration
       const [sh, sm] = startTimeStr.split(':').map(Number);
@@ -708,10 +748,19 @@ export const Grimoire: React.FC = () => {
                         </div>
                         <div className="space-y-2 mb-2">
                             {subtasks.map((st, i) => (
-                                <div key={i} className="flex items-center gap-2 text-xs text-stone-300 bg-[#151210] p-1 border border-stone-800">
-                                    <span className="text-stone-600">{i+1}.</span>
-                                    <span className="flex-1 truncate">{st.title}</span>
-                                    <button type="button" onClick={() => setSubtasks(subtasks.filter((_, idx) => idx !== i))} className="text-red-900 hover:text-red-500"><X size={10}/></button>
+                                <div key={i} className={`flex items-center gap-2 text-xs p-1 border ${st.completed ? 'bg-green-950/20 border-green-900 text-green-700' : 'bg-[#151210] border-stone-800 text-stone-300'}`}>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleToggleSubtask(i)}
+                                        className={`shrink-0 ${st.completed ? 'text-green-500' : 'text-stone-600 hover:text-stone-400'}`}
+                                        title={st.completed ? "Minion Defeated" : "Mark as Defeated"}
+                                    >
+                                        {st.completed ? <CheckSquare size={14} /> : <Square size={14} />}
+                                    </button>
+                                    
+                                    <span className={`flex-1 truncate ${st.completed ? 'line-through opacity-50' : ''}`}>{st.title}</span>
+                                    
+                                    <button type="button" onClick={() => setSubtasks(subtasks.filter((_, idx) => idx !== i))} className="text-stone-700 hover:text-red-500"><X size={10}/></button>
                                 </div>
                             ))}
                         </div>
@@ -734,7 +783,20 @@ export const Grimoire: React.FC = () => {
                     <button type="button" onClick={handleClearForm} className="bg-stone-900 border border-stone-700 text-stone-500 p-4 hover:text-white" title="Reset Form">
                         <RotateCcw size={20} />
                     </button>
-                    <button onClick={handleSubmit} className="flex-1 bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-4 font-serif font-bold tracking-widest uppercase hover:bg-[#5c3a22] transition-colors">{isEditing ? 'REWRITE FATE' : 'MANIFEST ENEMY'}</button>
+                    {isEditing ? (
+                        <div className="flex-1 flex gap-2">
+                            <button onClick={handleSubmit} className="flex-1 bg-stone-800 text-stone-300 border border-stone-600 py-4 font-serif font-bold tracking-widest uppercase hover:bg-stone-700 transition-colors">
+                                UPDATE
+                            </button>
+                            <button onClick={handleCompleteTask} className="flex-[1.5] bg-green-950 text-green-300 border border-green-800 py-4 font-serif font-bold tracking-widest uppercase hover:bg-green-900 transition-colors flex items-center justify-center gap-2">
+                                <Swords size={16} /> VANQUISH
+                            </button>
+                        </div>
+                    ) : (
+                        <button onClick={handleSubmit} className="flex-1 bg-[#3f2818] text-[#d6d3d1] border border-[#5c3a22] py-4 font-serif font-bold tracking-widest uppercase hover:bg-[#5c3a22] transition-colors">
+                            MANIFEST ENEMY
+                        </button>
+                    )}
                 </div>
             )}
           </>
