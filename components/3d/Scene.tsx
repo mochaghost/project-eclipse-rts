@@ -15,7 +15,8 @@ import * as THREE from 'three';
 // Improved Noise for clumping
 const noise = (x: number, z: number) => Math.sin(x * 0.05) * Math.cos(z * 0.05) + Math.sin(x * 0.1 + z * 0.1) * 0.5;
 
-const VegetationSystem = () => {
+// MEMOIZED COMPONENT: Only re-renders if dependencies change, ignoring other state updates
+const VegetationSystem = React.memo(() => {
     // OPTIMIZATION: Reduced from 10,000 to 3,500 to prevent crashing on iPhone/Low VRAM
     // Scaled up slightly (0.8 -> 1.2) to maintain density visually
     const grass = useMemo(() => {
@@ -68,9 +69,10 @@ const VegetationSystem = () => {
             </Instances>
         </group>
     );
-};
+});
 
-const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, groundColor: string }) => {
+// MEMOIZED MAP
+const ProceduralMap = React.memo(({ level, era, groundColor }: { level: number, era: Era, groundColor: string }) => {
     const viewRadius = 60 + (level * 2);
     
     // Decoration Distributions
@@ -129,9 +131,10 @@ const ProceduralMap = ({ level, era, groundColor }: { level: number, era: Era, g
             })}
         </group>
     )
-}
+});
 
-const WeatherSystem = ({ type }: { type: WeatherType }) => {
+// MEMOIZED WEATHER
+const WeatherSystem = React.memo(({ type }: { type: WeatherType }) => {
     if (type === 'CLEAR') return (
         <group>
              <Sparkles count={300} scale={60} size={2} speed={0.2} opacity={0.3} color="#fff" />
@@ -165,7 +168,7 @@ const WeatherSystem = ({ type }: { type: WeatherType }) => {
     }
 
     return null;
-}
+});
 
 const GlobalSceneController = () => {
     const { state } = useGame();
@@ -258,6 +261,7 @@ const GlobalSceneController = () => {
             {/* Rim Light for drama */}
             <spotLight position={[-30, 10, -30]} angle={0.5} intensity={2} color="#c084fc" />
 
+            {/* MEMOIZED MAP RENDER - Crucial for performance */}
             <ProceduralMap level={state.playerLevel} era={state.era} groundColor={groundColor} />
         </>
     )

@@ -74,12 +74,17 @@ const Explosion: React.FC<{ position: { x: number, y: number, z: number } }> = (
 
 export const VisualEffectsRenderer: React.FC = () => {
     const { state } = useGame();
+    
+    // SAFETY LIMIT: Only render the last 10 text effects to prevent DOM overflow on mobile
+    const textEffects = state.effects.filter(e => e.type.startsWith('TEXT')).slice(-10);
+    const explosions = state.effects.filter(e => e.type === 'EXPLOSION').slice(-5);
+
     return (
         <>
-            {state.effects.filter(e => e.type.startsWith('TEXT')).map(effect => (
+            {textEffects.map(effect => (
                 <FloatingText key={effect.id} effect={effect} />
             ))}
-            {state.effects.filter(e => e.type === 'EXPLOSION').map(effect => (
+            {explosions.map(effect => (
                 <Explosion key={effect.id} position={effect.position} />
             ))}
         </>

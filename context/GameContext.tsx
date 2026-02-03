@@ -39,8 +39,14 @@ export const useGame = () => {
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, setState] = useState<GameState>(loadGame());
+    const stateRef = useRef(state); // Ref to hold latest state for interval closures
     const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     
+    // Update Ref whenever state changes
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
+
     // Init Audio on first user interaction if possible, or lazily
     const ensureAudio = () => {
         initAudio();
@@ -57,13 +63,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, 120000); // 2 mins
     };
 
-    // Auto-save periodically
+    // OPTIMIZED AUTO-SAVE: Does NOT depend on [state], preventing infinite re-renders
     useEffect(() => {
         const t = setInterval(() => {
-            saveGame(state);
+            saveGame(stateRef.current);
         }, 30000);
         return () => clearInterval(t);
-    }, [state]);
+    }, []);
 
     // --- RECOLECCIÓN DE BASURA (Versión Segura) ---
     // Limpia efectos visuales para salvar GPU, pero es conservador con los datos.
@@ -73,7 +79,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const now = Date.now();
                 
                 // 1. Limpieza Visual (Solo efectos expirados)
-                const activeEffects = prev.effects.filter(e => now - e.timestamp < 4000);
+                // Reducimos el tiempo de vida a 3s para liberar DOM más rápido
+                const activeEffects = prev.effects.filter(e => now - e.timestamp < 3000);
                 
                 // 2. Limite Ejército (Visual) - Solo si hay demasiados
                 let currentMinions = prev.minions || [];
