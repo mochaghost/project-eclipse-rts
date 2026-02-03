@@ -190,6 +190,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetIdleTimer();
         playSfx('UI_CLICK');
 
+        // --- CALCULATE FORESIGHT BONUS ---
+        const now = new Date();
+        const start = new Date(startTime);
+        
+        // Zero out hours to compare dates only
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const taskDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        
+        const diffTime = taskDay.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        let foresightBonus = 0; // Default none
+        if (diffDays >= 1 && diffDays < 3) foresightBonus = 0.1; // +10% for Next Day planning
+        else if (diffDays >= 3 && diffDays < 7) foresightBonus = 0.25; // +25% for Week planning
+        else if (diffDays >= 7) foresightBonus = 0.5; // +50% for Long term planning
+
         setState(prev => {
             const taskId = generateId();
             
@@ -215,7 +231,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 subtasks: newSubtasks,
                 parentId,
                 crisisTriggered: false,
-                hubris: false
+                hubris: false,
+                foresightBonus 
             };
 
             const graveyard = prev.nemesisGraveyard || [];
@@ -255,7 +272,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     type: 'RITUAL', 
                     timestamp: Date.now(), 
                     message: `Oath Sworn: ${title}`, 
-                    details: `A Commander and ${subEnemies.length} minions manifest.` 
+                    details: foresightBonus > 0 ? `Strategic Planning Bonus Active (+${foresightBonus*100}%)` : `A Commander and ${subEnemies.length} minions manifest.` 
                 } as HistoryLog, ...prev.history].slice(0, 500),
                 isGrimoireOpen: false
             };
@@ -342,23 +359,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const task = prev.tasks.find(t => t.id === taskId);
             if (!task) return prev;
 
-            const leadTime = task.startTime - task.createdAt;
-            let foresightMultiplier = 1.0;
+            // Apply Foresight Bonus
+            const foresightMultiplier = 1.0 + (task.foresightBonus || 0);
             let foresightLabel = "";
             let foresightBonusLog = "";
 
-            if (leadTime > 3 * 24 * 60 * 60 * 1000) {
-                foresightMultiplier = 2.0;
+            if (foresightMultiplier > 1.4) {
                 foresightLabel = "PROPHETIC";
-                foresightBonusLog = "Ancient prophecy fulfilled (2x Reward).";
-            } else if (leadTime > 12 * 60 * 60 * 1000) {
-                foresightMultiplier = 1.5;
+                foresightBonusLog = `Ancient Prophecy Fulfilled (+${(task.foresightBonus||0)*100}%)`;
+            } else if (foresightMultiplier > 1.2) {
                 foresightLabel = "STRATEGIC";
-                foresightBonusLog = "Prepared in advance (1.5x Reward).";
-            } else if (leadTime > 4 * 60 * 60 * 1000) {
-                foresightMultiplier = 1.2;
+                foresightBonusLog = `Strategic Execution (+${(task.foresightBonus||0)*100}%)`;
+            } else if (foresightMultiplier > 1.0) {
                 foresightLabel = "TACTICAL";
-                foresightBonusLog = "Brief preparation (1.2x Reward).";
+                foresightBonusLog = `Tactical Advantage (+${(task.foresightBonus||0)*100}%)`;
             }
 
             const xpGain = Math.floor((100 * task.priority) * foresightMultiplier);
@@ -381,7 +395,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             effects.push({ id: generateId(), type: 'TEXT_XP', position: { ...pos, y: 3 }, text: `+${xpGain} XP`, timestamp: Date.now() });
 
             let newEquipment = { ...prev.heroEquipment };
-            const loot = generateLoot(nextLevel);
+            // Increased loot chance if foresight is high
+            const lootChanceBonus = (task.foresightBonus || 0) * 10; // +5 levels worth of luck for month planning
+            const loot = generateLoot(nextLevel + lootChanceBonus);
+            
             if (loot) {
                 if (loot.type === 'WEAPON') newEquipment.weapon = loot.name;
                 if (loot.type === 'ARMOR') newEquipment.armor = loot.name;

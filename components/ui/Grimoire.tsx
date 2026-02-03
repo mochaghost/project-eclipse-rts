@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -185,7 +185,22 @@ export const Grimoire: React.FC = () => {
         setTitle(`Redemption: ${oldTitle}`);
   };
 
+  const calculatePotentialBonus = () => {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const selectedDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+      
+      const diffTime = selectedDay.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays >= 7) return { label: 'PROPHETIC', amount: 50 };
+      if (diffDays >= 3) return { label: 'STRATEGIC', amount: 25 };
+      if (diffDays >= 1) return { label: 'TACTICAL', amount: 10 };
+      return null;
+  };
+
   const selectedEnemy = editingTaskId ? state.enemies.find(e => e.taskId === editingTaskId) : null;
+  const foresight = calculatePotentialBonus();
 
   if (!state.isGrimoireOpen) return null;
 
@@ -193,7 +208,6 @@ export const Grimoire: React.FC = () => {
   const TaskCard = ({ task, style, onClick, onDragStart }: { task: Task, style?: React.CSSProperties, onClick: (e:any)=>void, onDragStart: (e:any)=>void }) => {
       const enemy = state.enemies.find(e => e.taskId === task.id && !e.subtaskId);
       const displayName = showFantasy ? (enemy ? enemy.title : task.title) : task.title;
-      const lead = task.startTime - task.createdAt;
       
       let borderClass = "border-stone-700";
       let bgClass = "bg-stone-800/90 text-stone-200";
@@ -202,8 +216,9 @@ export const Grimoire: React.FC = () => {
       else if (task.priority === TaskPriority.MEDIUM) { borderClass = "border-yellow-600"; bgClass = "bg-yellow-950/90 text-yellow-100"; }
 
       let icon = null;
-      if (lead > 3 * 24 * 60 * 60 * 1000) { icon = <Crown size={10} className="text-yellow-400" />; } 
-      else if (lead > 12 * 60 * 60 * 1000) { icon = <Telescope size={10} className="text-purple-400" />; } 
+      if (task.foresightBonus && task.foresightBonus >= 0.5) { icon = <Crown size={10} className="text-yellow-400" />; } 
+      else if (task.foresightBonus && task.foresightBonus >= 0.25) { icon = <Telescope size={10} className="text-purple-400" />; }
+      else if (task.foresightBonus && task.foresightBonus >= 0.1) { icon = <Star size={10} className="text-blue-400" />; }
       
       if (task.completed) { bgClass = "bg-green-950/50 text-green-300 opacity-60 border-green-800"; }
       if (task.failed) { bgClass = "bg-red-950/90 text-red-100 border-red-500 animate-pulse-slow"; }
@@ -496,6 +511,17 @@ export const Grimoire: React.FC = () => {
                         <span className="text-stone-600">-</span>
                         <input type="time" value={endTimeStr} onChange={e => setEndTimeStr(e.target.value)} className="bg-black border border-yellow-900/30 text-yellow-500 font-mono text-sm p-1 w-20 text-center" />
                     </div>
+                    
+                    {/* FORESIGHT INDICATOR */}
+                    {!isEditing && foresight && (
+                        <div className="mt-3 bg-purple-900/20 border border-purple-500/50 p-2 text-center animate-pulse">
+                            <div className="text-[10px] text-purple-300 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                                {foresight.label === 'PROPHETIC' ? <Crown size={12}/> : <Telescope size={12}/>}
+                                {foresight.label} BONUS ACTIVE
+                            </div>
+                            <div className="text-xs text-purple-200">+{foresight.amount}% Rewards for planning ahead.</div>
+                        </div>
+                    )}
                 </div>
 
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-[#151210] border-b border-[#292524] p-3 text-stone-200 font-serif text-lg outline-none" placeholder="Enemy Name..." />

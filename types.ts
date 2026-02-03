@@ -122,6 +122,7 @@ export interface Task {
   parentId?: string; 
   crisisTriggered: boolean; 
   hubris: boolean; 
+  foresightBonus?: number; // 0 to 2.0 multiplier based on planning ahead
 }
 
 export interface HistoryLog {
