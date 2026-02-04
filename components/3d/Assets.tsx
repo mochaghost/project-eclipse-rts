@@ -496,7 +496,6 @@ const BaseComplex = ({ era, currentHp, maxHp, structures }: any) => {
     );
 };
 
-// ... (Rest of the file including Environment Details, Animals, and Exported Components remains unchanged)
 // --- ENVIRONMENT DETAILS ---
 
 export const GrassTuft: React.FC<{ position: [number, number, number] }> = ({ position }) => {
@@ -623,7 +622,7 @@ export const WolfConstruct = ({ position, rotation }: any) => (
         </mesh>
         {/* Legs */}
         {[[0.3, 0.6], [-0.3, 0.6], [0.3, -0.6], [-0.3, -0.6]].map(([x,z], i) => (
-            <mesh key={i} position={[x, 0.4, z] rotation={[0.2, 0, 0]}>
+            <mesh key={i} position={[x, 0.4, z]} rotation={[0.2, 0, 0]}>
                 <boxGeometry args={[0.15, 0.8, 0.15]} />
                 <meshStandardMaterial color="#0c0a09" />
             </mesh>

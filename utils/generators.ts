@@ -26,7 +26,6 @@ export const shuffleArray = <T>(array: T[]): T[] => {
 };
 
 export const generateHeroEquipment = (level: number): HeroEquipment => {
-    // Find the highest tier item that the user meets the level requirement for
     const weapon = [...EQUIPMENT_LORE.WEAPONS].reverse().find(w => level >= w.min) || EQUIPMENT_LORE.WEAPONS[0];
     const armor = [...EQUIPMENT_LORE.ARMOR].reverse().find(a => level >= a.min) || EQUIPMENT_LORE.ARMOR[0];
     
@@ -43,25 +42,20 @@ const RELICS = ["Tear of the Titan", "Chronos Shard", "Behelit Fragment", "Old K
 
 export const generateLoot = (level: number): { type: 'WEAPON' | 'ARMOR' | 'RELIC', name: string, lore: string } | null => {
     const roll = Math.random();
-    // Base chance 40% + 0.5% per level. At level 20 = 50% chance.
     const chance = 0.4 + (level * 0.005);
     
     if (roll > chance) return null; 
 
     const typeRoll = Math.random();
     if (typeRoll < 0.45) {
-        // WEAPON: Find best available for level, or slightly above/below
-        // reverse() checks from highest level down to 0
         const base = [...EQUIPMENT_LORE.WEAPONS].reverse().find(w => level >= (w.min - 5)) || EQUIPMENT_LORE.WEAPONS[0];
         const prefix = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
         return { type: 'WEAPON', name: `${prefix} ${base.name}`, lore: `A variant of the ${base.name}, modified by the ${prefix} energy of the realm.` };
     } else if (typeRoll < 0.9) {
-        // ARMOR
         const base = [...EQUIPMENT_LORE.ARMOR].reverse().find(a => level >= (a.min - 5)) || EQUIPMENT_LORE.ARMOR[0];
         const prefix = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
         return { type: 'ARMOR', name: `${prefix} ${base.name}`, lore: `The ${base.name}, reinforced with ${prefix} materials found in the void.` };
     } else {
-        // RELIC (Rare)
         const relic = RELICS[Math.floor(Math.random() * RELICS.length)];
         return { type: 'RELIC', name: relic, lore: "A rare artifact humming with strange power." };
     }
@@ -92,7 +86,6 @@ export const generateNemesis = (taskId: string, priority: TaskPriority, graveyar
     const name = generateName(race);
     const personality = PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)];
     
-    // Subtask Logic: Smaller, Rank 1
     const isSubtask = !!subtaskId;
     const rank = isSubtask ? 1 : Math.min(10, priority + Math.floor(previousWinStreak / 3));
     
@@ -108,7 +101,6 @@ export const generateNemesis = (taskId: string, priority: TaskPriority, graveyar
     
     const clan = ENEMY_CLANS[Math.floor(Math.random() * ENEMY_CLANS.length)];
     
-    // Graveyard logic only for Main Tasks
     if (!isSubtask) {
         const deadKin = graveyard.find(d => d.clan === clan.name);
         if (deadKin && Math.random() > 0.5) {
@@ -122,27 +114,14 @@ export const generateNemesis = (taskId: string, priority: TaskPriority, graveyar
                factionKey === 'SOL' ? `A zealous knight who believes your procrastination is a sin against Order.` : 
                `${factionData.desc} (${personality.toLowerCase()})`;
 
-    // --- MASSIVE SCALE LOGIC ---
     let scale = 0.6;
     if (!isSubtask) {
-        // Base scale starts at 1
-        // Priority adds massive bulk: LOW=0, MED=1.5, HIGH=3.0
         const priorityBonus = (priority - 1) * 1.5;
-        
-        // Duration adds exponential bulk: 
-        // 60m = +1
-        // 180m (3h) = +3
-        // 300m (5h) = +5
         const timeBonus = durationMinutes / 60;
-
         scale = 1.0 + priorityBonus + timeBonus;
-        
-        // Cap for sanity, but keep it huge. A 3 hour high priority task = 1 + 3 + 3 = 7.0 scale.
-        // A standard villager is scale 1. This is a TITAN.
         scale = Math.min(15, scale); 
     }
 
-    // Position logic: Spawn far away. Movement logic handles approach.
     const spawnPos = generateSpawnPosition(45, 60); 
 
     return {
@@ -168,8 +147,7 @@ export const generateNemesis = (taskId: string, priority: TaskPriority, graveyar
     };
 };
 
-// --- DIALOGUE ENGINES (DIEGETIC & REACTIVE) ---
-
+// --- DIALOGUE ENGINES ---
 const VAZAROTH_LINES = {
     IDLE: [
         "Your citadel stands silent. My armies are already marching.",
@@ -254,7 +232,7 @@ export const getSageWisdom = (context: 'GENERAL' | 'CRISIS' | 'STREAK' | 'FAIL' 
     return pool[Math.floor(Math.random() * pool.length)];
 };
 
-// ... (Vision Mirror logic unchanged) ...
+// ... (Vision Mirror logic updated for Smart Parsing) ...
 export interface VisionContent {
     type: 'VIDEO' | 'IMAGE' | 'SOCIAL';
     embedUrl: string;
@@ -269,93 +247,125 @@ const VOID_LIBRARY_DEFAULTS = [
     "https://www.youtube.com/embed/7I0D-aN5tJE?autoplay=1&controls=0&mute=0&loop=1&playlist=7I0D-aN5tJE"
 ];
 
-export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
-    if (!rawUrl) return null;
-    let clean = rawUrl.trim();
-    clean = clean.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-    if (clean.startsWith('"') && clean.endsWith('"')) clean = clean.slice(1, -1);
-    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
-        clean = 'https://' + clean;
+export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
+    if (!rawInput) return null;
+    
+    // 1. EXTRACT URL FROM TEXT BLOB (e.g. HTML Embed Code)
+    let cleanUrl = rawInput.trim();
+    
+    // Check if input is a complex HTML block
+    if (rawInput.includes('<') && rawInput.includes('>')) {
+        // Try extracting Instagram permalink specifically
+        const permalinkMatch = rawInput.match(/data-instgrm-permalink="([^"]+)"/);
+        if (permalinkMatch && permalinkMatch[1]) {
+            cleanUrl = permalinkMatch[1];
+        } else {
+            // Fallback: Find the first http/https link in the blob
+            const httpMatch = rawInput.match(/(https?:\/\/[^\s"<>]+)/);
+            if (httpMatch && httpMatch[1]) {
+                cleanUrl = httpMatch[1];
+            } else {
+                return null; 
+            }
+        }
     }
 
+    // 2. CLEANUP
+    cleanUrl = cleanUrl.replace(/&amp;/g, '&');
+    // Remove query params if needed, but keeping them is safer for social share links usually
+    let urlObj: URL;
     try {
-        const urlObj = new URL(clean);
-        const lowerUrl = clean.toLowerCase();
-
-        if (lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('pinimg.com')) {
-             return { type: 'IMAGE', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
-        }
-
-        if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-            let id = '';
-            if (urlObj.pathname.includes('/shorts/')) {
-                id = urlObj.pathname.split('/shorts/')[1]?.split('/')[0];
-            } else if (urlObj.hostname.includes('youtu.be')) {
-                id = urlObj.pathname.slice(1);
-            } else if (urlObj.searchParams.has('v')) {
-                id = urlObj.searchParams.get('v') || '';
-            }
-
-            if (id) {
-                return {
-                    type: 'VIDEO',
-                    embedUrl: `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${id}&playsinline=1`,
-                    originalUrl: clean,
-                    platform: 'YOUTUBE'
-                };
-            }
-        }
-
-        if (urlObj.hostname.includes('instagram.com')) {
-            const match = clean.match(/\/(p|reel|tv)\/([a-zA-Z0-9_-]+)/);
-            if (match && match[2]) {
-                const id = match[2];
-                return {
-                    type: 'VIDEO', 
-                    embedUrl: `https://www.instagram.com/p/${id}/embed/captioned/`, 
-                    originalUrl: clean,
-                    platform: 'INSTAGRAM'
-                };
-            }
-        }
-
-        let platform: any = 'OTHER';
-        if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) platform = 'PINTEREST';
-        else if (urlObj.hostname.includes('tiktok')) platform = 'TIKTOK';
-        else if (urlObj.hostname.includes('twitter') || urlObj.hostname.includes('x.com')) platform = 'TWITTER';
-
-        return {
-            type: 'SOCIAL',
-            embedUrl: clean, 
-            originalUrl: clean,
-            platform: platform
-        };
-
-    } catch (e) { 
-        if (clean.startsWith('http')) {
-             return { type: 'SOCIAL', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
-        }
+        urlObj = new URL(cleanUrl);
+    } catch(e) {
         return null;
     }
-};
+    
+    // 3. DETECT PLATFORM
+    
+    // --- DIRECT IMAGE (Pinterest or others) ---
+    if (cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('i.pinimg.com')) {
+         return { type: 'IMAGE', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
+    }
 
-export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
-    if (directUrl && directUrl.trim().length > 0) {
-        const rawLinks = directUrl.split(/[\n,;]+/).map(s => s.trim()).filter(s => s.length > 0);
-        const results: VisionContent[] = [];
-        
-        rawLinks.forEach(link => {
-            const res = convertToEmbedUrl(link);
-            if (res && !results.some(r => r.originalUrl === res.originalUrl)) {
-                results.push(res);
-            }
-        });
+    // --- YOUTUBE ---
+    if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+        let id = '';
+        if (urlObj.pathname.includes('/shorts/')) {
+            id = urlObj.pathname.split('/shorts/')[1]?.split('/')[0];
+        } else if (urlObj.hostname.includes('youtu.be')) {
+            id = urlObj.pathname.slice(1);
+        } else if (urlObj.searchParams.has('v')) {
+            id = urlObj.searchParams.get('v') || '';
+        }
 
-        if (results.length > 0) {
-            return results;
+        if (id) {
+            return {
+                type: 'VIDEO',
+                embedUrl: `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${id}&playsinline=1`,
+                originalUrl: cleanUrl,
+                platform: 'YOUTUBE'
+            };
         }
     }
 
+    // --- INSTAGRAM ---
+    if (urlObj.hostname.includes('instagram.com')) {
+        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'INSTAGRAM' };
+    }
+
+    // --- PINTEREST (Social Link) ---
+    if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) {
+        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'PINTEREST' };
+    }
+
+    // --- TIKTOK ---
+    if (urlObj.hostname.includes('tiktok')) {
+        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'TIKTOK' };
+    }
+
+    // Default Fallback
+    return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
+};
+
+// SMART PARSING FOR MIXED CONTENT BLOCKS
+export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
+    if (directUrl && directUrl.trim().length > 0) {
+        const results: VisionContent[] = [];
+        
+        // 1. Extract specifically formatted HTML Attributes first (High confidence)
+        const instaMatches = directUrl.matchAll(/data-instgrm-permalink="([^"]+)"/g);
+        for (const match of instaMatches) {
+            const res = convertToEmbedUrl(match[1]);
+            if (res) results.push(res);
+        }
+
+        // 2. Extract standard URLs that are NOT inside the HTML attributes we just found
+        // Simple approach: Split by whitespace/commas, filter valid URLs, deduplicate
+        // This is messy if we mix it with the above.
+        // BETTER STRATEGY:
+        // If the user pasted a raw block with HTML, `matchAll` handles the hidden links.
+        // If the user pasted a list of links, we need to find them.
+        
+        const urlRegex = /(https?:\/\/[^\s,;"'<]+)/g;
+        const allUrls = directUrl.matchAll(urlRegex);
+        
+        for (const match of allUrls) {
+            const raw = match[1];
+            // Avoid duplicates if we already caught it via HTML attribute
+            if (!results.some(r => r.originalUrl.includes(raw) || raw.includes(r.originalUrl))) {
+                const res = convertToEmbedUrl(raw);
+                if (res) results.push(res);
+            }
+        }
+
+        if (results.length > 0) {
+            // Deduplicate by URL
+            const unique = results.filter((v,i,a)=>a.findIndex(t=>(t.originalUrl === v.originalUrl))===i);
+            return unique;
+        }
+    }
+
+    // ... (Fallback to Sheet logic remains unchanged)
     let fetchUrl = "";
     let sheetInput = customSheetId || DEFAULT_SHEET_ID;
     

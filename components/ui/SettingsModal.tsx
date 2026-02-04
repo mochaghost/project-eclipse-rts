@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle, Wand2, Activity, Wifi, RefreshCw, Eye, Link as LinkIcon, FileSpreadsheet, Bell } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle, Wand2, Activity, Wifi, RefreshCw, Eye, Link as LinkIcon, FileSpreadsheet, Bell, Info } from 'lucide-react';
 import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
@@ -191,22 +191,20 @@ export const SettingsModal: React.FC = () => {
                                                 <Bell size={12}/> Enable / Test
                                             </button>
                                         </div>
-                                        <p className="text-[9px] text-stone-600 mt-2">
-                                            Required for "75% Crisis" alerts. On iOS, you must tap "Enable" manually. Ensure "Do Not Disturb" is off.
-                                        </p>
                                     </div>
                                 </div>
                              </div>
 
-                             {/* VISION MIRROR SETTINGS (RESTORED) */}
+                             {/* VISION MIRROR SETTINGS */}
                              <div>
                                 <h3 className="text-purple-400 text-xs uppercase font-bold tracking-widest mb-4 flex items-center gap-2 border-b border-purple-900/30 pb-2">
                                     <Eye size={14} /> Vision Mirror Source
                                 </h3>
                                 <div className="bg-[#15101a] p-5 border border-purple-900/30 space-y-4">
+                                    {/* Google Sheets / Automator Guide */}
                                     <div>
                                         <label className="flex items-center gap-2 text-[10px] uppercase text-stone-500 font-bold mb-1">
-                                            <FileSpreadsheet size={12} /> Google Sheet ID (For Random Playlists)
+                                            <FileSpreadsheet size={12} /> Google Sheet ID (Automator Source)
                                         </label>
                                         <input 
                                             type="text" 
@@ -215,9 +213,17 @@ export const SettingsModal: React.FC = () => {
                                             className="w-full bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500"
                                             placeholder="e.g. 1Hhfl7Cq28FvcyNrH..."
                                         />
-                                        <p className="text-[9px] text-stone-600 mt-1">
-                                            Paste the ID of a public Google Sheet containing links (YouTube, Pinterest, Instagram).
-                                        </p>
+                                        <details className="mt-2 text-[10px] text-stone-500 bg-black/30 p-2 rounded cursor-pointer group">
+                                            <summary className="font-bold flex items-center gap-1 hover:text-stone-300 select-none">
+                                                <Info size={10} /> How to Automate (Pinterest -> Game)
+                                            </summary>
+                                            <div className="mt-2 pl-2 border-l border-stone-700 space-y-1 text-stone-400 leading-relaxed">
+                                                <p>1. Create a public Google Sheet.</p>
+                                                <p>2. Use IFTTT/Zapier: "If New Pin on Board -> Add Row to Sheet".</p>
+                                                <p>3. Paste the Sheet ID above.</p>
+                                                <p>4. The game will now fetch your latest pins automatically.</p>
+                                            </div>
+                                        </details>
                                     </div>
                                     
                                     <div className="relative">
@@ -235,10 +241,10 @@ export const SettingsModal: React.FC = () => {
                                             value={settings.directVisionUrl || ''} 
                                             onChange={(e) => updateSettings({ directVisionUrl: e.target.value })}
                                             className="w-full h-24 bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500 resize-none"
-                                            placeholder="Paste YouTube, Pinterest, or Image URLs here.&#10;One per line, or separated by commas.&#10;Example:&#10;https://youtu.be/...&#10;https://pinterest.com/..."
+                                            placeholder="Paste URL lists, HTML Embed codes, or mixed text here..."
                                         />
                                         <p className="text-[9px] text-stone-600 mt-1">
-                                            Enter multiple links (comma or newline separated) to create a custom shuffled deck.
+                                            Accepts raw text blocks, comma-separated lists, and HTML embed codes.
                                         </p>
                                     </div>
                                 </div>
@@ -296,24 +302,7 @@ export const SettingsModal: React.FC = () => {
                                             <div>
                                                 <div className="text-stone-300 font-bold">{user.displayName || 'Anonymous Soul'}</div>
                                                 <div className="text-[10px] text-stone-600">{user.email}</div>
-                                                <div className="text-[10px] text-stone-500 font-mono mt-1">User ID: <span className="text-yellow-600 select-all">{user.uid}</span></div>
                                             </div>
-                                        </div>
-                                        <div className="bg-black/40 border border-stone-800 p-4 mb-6">
-                                            <h5 className="text-[10px] text-stone-500 uppercase tracking-widest font-bold mb-3 flex items-center gap-2"><Activity size={12}/> Connection Diagnostics</h5>
-                                            <div className="flex gap-2">
-                                                <button onClick={handleTestConnection} disabled={testStatus === 'TESTING'} className="flex-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-[10px] py-2 border border-stone-600 font-bold flex items-center justify-center gap-2">
-                                                    {testStatus === 'TESTING' ? <Loader2 className="animate-spin" size={12}/> : <Wifi size={12}/>} TEST WRITE PERMISSION
-                                                </button>
-                                                 <button onClick={forcePull} className="flex-1 bg-blue-900/20 hover:bg-blue-900/40 text-blue-300 text-[10px] py-2 border border-blue-800 font-bold flex items-center justify-center gap-2">
-                                                    <RefreshCw size={12}/> FORCE PULL FROM CLOUD
-                                                </button>
-                                            </div>
-                                            {testStatus !== 'IDLE' && (
-                                                <div className={`mt-2 text-[10px] font-mono p-1 text-center ${testStatus === 'SUCCESS' ? 'text-green-500 bg-green-950/30' : testStatus === 'FAIL' ? 'text-red-500 bg-red-950/30' : 'text-stone-500'}`}>
-                                                    {testStatus === 'TESTING' ? "Verifying access..." : testMessage}
-                                                </div>
-                                            )}
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             <button onClick={handleForcePush} className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-600 py-3 text-xs font-bold hover:bg-yellow-900/30 flex items-center justify-center gap-2">
@@ -332,7 +321,6 @@ export const SettingsModal: React.FC = () => {
                                         {isLoggingIn ? <Loader2 size={20} className="animate-spin" /> : <LogIn size={20} />}
                                         {isLoggingIn ? "CONNECTING..." : "LOGIN WITH GOOGLE"}
                                     </button>
-                                    {configStatus !== 'VALID' && <p className="text-red-500 text-[10px] mt-2 font-mono">Valid Config Required First (See Below)</p>}
                                 </div>
                             )}
 
@@ -344,17 +332,10 @@ export const SettingsModal: React.FC = () => {
                                     </h4>
                                     {configStatus === 'VALID' ? 
                                         <span className="text-[10px] text-green-500 flex items-center gap-1 font-bold animate-pulse"><CheckCircle2 size={12}/> VALID CONFIG DETECTED</span> : 
-                                        configStatus === 'MISSING_DB' ?
-                                        <span className="text-[10px] text-yellow-500 flex items-center gap-1 font-bold animate-pulse"><AlertTriangle size={12}/> MISSING DATABASE URL</span> :
                                         <span className="text-[10px] text-stone-500 flex items-center gap-1 font-bold"><AlertTriangle size={12}/> PASTE CODE SNIPPET</span>
                                     }
                                 </div>
-                                {configStatus === 'MISSING_DB' && (
-                                    <div className="bg-yellow-900/20 p-2 mb-2 text-[10px] text-yellow-400 border border-yellow-800">
-                                        <strong>ATTENTION:</strong> Your config is missing <code>databaseURL</code>. 
-                                    </div>
-                                )}
-                                <textarea value={configInput} onChange={handleInputChange} spellCheck={false} className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-stone-300 border-stone-700'}`} placeholder={`// Paste the ENTIRE block from Firebase here:\n\nconst firebaseConfig = {\n  apiKey: "AIza...",\n  authDomain: "..."\n};`} />
+                                <textarea value={configInput} onChange={handleInputChange} spellCheck={false} className={`w-full h-32 bg-black border p-2 text-[10px] font-mono outline-none mb-2 ${configStatus === 'VALID' ? 'text-green-400 border-green-900/50' : 'text-stone-300 border-stone-700'}`} placeholder={`// Paste the ENTIRE block from Firebase here...`} />
                                 <div className="flex gap-2">
                                      <button onClick={handleSaveConfig} disabled={configStatus !== 'VALID'} className={`flex-1 py-3 text-xs font-bold border transition-all flex items-center justify-center gap-2 ${configStatus === 'VALID' ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40' : 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed'}`}>
                                         <Wand2 size={14} /> SAVE & RELOAD (AUTO-CLEAN)

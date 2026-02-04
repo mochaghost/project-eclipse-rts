@@ -42,6 +42,9 @@ export const VisionMirror: React.FC = () => {
         const top = (window.screen.height - height) / 2;
         
         try {
+            // Validate first
+            new URL(url); // Will throw if invalid syntax
+            
             const popup = window.open(
                 url, 
                 'VisionPortal', 
@@ -52,7 +55,11 @@ export const VisionMirror: React.FC = () => {
                 window.open(url, '_blank');
             }
         } catch (e) {
-            window.open(url, '_blank');
+            console.error("Failed to open portal:", e);
+            // Fallback to blank if it was a URL issue but try basic fallback
+            if (url && url.startsWith('http')) {
+                try { window.open(url, '_blank'); } catch(err) {}
+            }
         }
     };
 
@@ -112,16 +119,17 @@ export const VisionMirror: React.FC = () => {
                     <img 
                         src={content.embedUrl} 
                         alt="Vision" 
-                        className="max-w-full max-h-full object-contain z-10" 
+                        className="w-full h-full object-contain z-10" 
                     />
                     <div 
-                        className="absolute inset-0 bg-cover bg-center blur-xl opacity-30 z-0"
+                        className="absolute inset-0 bg-cover bg-center blur-2xl opacity-40 z-0"
                         style={{ backgroundImage: `url(${content.embedUrl})` }}
                     ></div>
                 </div>
             )
         }
 
+        // SOCIAL LINKS (Instagram, Pinterest Social, etc)
         const isInsta = content.platform === 'INSTAGRAM';
         const isPin = content.platform === 'PINTEREST';
         const isTikTok = content.platform === 'TIKTOK';
@@ -129,35 +137,47 @@ export const VisionMirror: React.FC = () => {
         let cardColor = "text-purple-300";
         let cardBorder = "border-purple-500/30";
         let cardBg = "bg-purple-900/10";
+        let PlatformIcon: React.ElementType = Globe;
+        let actionText = "Open Portal";
         
-        if (isPin) { cardColor = "text-red-300"; cardBorder = "border-red-500/30"; cardBg = "bg-red-900/10"; }
-        if (isInsta) { cardColor = "text-pink-300"; cardBorder = "border-pink-500/30"; cardBg = "bg-pink-900/10"; }
-        if (isTikTok) { cardColor = "text-cyan-300"; cardBorder = "border-cyan-500/30"; cardBg = "bg-cyan-900/10"; }
+        if (isPin) { 
+            cardColor = "text-red-300"; cardBorder = "border-red-500/30"; cardBg = "bg-red-900/10"; 
+            PlatformIcon = () => <div className="text-red-500 font-bold text-4xl font-serif">P</div>;
+            actionText = "View Board";
+        }
+        if (isInsta) { 
+            cardColor = "text-pink-300"; cardBorder = "border-pink-500/30"; cardBg = "bg-pink-900/10"; 
+            PlatformIcon = Instagram;
+            actionText = "View Reel";
+        }
+        if (isTikTok) { 
+            cardColor = "text-cyan-300"; cardBorder = "border-cyan-500/30"; cardBg = "bg-cyan-900/10"; 
+            PlatformIcon = () => <div className="text-cyan-400 font-bold text-xl font-mono">TikTok</div>;
+            actionText = "Watch TikTok";
+        }
 
         // VALIDATION: Ensure URL is absolute for browser safety
         let safeUrl = content.originalUrl;
         if (safeUrl && !safeUrl.startsWith('http')) {
             safeUrl = `https://${safeUrl}`;
         }
+        
         const isValidUrl = safeUrl && safeUrl.length > 10 && safeUrl.includes('.');
 
         return (
             <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] relative p-6">
                 <div className="absolute inset-0 bg-gradient-to-b from-black via-[#1a1025] to-black pointer-events-none"></div>
                 
-                <div className={`mb-6 p-4 rounded-full border-2 ${cardBorder} ${cardBg} shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10`}>
-                    {isInsta ? <Instagram size={48} className="text-pink-500" /> : 
-                        isPin ? <div className="text-red-500 font-bold text-4xl font-serif">P</div> : 
-                        isTikTok ? <div className="text-cyan-400 font-bold text-xl font-mono">TikTok</div> :
-                        <Globe size={48} className="text-blue-400" />}
+                <div className={`mb-6 p-4 rounded-full border-2 ${cardBorder} ${cardBg} shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10 animate-pulse-slow`}>
+                    <PlatformIcon size={48} className={cardColor} />
                 </div>
 
                 <h3 className={`${cardColor} font-serif text-lg tracking-widest mb-2 font-bold uppercase z-10`}>
                     {content.platform} SIGNAL
                 </h3>
                 <p className="text-stone-500 text-xs text-center mb-8 max-w-[80%] leading-relaxed z-10">
-                    This scroll is sealed by the Ancients (Security Wards). <br/>
-                    {isPin ? "Use 'Copy Image Address' for a direct view." : "Open the portal to view it."}
+                    The Void has intercepted a social fragment. <br/>
+                    Open the portal to view the original source.
                 </p>
 
                 <div className="flex flex-col gap-3 w-full max-w-[200px] z-50">
@@ -166,7 +186,7 @@ export const VisionMirror: React.FC = () => {
                             onClick={() => handleOpenPopup(safeUrl!)}
                             className="group relative px-6 py-3 bg-stone-900/80 text-white font-serif font-bold tracking-widest uppercase border border-stone-600 hover:bg-stone-800 transition-all shadow-lg flex items-center justify-center gap-2 pointer-events-auto cursor-pointer hover:scale-105 hover:border-yellow-600"
                         >
-                                OPEN PORTAL <ExternalLink size={14}/>
+                                {actionText} <ExternalLink size={14}/>
                         </button>
                     ) : (
                         <div className="px-6 py-3 bg-red-950/50 text-red-400 font-bold border border-red-900 flex items-center justify-center gap-2 cursor-not-allowed">
@@ -182,8 +202,8 @@ export const VisionMirror: React.FC = () => {
                     </button>
                 </div>
                 
-                <div className="absolute bottom-16 text-[10px] text-stone-700 font-mono break-all max-w-[90%] text-center z-10 opacity-50">
-                    {isValidUrl ? safeUrl.substring(0, 40) + '...' : 'INVALID_URL_DATA'}
+                <div className="absolute bottom-16 text-[10px] text-stone-700 font-mono break-all max-w-[90%] text-center z-10 opacity-50 truncate">
+                    {isValidUrl ? safeUrl : 'INVALID_URL_DATA'}
                 </div>
             </div>
         );
