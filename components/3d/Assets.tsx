@@ -1,6 +1,6 @@
 
-import React, { useState, useRef } from 'react';
-import { Html, Float, Sparkles, Trail, useTexture } from '@react-three/drei';
+import React, { useState, useMemo, useRef } from 'react';
+import { Html, Float, Sparkles, Trail, useTexture, Instance, Instances } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PALETTE } from '../../constants';
@@ -39,9 +39,9 @@ const Fire = ({ position, scale = 1, color = "#ea580c" }: { position: [number, n
     </group>
 );
 
-const Smoke = ({ position }: { position: [number, number, number] }) => (
+const Smoke = ({ position, color = "#57534e" }: { position: [number, number, number], color?: string }) => (
     <group position={position}>
-        <Sparkles count={30} scale={2} size={15} speed={0.2} opacity={0.2} color="#57534e" noise={1} />
+        <Sparkles count={30} scale={2} size={15} speed={0.2} opacity={0.2} color={color} noise={1} />
     </group>
 );
 
@@ -49,12 +49,10 @@ const Smoke = ({ position }: { position: [number, number, number] }) => (
 
 export const Torch: React.FC<{ position: [number, number, number] }> = ({ position }) => (
     <group position={position}>
-        {/* Stick */}
         <mesh position={[0, 1, 0]}>
             <cylinderGeometry args={[0.05, 0.08, 2]} />
             <meshStandardMaterial color="#292524" />
         </mesh>
-        {/* Fire Cage */}
         <mesh position={[0, 2, 0]}>
             <cylinderGeometry args={[0.15, 0.1, 0.4, 4]} />
             <meshStandardMaterial color="#1c1917" />
@@ -79,12 +77,10 @@ export const GlowingMushroom: React.FC<{ position: [number, number, number] }> =
 
 export const TwistedTree: React.FC<{ position: [number, number, number], scale?: number, rotation?: [number, number, number] }> = ({ position, scale = 1, rotation = [0,0,0] }) => (
     <group position={position} scale={[scale, scale, scale]} rotation={rotation as any}>
-        {/* Trunk */}
         <mesh position={[0, 1.5, 0]} rotation={[0.1, 0, 0.1]}>
             <cylinderGeometry args={[0.3, 0.5, 3, 5]} />
             <meshStandardMaterial color="#1a120b" roughness={1} />
         </mesh>
-        {/* Twisted Branches */}
         <mesh position={[0.2, 2.8, 0]} rotation={[0, 0, -0.5]}>
             <cylinderGeometry args={[0.15, 0.25, 2, 4]} />
             <meshStandardMaterial color="#1a120b" roughness={1} />
@@ -93,7 +89,6 @@ export const TwistedTree: React.FC<{ position: [number, number, number], scale?:
             <cylinderGeometry args={[0.1, 0.2, 1.5, 4]} />
             <meshStandardMaterial color="#1a120b" roughness={1} />
         </mesh>
-        {/* Dead Foliage / Moss */}
         <mesh position={[0, 3.5, 0]} rotation={[Math.random(), Math.random(), Math.random()]}>
             <dodecahedronGeometry args={[1.2, 0]} />
             <meshStandardMaterial color="#2d2a26" roughness={1} />
@@ -114,111 +109,209 @@ export const GhostWisp: React.FC<{ position: [number, number, number] }> = ({ po
     </group>
 );
 
-// --- MODULAR STRUCTURES ---
+// --- ARCHITECTURAL ELEMENTS ---
 
-const StructureForge = ({ level }: { level: number }) => {
-    if (level === 0) return (
-        <group position={[-2.5, 0, -2.5]}>
-            <mesh position={[0, 0.3, 0]}><boxGeometry args={[0.8, 0.6, 0.8]} /><meshStandardMaterial color="#292524" /></mesh>
-            <mesh position={[0, 0.7, 0]}><boxGeometry args={[0.6, 0.2, 0.4]} /><meshStandardMaterial color="#1c1917" /></mesh>
+const CityStreets = ({ level }: { level: number }) => {
+    // Level 0: Nothing
+    if (level === 0) return null;
+
+    const roadColor = level === 1 ? "#57534e" : level === 2 ? "#292524" : "#0f172a";
+    const roadWidth = level === 1 ? 1.5 : 2.5;
+    const districtRadius = 5;
+
+    return (
+        <group position={[0, 0.02, 0]}>
+            {/* Central Plaza */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <circleGeometry args={[level === 1 ? 3 : 4, 32]} />
+                <meshStandardMaterial color={roadColor} roughness={0.9} />
+            </mesh>
+            
+            {/* Roads to Districts (Cardinal Directions) */}
+            {[0, Math.PI/2, Math.PI, -Math.PI/2].map((rot, i) => (
+                <mesh key={i} rotation={[-Math.PI / 2, 0, rot]} position={[Math.sin(rot)*districtRadius, 0, Math.cos(rot)*districtRadius]}>
+                    <planeGeometry args={[roadWidth, districtRadius * 1.5]} />
+                    <meshStandardMaterial color={roadColor} roughness={0.9} />
+                </mesh>
+            ))}
+
+            {/* Connecting Ring (Outer Road) - Only for higher tiers */}
+            {level >= 2 && (
+                <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                    <ringGeometry args={[7, 9, 32]} />
+                    <meshStandardMaterial color={roadColor} roughness={0.9} />
+                </mesh>
+            )}
         </group>
-    ); // Tier 0: Simple Anvil
-    
-    if (level === 1) return (
-        <InteractiveStructure name="Blacksmith" position={[-3, 0, -3]}>
-            <mesh position={[0, 1, 0]}><boxGeometry args={[2, 2, 2]} /><meshStandardMaterial color="#44403c" /></mesh>
-            <mesh position={[0, 2.5, 0]} rotation={[0,0.5,0]}><coneGeometry args={[1.5, 1.5, 4]} /><meshStandardMaterial color="#1c1917" /></mesh>
-            <Fire position={[0.5, 0.5, 1.1]} scale={0.5} />
-            {/* Added Smoke to show activity */}
-            <Smoke position={[0, 3, 0]} /> 
-        </InteractiveStructure>
-    ); // Tier 1: Smithy
-
-    if (level === 2) return (
-        <InteractiveStructure name="Industrial Forge" position={[-3, 0, -3]} scale={1.2}>
-            <mesh position={[0, 1.5, 0]}><cylinderGeometry args={[1.5, 1.8, 3, 6]} /><meshStandardMaterial color="#1c1917" metalness={0.5} /></mesh>
-            <mesh position={[0, 3.5, 0]}><cylinderGeometry args={[0.5, 0.8, 2]} /><meshStandardMaterial color="#0c0a09" /></mesh>
-            <Fire position={[0, 3.5, 0]} scale={1} color="#ef4444" />
-            <Smoke position={[0, 5, 0]} />
-        </InteractiveStructure>
-    ); // Tier 2: Foundry
-
-    return (
-        <InteractiveStructure name="Titan Core" position={[-3, 0, -3]} scale={1.5}>
-            <Float speed={2} floatIntensity={0.5}>
-                <mesh position={[0, 3, 0]} rotation={[0.5, 0.5, 0]}><octahedronGeometry args={[1.5, 0]} /><meshStandardMaterial color="#ea580c" emissive="#c2410c" emissiveIntensity={3} /></mesh>
-            </Float>
-            <mesh position={[0, 0.5, 0]}><cylinderGeometry args={[2, 2.5, 1, 8]} /><meshStandardMaterial color="#000" /></mesh>
-            <pointLight position={[0, 3, 0]} color="#ea580c" intensity={5} distance={10} />
-            <Sparkles count={50} scale={4} size={10} color="#ea580c" speed={2} />
-        </InteractiveStructure>
-    ); // Tier 3: Titan Core
+    )
 }
 
-const StructureLibrary = ({ level }: { level: number }) => {
-    if (level === 0) return null; // Tier 0: Nothing
+const ProceduralHousing = ({ count, radius, level }: { count: number, radius: number, level: number }) => {
+    if (level === 0) return null;
     
-    if (level === 1) return (
-        <InteractiveStructure name="Archives" position={[3, 0, 3]}>
-            <mesh position={[0, 1, 0]}><boxGeometry args={[1.5, 2, 1.5]} /><meshStandardMaterial color="#3f2818" /></mesh>
-            <mesh position={[0, 2.2, 0]}><coneGeometry args={[1.2, 1, 4]} /><meshStandardMaterial color="#1c1917" /></mesh>
-            {/* Added Light to show occupancy */}
-            <pointLight position={[0, 1, 0]} color="#fbbf24" distance={3} intensity={1} />
-        </InteractiveStructure>
-    ); // Tier 1: Wooden Building
+    // Slums / Housing clusters
+    const houses = useMemo(() => {
+        return Array.from({length: count}).map((_, i) => {
+            const angle = (i / count) * Math.PI * 2 + (Math.random() * 0.5);
+            const r = radius + (Math.random() * 1.5);
+            return {
+                x: Math.cos(angle) * r,
+                z: Math.sin(angle) * r,
+                scale: 0.5 + Math.random() * 0.5,
+                rot: Math.random() * Math.PI
+            }
+        });
+    }, [count, radius]);
 
-    if (level === 2) return (
-        <InteractiveStructure name="Observatory" position={[3, 0, 3]} scale={1.2}>
-            <mesh position={[0, 2, 0]}><cylinderGeometry args={[1, 1, 4, 8]} /><meshStandardMaterial color="#e7e5e4" /></mesh>
-            <mesh position={[0, 4.5, 0]}><sphereGeometry args={[1.2, 16, 16, 0, Math.PI * 2, 0, Math.PI/2]} /><meshStandardMaterial color="#0c0a09" metalness={0.8} /></mesh>
-            <mesh position={[0.5, 4.8, 0]} rotation={[0,0,-0.5]}><cylinderGeometry args={[0.1, 0.2, 1]} /><meshStandardMaterial color="#fbbf24" /></mesh>
-            <Sparkles count={20} scale={3} size={2} color="#fbbf24" />
-        </InteractiveStructure>
-    ); // Tier 2: Stone Observatory
+    const houseColor = level === 1 ? "#3f2818" : "#1c1917"; // Wood vs Stone
 
-    return (
-        <InteractiveStructure name="Void Spire" position={[3, 0, 3]} scale={1.5}>
-            <Float speed={1} floatIntensity={0.2}>
-                <mesh position={[0, 3, 0]}><torusGeometry args={[1.5, 0.1, 16, 4]} /><meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={2} /></mesh>
-            </Float>
-            <mesh position={[0, 2.5, 0]}><coneGeometry args={[1, 5, 4]} /><meshStandardMaterial color="#2e1065" emissive="#581c87" /></mesh>
-            <Sparkles count={50} scale={5} color="#d8b4fe" size={5} speed={0.5} />
-            <pointLight position={[0, 4, 0]} color="#a855f7" distance={10} intensity={3} />
-        </InteractiveStructure>
-    ); // Tier 3: Magic Spire
-}
-
-const StructureWalls = ({ level }: { level: number }) => {
-    if (level === 0) return null; // Tier 0: No walls
-
-    // Procedural Walls: 4 corners
-    const positions = [[4, 4], [-4, 4], [4, -4], [-4, -4]];
-    
     return (
         <group>
-            {positions.map(([x, z], i) => (
-                <group key={i} position={[x, 0, z]}>
-                    {level === 1 && <mesh position={[0, 1, 0]}><boxGeometry args={[1, 2, 1]} /><meshStandardMaterial color="#57534e" /></mesh>}
-                    {level === 2 && (
-                        <group>
-                            <mesh position={[0, 1.5, 0]}><cylinderGeometry args={[0.8, 1, 3, 6]} /><meshStandardMaterial color="#1c1917" /></mesh>
-                            <mesh position={[0, 3.2, 0]}><coneGeometry args={[1, 0.5, 6]} /><meshStandardMaterial color="#000" /></mesh>
-                        </group>
-                    )}
-                    {level === 3 && (
-                        <group>
-                            <mesh position={[0, 2, 0]}><cylinderGeometry args={[0.5, 0.8, 4, 6]} /><meshStandardMaterial color="#000" /></mesh>
-                            <mesh position={[0, 4.2, 0]}><octahedronGeometry args={[0.5]} /><meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={2} /></mesh>
-                            <pointLight position={[0, 4, 0]} color="#3b82f6" distance={5} intensity={2} />
-                        </group>
-                    )}
+            {houses.map((h, i) => (
+                <group key={i} position={[h.x, 0, h.z]} rotation={[0, h.rot, 0]} scale={[h.scale, h.scale, h.scale]}>
+                    <mesh position={[0, 0.5, 0]}>
+                        <boxGeometry args={[1, 1, 1]} />
+                        <meshStandardMaterial color={houseColor} />
+                    </mesh>
+                    <mesh position={[0, 1.2, 0]}>
+                        <coneGeometry args={[0.8, 0.8, 4]} />
+                        <meshStandardMaterial color="#0f0f0f" />
+                    </mesh>
+                    {level >= 3 && <pointLight position={[0, 1, 0]} color="#fbbf24" distance={2} intensity={0.5} />}
                 </group>
             ))}
         </group>
     )
 }
 
-// --- MAIN BASE COMPLEX ---
+// --- MODULAR STRUCTURES (REDESIGNED) ---
+
+const StructureForge = ({ level }: { level: number }) => {
+    // Positioned WEST (-X)
+    if (level === 0) return (
+        <group position={[-5, 0, 0]}>
+            <mesh position={[0, 0.3, 0]}><boxGeometry args={[0.8, 0.6, 0.8]} /><meshStandardMaterial color="#292524" /></mesh>
+            <Smoke position={[0, 1, 0]} />
+        </group>
+    ); 
+    
+    // Industrial District
+    return (
+        <InteractiveStructure name={level > 2 ? "Titan Foundry" : "Iron Works"} position={[-7, 0, 0]} rotation={[0, Math.PI/2, 0]}>
+            {/* Main Factory Floor */}
+            <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+                <boxGeometry args={[4, 3, 3]} />
+                <meshStandardMaterial color="#1c1917" roughness={0.8} />
+            </mesh>
+            
+            {/* Chimneys */}
+            <mesh position={[1, 3, 1]}>
+                <cylinderGeometry args={[0.4, 0.6, 3]} />
+                <meshStandardMaterial color="#0c0a09" />
+            </mesh>
+            <Smoke position={[1, 5, 1]} color="#000" />
+
+            {level >= 2 && (
+                <>
+                    <mesh position={[-1, 3, -1]}>
+                        <cylinderGeometry args={[0.5, 0.8, 4]} />
+                        <meshStandardMaterial color="#0c0a09" />
+                    </mesh>
+                    <Smoke position={[-1, 5.5, -1]} color="#2a0a0a" />
+                </>
+            )}
+
+            {/* Molten Core (Tier 3) */}
+            {level >= 3 && (
+                <group position={[2.5, 0, 0]}>
+                    <mesh position={[0, 1, 0]}>
+                        <sphereGeometry args={[1.5]} />
+                        <meshStandardMaterial color="#ea580c" emissive="#c2410c" emissiveIntensity={2} wireframe />
+                    </mesh>
+                    <pointLight position={[0, 2, 0]} color="#ea580c" intensity={5} distance={15} />
+                </group>
+            )}
+        </InteractiveStructure>
+    );
+}
+
+const StructureLibrary = ({ level }: { level: number }) => {
+    // Positioned EAST (+X)
+    if (level === 0) return null;
+    
+    // Arcane District
+    return (
+        <InteractiveStructure name="Arcane Spire" position={[7, 0, 0]} rotation={[0, -Math.PI/2, 0]}>
+            {/* Main Tower Base */}
+            <mesh position={[0, level, 0]} castShadow>
+                <cylinderGeometry args={[1.5, 2, level * 2, 6]} />
+                <meshStandardMaterial color="#e7e5e4" />
+            </mesh>
+            
+            {/* Floating Rings for Tier 3 */}
+            {level >= 3 && (
+                <Float speed={2} rotationIntensity={0.5}>
+                    <mesh position={[0, 6, 0]} rotation={[Math.PI/4, 0, 0]}>
+                        <torusGeometry args={[2.5, 0.1, 16, 32]} />
+                        <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={2} />
+                    </mesh>
+                </Float>
+            )}
+
+            {/* Crystal Top */}
+            <mesh position={[0, (level * 2) + 1, 0]}>
+                <octahedronGeometry args={[1]} />
+                <meshStandardMaterial color="#3b82f6" emissive="#1d4ed8" emissiveIntensity={1.5} />
+            </mesh>
+            <pointLight position={[0, (level * 2) + 2, 0]} color="#3b82f6" distance={10} intensity={2} />
+        </InteractiveStructure>
+    );
+}
+
+const StructureWalls = ({ level }: { level: number }) => {
+    if (level === 0) return null;
+
+    const radius = 10 + (level * 2); // Walls expand outward
+    const height = level * 1.5;
+    const segmentCount = 12;
+
+    // Procedural Ring Wall
+    return (
+        <group>
+            {Array.from({ length: segmentCount }).map((_, i) => {
+                const angle = (i / segmentCount) * Math.PI * 2;
+                // Leave gaps for cardinal gates
+                if (i % 3 === 0) return null; 
+
+                return (
+                    <group key={i} position={[Math.cos(angle)*radius, height/2, Math.sin(angle)*radius]} rotation={[0, -angle, 0]}>
+                        <mesh castShadow receiveShadow>
+                            <boxGeometry args={[1, height, 5.5]} />
+                            <meshStandardMaterial color="#1c1917" />
+                        </mesh>
+                        {/* Battlements */}
+                        <mesh position={[0, height/2 + 0.2, 0]}>
+                            <boxGeometry args={[1.2, 0.4, 5.5]} />
+                            <meshStandardMaterial color="#292524" />
+                        </mesh>
+                    </group>
+                )
+            })}
+            
+            {/* Gatehouses at cardinal points */}
+            {[0, Math.PI/2, Math.PI, -Math.PI/2].map((angle, i) => (
+                <group key={`gate-${i}`} position={[Math.cos(angle)*radius, 0, Math.sin(angle)*radius]} rotation={[0, -angle, 0]}>
+                    <mesh position={[0, 2, 2.5]}><boxGeometry args={[2, 4, 2]} /><meshStandardMaterial color="#0c0a09" /></mesh>
+                    <mesh position={[0, 2, -2.5]}><boxGeometry args={[2, 4, 2]} /><meshStandardMaterial color="#0c0a09" /></mesh>
+                    {/* Arch */}
+                    <mesh position={[0, 3.5, 0]}><boxGeometry args={[1.5, 1, 6]} /><meshStandardMaterial color="#1c1917" /></mesh>
+                </group>
+            ))}
+        </group>
+    )
+}
+
+// --- MAIN BASE COMPLEX (The Citadel) ---
 
 const BaseComplex = ({ era, currentHp, maxHp, structures }: any) => {
     const healthPercent = currentHp / maxHp;
@@ -227,38 +320,175 @@ const BaseComplex = ({ era, currentHp, maxHp, structures }: any) => {
     const forgeLevel = structures?.forgeLevel || 0;
     const libraryLevel = structures?.libraryLevel || 0;
     const wallsLevel = structures?.wallsLevel || 0;
+    const marketLevel = structures?.marketLevel || 0;
+
+    // Determine visual tier based on Era + Levels
+    let cityTier = 0;
+    if (era === Era.CAPTAIN) cityTier = 1;
+    if (era === Era.GENERAL) cityTier = 2;
+    if (era === Era.KING) cityTier = 3;
 
     return (
         <group>
-            {/* CORE CITADEL (Visual changes with ERA only) */}
-            <InteractiveStructure name={era === Era.RUIN ? "Camp" : "Citadel"}>
-                {era === Era.RUIN && (
+            {/* 1. URBAN LAYOUT (The Foundation) */}
+            <CityStreets level={cityTier} />
+
+            {/* 2. THE SEAT OF POWER (The Citadel) */}
+            <InteractiveStructure name={cityTier === 3 ? "The Dark Palace" : cityTier === 2 ? "High Command" : "The Citadel"}>
+                
+                {/* TIER 0: The Exile's Camp (Survival Mode) */}
+                {cityTier === 0 && (
                     <group>
-                        <Fire position={[0, 0, 0]} />
-                        <mesh position={[1.5, 0.5, 1]} rotation={[0, -0.5, 0]}><coneGeometry args={[1, 1.5, 4]} /><meshStandardMaterial color="#451a03" /></mesh>
+                        {/* Main Tent */}
+                        <mesh position={[0, 1, 0]} castShadow>
+                            <coneGeometry args={[2, 2.5, 6]} />
+                            <meshStandardMaterial color="#451a03" roughness={1} />
+                        </mesh>
+                        {/* Entrance Flap */}
+                        <mesh position={[0, 0.5, 1.5]} rotation={[0.2, 0, 0]}>
+                            <boxGeometry args={[1, 1.5, 0.1]} />
+                            <meshStandardMaterial color="#292524" />
+                        </mesh>
+                        <Fire position={[1.5, 0, 1.5]} scale={0.8} />
+                        {/* Scattered Crates */}
+                        <mesh position={[-1.5, 0.25, 0]} rotation={[0, 0.5, 0]}>
+                            <boxGeometry args={[0.5, 0.5, 0.5]} />
+                            <meshStandardMaterial color="#57534e" />
+                        </mesh>
                     </group>
                 )}
-                {era === Era.CAPTAIN && (
-                    <mesh position={[0, 1.5, 0]} castShadow><boxGeometry args={[3, 3, 3]} /><meshStandardMaterial color="#44403c" /></mesh>
-                )}
-                {era === Era.GENERAL && (
+                
+                {/* TIER 1: The Bastion (Martial Law) */}
+                {cityTier === 1 && (
                     <group>
-                        <mesh position={[0, 2, 0]} castShadow><boxGeometry args={[4, 4, 4]} /><meshStandardMaterial color="#1c1917" /></mesh>
-                        <mesh position={[0, 4.5, 0]}><coneGeometry args={[2.5, 2, 4]} /><meshStandardMaterial color="#0c0a09" /></mesh>
+                        {/* Main Block - Brutalist */}
+                        <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+                            <boxGeometry args={[4, 3, 4]} />
+                            <meshStandardMaterial color="#292524" roughness={0.9} />
+                        </mesh>
+                        {/* Battlements */}
+                        <mesh position={[0, 3.1, 0]}>
+                            <boxGeometry args={[4.2, 0.4, 4.2]} />
+                            <meshStandardMaterial color="#1c1917" />
+                        </mesh>
+                        {/* Iron Door */}
+                        <mesh position={[0, 1, 2.05]}>
+                            <planeGeometry args={[1.5, 2]} />
+                            <meshStandardMaterial color="#0c0a09" metalness={0.8} roughness={0.4} />
+                        </mesh>
+                        {/* Corner Torches */}
+                        <Torch position={[1.8, 3.2, 1.8]} />
+                        <Torch position={[-1.8, 3.2, 1.8]} />
                     </group>
                 )}
-                {era === Era.KING && (
+
+                {/* TIER 2: The Fortress (Gothic Industrial) */}
+                {cityTier === 2 && (
                     <group>
-                        <mesh position={[0, 3, 0]} castShadow><cylinderGeometry args={[2, 3, 6, 8]} /><meshStandardMaterial color="#000" metalness={0.8} /></mesh>
-                        <Float speed={1}><mesh position={[0, 7, 0]}><octahedronGeometry args={[1.5]} /><meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={2} /></mesh></Float>
+                        {/* Central Spire Base */}
+                        <mesh position={[0, 3, 0]} castShadow receiveShadow>
+                            <cylinderGeometry args={[2, 3, 6, 8]} />
+                            <meshStandardMaterial color="#1c1917" roughness={0.8} />
+                        </mesh>
+                        {/* Upper Tower */}
+                        <mesh position={[0, 7, 0]} castShadow>
+                            <cylinderGeometry args={[1.5, 1.8, 4, 8]} />
+                            <meshStandardMaterial color="#292524" />
+                        </mesh>
+                        {/* Roof */}
+                        <mesh position={[0, 10, 0]}>
+                            <coneGeometry args={[2, 3, 8]} />
+                            <meshStandardMaterial color="#0f172a" />
+                        </mesh>
+                        {/* Buttresses (The structural expansion) */}
+                        {[0, Math.PI/2, Math.PI, -Math.PI/2].map((r, i) => (
+                            <group key={i} rotation={[0, r, 0]}>
+                                <mesh position={[2.5, 2, 0]}>
+                                    <boxGeometry args={[2, 4, 1]} />
+                                    <meshStandardMaterial color="#292524" />
+                                </mesh>
+                                {/* Banners */}
+                                <mesh position={[2.5, 3, 0.6]} rotation={[0.1, 0, 0]}>
+                                    <planeGeometry args={[0.8, 2]} />
+                                    <meshStandardMaterial color={PALETTE.BLOOD} side={THREE.DoubleSide} />
+                                </mesh>
+                            </group>
+                        ))}
+                        {/* Glowing Windows */}
+                        <pointLight position={[0, 6, 0]} color="#fbbf24" intensity={2} distance={8} />
+                    </group>
+                )}
+
+                {/* TIER 3: The Dark Palace (Supreme Authority) */}
+                {cityTier === 3 && (
+                    <group>
+                        {/* Massive Foundation */}
+                        <mesh position={[0, 2, 0]} castShadow receiveShadow>
+                            <boxGeometry args={[8, 4, 6]} />
+                            <meshStandardMaterial color="#0c0a09" roughness={0.6} />
+                        </mesh>
+                        
+                        {/* Central Cathedral Nave */}
+                        <mesh position={[0, 6, 0]} castShadow>
+                            <boxGeometry args={[4, 8, 4]} />
+                            <meshStandardMaterial color="#1c1917" />
+                        </mesh>
+
+                        {/* Floating Crown Structure (Politics/Magic) */}
+                        <Float speed={0.5} rotationIntensity={0.2} floatIntensity={0.2}>
+                            <group position={[0, 12, 0]}>
+                                <mesh>
+                                    <torusGeometry args={[3, 0.2, 16, 6]} />
+                                    <meshStandardMaterial color={PALETTE.GOLD} emissive={PALETTE.GOLD} emissiveIntensity={1} />
+                                </mesh>
+                                <mesh rotation={[Math.PI/2, 0, 0]}>
+                                    <torusGeometry args={[2.5, 0.1, 16, 6]} />
+                                    <meshStandardMaterial color={PALETTE.GOLD} emissive={PALETTE.GOLD} emissiveIntensity={0.5} />
+                                </mesh>
+                                {/* The Eye of the State */}
+                                <mesh position={[0, 0, 0]}>
+                                    <octahedronGeometry args={[1]} />
+                                    <meshStandardMaterial color="#a855f7" emissive="#7e22ce" emissiveIntensity={3} />
+                                </mesh>
+                                <pointLight color="#a855f7" intensity={10} distance={40} />
+                            </group>
+                        </Float>
+
+                        {/* Side Spires */}
+                        <mesh position={[3, 5, 2]}>
+                            <cylinderGeometry args={[0.5, 1, 8]} />
+                            <meshStandardMaterial color="#292524" />
+                        </mesh>
+                        <mesh position={[-3, 5, 2]}>
+                            <cylinderGeometry args={[0.5, 1, 8]} />
+                            <meshStandardMaterial color="#292524" />
+                        </mesh>
+
+                        {/* Grand Entrance */}
+                        <mesh position={[0, 1, 3.1]}>
+                            <boxGeometry args={[2, 3, 0.5]} />
+                            <meshStandardMaterial color="#000" metalness={1} roughness={0} />
+                        </mesh>
+                        <pointLight position={[0, 2, 4]} color="#fbbf24" intensity={2} distance={5} />
                     </group>
                 )}
             </InteractiveStructure>
 
-            {/* UPGRADABLE SUB-STRUCTURES */}
+            {/* 3. FUNCTIONAL DISTRICTS (The Modules) */}
             <StructureForge level={forgeLevel} />
             <StructureLibrary level={libraryLevel} />
             <StructureWalls level={wallsLevel} />
+
+            {/* 4. POPULATION DENSITY (Visual Filler) */}
+            {/* South District: Residential */}
+            <group position={[0, 0, 7]}>
+                <ProceduralHousing count={5 + (cityTier * 5)} radius={3} level={cityTier} />
+            </group>
+            
+            {/* North District: Gate Ward */}
+            <group position={[0, 0, -7]}>
+                <ProceduralHousing count={3 + (cityTier * 2)} radius={3} level={cityTier} />
+            </group>
 
             {/* DAMAGE FX */}
             {isCritical && <Fire position={[2, 0, 2]} scale={2} />}
@@ -393,7 +623,7 @@ export const WolfConstruct = ({ position, rotation }: any) => (
         </mesh>
         {/* Legs */}
         {[[0.3, 0.6], [-0.3, 0.6], [0.3, -0.6], [-0.3, -0.6]].map(([x,z], i) => (
-            <mesh key={i} position={[x, 0.4, z]} rotation={[0.2, 0, 0]}>
+            <mesh key={i} position={[x, 0.4, z] rotation={[0.2, 0, 0]}>
                 <boxGeometry args={[0.15, 0.8, 0.15]} />
                 <meshStandardMaterial color="#0c0a09" />
             </mesh>
