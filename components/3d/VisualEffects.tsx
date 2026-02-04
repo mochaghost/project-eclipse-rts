@@ -8,16 +8,23 @@ import { VisualEffect } from '../../types';
 
 const FloatingText: React.FC<{ effect: VisualEffect }> = ({ effect }) => {
     let color = 'text-[#fbbf24]';
+    let scale = 'scale(1)';
+    let zIndex = 100;
+
     if (effect.type === 'TEXT_DAMAGE') color = 'text-red-600';
     if (effect.type === 'TEXT_GOLD') color = 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]';
-    if (effect.type === 'TEXT_LOOT') color = 'text-purple-400 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]';
+    if (effect.type === 'TEXT_LOOT') {
+        color = 'text-white drop-shadow-[0_0_15px_rgba(234,179,8,1)] text-lg';
+        scale = 'scale(1.5)';
+        zIndex = 200;
+    }
 
     return (
-        <Html position={[effect.position.x, effect.position.y, effect.position.z]} center zIndexRange={[100, 0]}>
+        <Html position={[effect.position.x, effect.position.y, effect.position.z]} center zIndexRange={[zIndex, 0]}>
             <div className={`
                 pointer-events-none text-2xl font-black font-serif tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]
                 animate-float-up opacity-0 ${color}
-            `}>
+            `} style={{ transform: scale }}>
                 {effect.text}
             </div>
             <style>{`
@@ -27,7 +34,7 @@ const FloatingText: React.FC<{ effect: VisualEffect }> = ({ effect }) => {
                     100% { transform: translateY(-80px) scale(1); opacity: 0; }
                 }
                 .animate-float-up {
-                    animation: floatUp 2s forwards ease-out;
+                    animation: floatUp 3s forwards ease-out; /* Slower animation for Loot */
                 }
             `}</style>
         </Html>

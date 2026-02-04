@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle, Wand2, Activity, Wifi, RefreshCw, Eye, Link as LinkIcon, FileSpreadsheet } from 'lucide-react';
+import { X, Save, Cloud, Database, Sliders, Volume2, Smartphone, Key, LogIn, Loader2, UploadCloud, CheckCircle2, AlertTriangle, Wand2, Activity, Wifi, RefreshCw, Eye, Link as LinkIcon, FileSpreadsheet, Bell } from 'lucide-react';
 import { DEFAULT_FIREBASE_CONFIG, pushToCloud } from '../../services/firebase';
 
 export const SettingsModal: React.FC = () => {
-    const { state, toggleSettings, exportSave, importSave, clearSave, updateSettings, loginWithGoogle, logout, testCloudConnection, forcePull } = useGame();
+    // @ts-ignore
+    const { state, toggleSettings, exportSave, importSave, clearSave, updateSettings, loginWithGoogle, logout, testCloudConnection, forcePull, requestPermissions } = useGame();
     const [tab, setTab] = useState<'GENERAL' | 'CLOUD'>('GENERAL');
     const [importData, setImportData] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -160,23 +161,40 @@ export const SettingsModal: React.FC = () => {
                 <div className="p-8 overflow-y-auto flex-1 custom-scrollbar bg-[#0c0a09]">
                     {tab === 'GENERAL' ? (
                         <div className="space-y-10">
-                             {/* AUDIO */}
+                             {/* AUDIO & NOTIFICATIONS */}
                              <div>
                                 <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-4 flex items-center gap-2 border-b border-stone-800 pb-2">
-                                    <Volume2 size={14} /> Audio & Immersion
+                                    <Volume2 size={14} /> Audio & Alerts
                                 </h3>
-                                <div className="bg-[#151210] p-5 border border-stone-800">
-                                    <div className="flex justify-between text-stone-300 text-sm mb-2 font-mono">
-                                        <span>Master Volume</span>
-                                        <span>{Math.round(settings.masterVolume * 100)}%</span>
+                                <div className="bg-[#151210] p-5 border border-stone-800 space-y-4">
+                                    <div>
+                                        <div className="flex justify-between text-stone-300 text-sm mb-2 font-mono">
+                                            <span>Master Volume</span>
+                                            <span>{Math.round(settings.masterVolume * 100)}%</span>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min="0" max="1" step="0.05" 
+                                            value={settings.masterVolume} 
+                                            onChange={(e) => updateSettings({ masterVolume: parseFloat(e.target.value) })}
+                                            className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-yellow-600 mb-2"
+                                        />
                                     </div>
-                                    <input 
-                                        type="range" 
-                                        min="0" max="1" step="0.05" 
-                                        value={settings.masterVolume} 
-                                        onChange={(e) => updateSettings({ masterVolume: parseFloat(e.target.value) })}
-                                        className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-yellow-600 mb-2"
-                                    />
+                                    <hr className="border-stone-800" />
+                                    <div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-stone-300 text-sm font-mono">Notifications (iOS/Desktop)</span>
+                                            <button 
+                                                onClick={requestPermissions}
+                                                className="bg-stone-800 hover:bg-stone-700 text-stone-300 px-3 py-1 text-xs border border-stone-600 flex items-center gap-2"
+                                            >
+                                                <Bell size={12}/> Enable / Test
+                                            </button>
+                                        </div>
+                                        <p className="text-[9px] text-stone-600 mt-2">
+                                            Required for "75% Crisis" alerts. On iOS, you must tap "Enable" manually. Ensure "Do Not Disturb" is off.
+                                        </p>
+                                    </div>
                                 </div>
                              </div>
 

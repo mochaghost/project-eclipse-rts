@@ -26,6 +26,7 @@ export const shuffleArray = <T>(array: T[]): T[] => {
 };
 
 export const generateHeroEquipment = (level: number): HeroEquipment => {
+    // Find the highest tier item that the user meets the level requirement for
     const weapon = [...EQUIPMENT_LORE.WEAPONS].reverse().find(w => level >= w.min) || EQUIPMENT_LORE.WEAPONS[0];
     const armor = [...EQUIPMENT_LORE.ARMOR].reverse().find(a => level >= a.min) || EQUIPMENT_LORE.ARMOR[0];
     
@@ -37,24 +38,30 @@ export const generateHeroEquipment = (level: number): HeroEquipment => {
 };
 
 // --- LOOT GENERATION ---
-const PREFIXES = ["Cursed", "Blessed", "Ancient", "Rusting", "Void-Touched", "Royal", "Shattered", "Glowing"];
-const RELICS = ["Tear of the Titan", "Chronos Shard", "Behelit Fragment", "Old King's Ring", "Vial of Pure Will"];
+const PREFIXES = ["Cursed", "Blessed", "Ancient", "Rusting", "Void-Touched", "Royal", "Shattered", "Glowing", "Timeworn", "Astral"];
+const RELICS = ["Tear of the Titan", "Chronos Shard", "Behelit Fragment", "Old King's Ring", "Vial of Pure Will", "Essence of Focus"];
 
 export const generateLoot = (level: number): { type: 'WEAPON' | 'ARMOR' | 'RELIC', name: string, lore: string } | null => {
     const roll = Math.random();
-    const chance = 0.3 + (level * 0.005);
+    // Base chance 40% + 0.5% per level. At level 20 = 50% chance.
+    const chance = 0.4 + (level * 0.005);
+    
     if (roll > chance) return null; 
 
     const typeRoll = Math.random();
-    if (typeRoll < 0.4) {
+    if (typeRoll < 0.45) {
+        // WEAPON: Find best available for level, or slightly above/below
+        // reverse() checks from highest level down to 0
         const base = [...EQUIPMENT_LORE.WEAPONS].reverse().find(w => level >= (w.min - 5)) || EQUIPMENT_LORE.WEAPONS[0];
         const prefix = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
         return { type: 'WEAPON', name: `${prefix} ${base.name}`, lore: `A variant of the ${base.name}, modified by the ${prefix} energy of the realm.` };
-    } else if (typeRoll < 0.8) {
+    } else if (typeRoll < 0.9) {
+        // ARMOR
         const base = [...EQUIPMENT_LORE.ARMOR].reverse().find(a => level >= (a.min - 5)) || EQUIPMENT_LORE.ARMOR[0];
         const prefix = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
         return { type: 'ARMOR', name: `${prefix} ${base.name}`, lore: `The ${base.name}, reinforced with ${prefix} materials found in the void.` };
     } else {
+        // RELIC (Rare)
         const relic = RELICS[Math.floor(Math.random() * RELICS.length)];
         return { type: 'RELIC', name: relic, lore: "A rare artifact humming with strange power." };
     }
@@ -247,16 +254,7 @@ export const getSageWisdom = (context: 'GENERAL' | 'CRISIS' | 'STREAK' | 'FAIL' 
     return pool[Math.floor(Math.random() * pool.length)];
 };
 
-// --- VISION MIRROR ---
-const DEFAULT_SHEET_ID = "1Hhfl7Cq28FvcyNrH_hodeNlIz9SCunUY5eJw67sWSM4"; 
-
-const VOID_LIBRARY_DEFAULTS = [
-    "https://www.youtube.com/embed/S2qT6w04x18?autoplay=1&controls=0&mute=0&loop=1&playlist=S2qT6w04x18", 
-    "https://www.youtube.com/embed/I5gMv2sM7yM?autoplay=1&controls=0&mute=0&loop=1&playlist=I5gMv2sM7yM",
-    "https://www.youtube.com/embed/7I0D-aN5tJE?autoplay=1&controls=0&mute=0&loop=1&playlist=7I0D-aN5tJE"
-];
-
-// Content Type Definition
+// ... (Vision Mirror logic unchanged) ...
 export interface VisionContent {
     type: 'VIDEO' | 'IMAGE' | 'SOCIAL';
     embedUrl: string;
@@ -264,19 +262,18 @@ export interface VisionContent {
     platform: 'YOUTUBE' | 'INSTAGRAM' | 'PINTEREST' | 'TIKTOK' | 'OTHER';
 }
 
+const DEFAULT_SHEET_ID = "1Hhfl7Cq28FvcyNrH_hodeNlIz9SCunUY5eJw67sWSM4"; 
+const VOID_LIBRARY_DEFAULTS = [
+    "https://www.youtube.com/embed/S2qT6w04x18?autoplay=1&controls=0&mute=0&loop=1&playlist=S2qT6w04x18", 
+    "https://www.youtube.com/embed/I5gMv2sM7yM?autoplay=1&controls=0&mute=0&loop=1&playlist=I5gMv2sM7yM",
+    "https://www.youtube.com/embed/7I0D-aN5tJE?autoplay=1&controls=0&mute=0&loop=1&playlist=7I0D-aN5tJE"
+];
+
 export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
     if (!rawUrl) return null;
-    
-    // 1. Basic cleanup of the raw string
     let clean = rawUrl.trim();
-    
-    // Decode HTML entities (common in scraped Google Sheet data)
     clean = clean.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-    
-    // Remove wrapping quotes if present
     if (clean.startsWith('"') && clean.endsWith('"')) clean = clean.slice(1, -1);
-    
-    // Auto-fix missing protocol
     if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
         clean = 'https://' + clean;
     }
@@ -285,12 +282,10 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
         const urlObj = new URL(clean);
         const lowerUrl = clean.toLowerCase();
 
-        // 2. IMAGE DETECTION
         if (lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('pinimg.com')) {
              return { type: 'IMAGE', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
         }
 
-        // 3. YOUTUBE DETECTION
         if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
             let id = '';
             if (urlObj.pathname.includes('/shorts/')) {
@@ -311,16 +306,12 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
             }
         }
 
-        // 4. INSTAGRAM DETECTION (Reels/Posts)
-        // Supported formats: instagram.com/p/ID, instagram.com/reel/ID, instagram.com/tv/ID
         if (urlObj.hostname.includes('instagram.com')) {
-            // Extract the ID
             const match = clean.match(/\/(p|reel|tv)\/([a-zA-Z0-9_-]+)/);
             if (match && match[2]) {
                 const id = match[2];
                 return {
-                    type: 'VIDEO', // Treat as VIDEO to use Iframe
-                    // Append /embed/captioned/ to force embed mode regardless of platform
+                    type: 'VIDEO', 
                     embedUrl: `https://www.instagram.com/p/${id}/embed/captioned/`, 
                     originalUrl: clean,
                     platform: 'INSTAGRAM'
@@ -328,7 +319,6 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
             }
         }
 
-        // 5. OTHER PLATFORMS
         let platform: any = 'OTHER';
         if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) platform = 'PINTEREST';
         else if (urlObj.hostname.includes('tiktok')) platform = 'TIKTOK';
@@ -342,7 +332,6 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
         };
 
     } catch (e) { 
-        // Fallback for non-standard but valid looking URLs
         if (clean.startsWith('http')) {
              return { type: 'SOCIAL', embedUrl: clean, originalUrl: clean, platform: 'OTHER' };
         }
@@ -351,21 +340,17 @@ export const convertToEmbedUrl = (rawUrl: string): VisionContent | null => {
 };
 
 export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
-    // --- UPDATED: HANDLE MULTIPLE DIRECT LINKS ---
     if (directUrl && directUrl.trim().length > 0) {
-        // Split by newlines, commas, or semicolons
         const rawLinks = directUrl.split(/[\n,;]+/).map(s => s.trim()).filter(s => s.length > 0);
         const results: VisionContent[] = [];
         
         rawLinks.forEach(link => {
             const res = convertToEmbedUrl(link);
-            // Deduplicate basic check
             if (res && !results.some(r => r.originalUrl === res.originalUrl)) {
                 results.push(res);
             }
         });
 
-        // If we found any valid links, return them (Shuffle Deck will handle the rest)
         if (results.length > 0) {
             return results;
         }
@@ -374,22 +359,17 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
     let fetchUrl = "";
     let sheetInput = customSheetId || DEFAULT_SHEET_ID;
     
-    // Robust detection for Published 2PACX Sheets
     if (sheetInput.includes("2PACX-")) {
         if (sheetInput.includes("http")) {
-             // Strip trailing parts like /pubhtml and append /pub?output=csv
              const parts = sheetInput.split('/pub');
              fetchUrl = `${parts[0]}/pub?output=csv`;
         } else {
-             // It's just the ID
              fetchUrl = `https://docs.google.com/spreadsheets/d/e/${sheetInput}/pub?output=csv`;
         }
     } 
-    // Standard Sheets
     else if (!sheetInput.includes("http") && sheetInput.length > 20) {
         fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetInput}/gviz/tq?tqx=out:csv`;
     } 
-    // Fallback if full URL provided but not 2PACX
     else if (sheetInput.includes("/d/")) {
          const match = sheetInput.match(/\/d\/([a-zA-Z0-9-_]+)/);
          const id = match ? match[1] : sheetInput;
@@ -404,9 +384,6 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
         const response = await fetch(fetchUrl);
         if (response.ok) {
             const text = await response.text();
-            
-            // ROBUST EXTRACTION: Look for https:// until we hit a " or , or whitespace or <
-            // This handles CSV quotes, HTML tags, etc.
             const urlRegex = /(https?:\/\/[^\s",<]+)/g;
             const allMatches = text.match(urlRegex);
             const validItems: VisionContent[] = [];
@@ -414,7 +391,6 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
             if (allMatches) {
                 allMatches.forEach(rawUrl => {
                     const result = convertToEmbedUrl(rawUrl);
-                    // Filter duplicates and nulls
                     if (result && !validItems.some(v => v.originalUrl === result.originalUrl)) {
                         validItems.push(result);
                     }
@@ -422,7 +398,6 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
             }
 
             if (validItems.length > 0) {
-                console.log(`[Vision] Found ${validItems.length} items`);
                 return validItems;
             }
         } 

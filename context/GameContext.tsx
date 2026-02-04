@@ -71,7 +71,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         stateRef.current = state;
     }, [state]);
 
-    // MOVED: Request permissions on interaction, not mount, to avoid blocking
+    // Manual permission request exposed for Settings Modal
+    const requestPermissions = async () => {
+        if (!("Notification" in window)) return;
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+            sendNotification("System Link Established", "The Void whispers directly to your mind now.");
+        }
+        initAudio();
+    };
+
     const ensurePermissions = () => {
         if (Notification.permission === 'default') {
             Notification.requestPermission();
@@ -353,7 +362,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // ... (editTask, deleteTask, moveTask, completeTask, completeSubtask, failTask, selectEnemy... remain unchanged for brevity, but are included in final file context)
     const editTask = (taskId: string, data: TaskUpdateData) => {
         ensureAudio();
         setState(prev => {
@@ -439,7 +447,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             effects.push({ id: generateId(), type: 'TEXT_XP', position: { ...pos, y: 3 }, text: `+${xpGain} XP`, timestamp: Date.now() });
 
-            // --- LOOT SYSTEM ---
+            // --- LOOT SYSTEM IMPROVED ---
+            // Ensure nextLevel is used to calculate appropriate tier
             const lootChanceBonus = (task.foresightBonus || 0) * 10; 
             const generatedLoot = generateLoot(nextLevel + lootChanceBonus);
             let inventoryUpdate = prev.inventory || [];
@@ -455,7 +464,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     isEquipped: false
                 };
                 inventoryUpdate = [...inventoryUpdate, newItem];
-                effects.push({ id: generateId(), type: 'TEXT_LOOT', position: { x: 4, y: 3, z: 4 }, text: `LOOT: ${newItem.name}`, timestamp: Date.now() });
+                // FLASHY TEXT FOR LOOT
+                effects.push({ id: generateId(), type: 'TEXT_LOOT', position: { x: 4, y: 3, z: 4 }, text: `LOOT FOUND: ${newItem.name}`, timestamp: Date.now() });
+                playSfx('MAGIC');
             }
 
             const newMinion: MinionEntity = { id: generateId(), type: 'WARRIOR', position: { x: 4, y: 0, z: 4 }, targetEnemyId: null, createdAt: Date.now() };
@@ -735,7 +746,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // ... (rest of context unchanged)
     const sellItem = (itemId: string) => {
         setState(prev => {
             const item = prev.inventory?.find(i => i.id === itemId);
@@ -784,14 +794,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const disconnectCloud = () => { disconnect(); setState(prev => ({ ...prev, syncConfig: { ...prev.syncConfig!, isConnected: false } })); };
     const closeVision = () => { setState(prev => ({ ...prev, activeMapEvent: 'NONE', activeVisionVideo: null })); };
     
-    // --- SHUFFLE DECK ALGORITHM FOR VISIONS ---
+    // ... (rest of the file including rerollVision, interactWithNPC, etc. unchanged)
     const rerollVision = async () => { 
         let queue = [...(state.visionQueue || [])];
 
-        // If Queue empty, refill it
         if (queue.length === 0) {
             const videos = await fetchMotivationVideos(state.settings.googleSheetId, state.settings.directVisionUrl);
-            // Convert to string format for storage
             const videoStrings = videos.map(v => v.type === 'VIDEO' ? v.embedUrl : JSON.stringify(v));
             queue = shuffleArray(videoStrings);
         }
@@ -813,7 +821,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(prev => { 
             const next = { ...prev, settings: { ...prev.settings, ...settings } };
             
-            // If Vision settings changed, clear the queue to force re-fetch on next usage
             if (settings.googleSheetId !== undefined || settings.directVisionUrl !== undefined) {
                 next.visionQueue = []; 
             }
@@ -828,14 +835,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const testCloudConnection = async () => { if (!state.syncConfig?.roomId) return { success: false, message: "No Room ID" }; return await testConnection(state.syncConfig.roomId); };
     const forcePull = () => { if (state.syncConfig?.isConnected && state.syncConfig.roomId) { window.location.reload(); } };
 
-    // --- TEMPLATE SYSTEM ---
     const saveTemplate = (templateData: Omit<TaskTemplate, 'id'>) => {
         playSfx('UI_CLICK');
         setState(prev => {
             const newTemplate: TaskTemplate = {
                 ...templateData,
                 id: generateId(),
-                // DEEP COPY: Map over subtasks to break reference to form state
                 subtasks: (templateData.subtasks || []).map(s => ({...s}))
             };
             const next = {
@@ -870,7 +875,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             clearSave, exportSave, importSave, connectToCloud, loginWithGoogle, logout, disconnectCloud,
             addEffect, closeVision, rerollVision, interactWithNPC, updateSettings, castSpell,
             testCloudConnection, forcePull,
-            saveTemplate, deleteTemplate
+            saveTemplate, deleteTemplate, requestPermissions
         }}>
             {children}
         </GameContext.Provider>

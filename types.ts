@@ -363,6 +363,7 @@ export interface GameContextType {
   castSpell: (spellId: string) => void; 
   testCloudConnection: () => Promise<{success: boolean, message: string}>;
   forcePull: () => void;
-  saveTemplate: (template: Omit<TaskTemplate, 'id'>) => void; // NEW
-  deleteTemplate: (templateId: string) => void; // NEW
+  saveTemplate: (template: Omit<TaskTemplate, 'id'>) => void;
+  deleteTemplate: (templateId: string) => void;
+  requestPermissions: () => Promise<void>; // Added for iOS support
 }
