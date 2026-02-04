@@ -53,11 +53,15 @@ export const useGame = () => {
 
 // --- NOTIFICATION HELPER ---
 const sendNotification = (title: string, body: string) => {
-    if (Notification.permission === 'granted') {
-        new Notification(title, { 
-            body, 
-            icon: 'https://cdn-icons-png.flaticon.com/512/3062/3062634.png' // Generic fantasy icon or shield
-        });
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+            new Notification(title, { 
+                body, 
+                icon: 'https://cdn-icons-png.flaticon.com/512/3062/3062634.png' // Generic fantasy icon or shield
+            });
+        } catch (e) {
+            console.warn("Notification failed to send:", e);
+        }
     }
 };
 
@@ -73,17 +77,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Manual permission request exposed for Settings Modal
     const requestPermissions = async () => {
-        if (!("Notification" in window)) return;
-        const perm = await Notification.requestPermission();
-        if (perm === 'granted') {
-            sendNotification("System Link Established", "The Void whispers directly to your mind now.");
+        if (typeof Notification === 'undefined') return;
+        try {
+            const perm = await Notification.requestPermission();
+            if (perm === 'granted') {
+                sendNotification("System Link Established", "The Void whispers directly to your mind now.");
+            }
+        } catch (e) {
+            console.warn("Permission request failed", e);
         }
         initAudio();
     };
 
     const ensurePermissions = () => {
-        if (Notification.permission === 'default') {
-            Notification.requestPermission();
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+            Notification.requestPermission().catch(err => console.warn(err));
         }
         initAudio();
         setVolume(state.settings?.masterVolume ?? 0.2);
@@ -545,7 +553,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const task = prev.tasks.find(t => t.id === taskId);
             if (!task) return prev;
             
-            sendNotification("❌ Defeat", `Task Failed: ${task.title}`);
+            sendNotification("⚔️ Defeat", `Task Failed: ${task.title}`);
 
             const next: GameState = {
                 ...prev,
