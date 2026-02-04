@@ -2,7 +2,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { EntityType, Era, TaskPriority, NPC, RaceType } from '../../types';
+import { EntityType, Era, TaskPriority, NPC, RaceType, Structures } from '../../types';
 import { HeroAvatar, BaseComplex, EnemyMesh, VillagerAvatar, MinionMesh, ForestStag, WolfConstruct, Crow } from './Assets';
 
 interface EntityRendererProps {
@@ -22,6 +22,7 @@ interface EntityRendererProps {
   subtaskCount?: number;
   npcAction?: NPC['currentAction']; 
   failed?: boolean;
+  structures?: Structures; // Added Structures prop
 }
 
 const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { children?: React.ReactNode, initialPos: [number,number,number], type: EntityType, speed?: number }) => {
@@ -82,13 +83,14 @@ const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { childr
     return <group ref={group} position={initialPos}>{children}</group>;
 }
 
-export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed }) => {
+export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures }) => {
   const content = useMemo(() => {
     switch (type) {
       case EntityType.HERO:
         return <HeroAvatar level={variant === Era.RUIN ? 0 : 3} winStreak={winStreak || 0} />;
       case EntityType.BUILDING_BASE:
-        return <BaseComplex era={variant as Era} currentHp={stats?.hp || 100} maxHp={stats?.maxHp || 100} />;
+        // Pass structures to BaseComplex to render Forge, Library, etc.
+        return <BaseComplex era={variant as Era} currentHp={stats?.hp || 100} maxHp={stats?.maxHp || 100} structures={structures} />;
       case EntityType.ENEMY:
         let visualArchetype = archetype || 'MONSTER';
         if (race === 'HUMAN' && archetype === 'KNIGHT') visualArchetype = 'KNIGHT';
@@ -104,7 +106,7 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
       default:
         return null;
     }
-  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed]);
+  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures]);
 
   if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null; // Handled by Scene Instances now
 

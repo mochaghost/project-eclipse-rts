@@ -35,6 +35,27 @@ export const VisionMirror: React.FC = () => {
         setTimeout(() => setLoading(false), 800);
     }
 
+    const handleOpenPopup = (url: string) => {
+        const width = 1000;
+        const height = 800;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        
+        try {
+            const popup = window.open(
+                url, 
+                'VisionPortal', 
+                `width=${width},height=${height},top=${top},left=${left},toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes`
+            );
+            // Fallback if blocked
+            if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+                window.open(url, '_blank');
+            }
+        } catch (e) {
+            window.open(url, '_blank');
+        }
+    };
+
     // Effect to stop loading when content changes
     useEffect(() => {
         setLoading(false);
@@ -141,14 +162,12 @@ export const VisionMirror: React.FC = () => {
 
                 <div className="flex flex-col gap-3 w-full max-w-[200px] z-50">
                     {isValidUrl ? (
-                        <a 
-                            href={safeUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
+                        <button 
+                            onClick={() => handleOpenPopup(safeUrl!)}
                             className="group relative px-6 py-3 bg-stone-900/80 text-white font-serif font-bold tracking-widest uppercase border border-stone-600 hover:bg-stone-800 transition-all shadow-lg flex items-center justify-center gap-2 pointer-events-auto cursor-pointer hover:scale-105 hover:border-yellow-600"
                         >
                                 OPEN PORTAL <ExternalLink size={14}/>
-                        </a>
+                        </button>
                     ) : (
                         <div className="px-6 py-3 bg-red-950/50 text-red-400 font-bold border border-red-900 flex items-center justify-center gap-2 cursor-not-allowed">
                             <AlertTriangle size={14} /> BROKEN LINK

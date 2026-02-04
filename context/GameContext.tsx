@@ -4,7 +4,7 @@ import {
   GameState, Task, SubtaskDraft, TaskPriority, AlertType, MapEventType, 
   VisualEffect, GameContextType, FirebaseConfig, TaskUpdateData, 
   Era, GameSettings, EntityType, MinionEntity, HistoryLog, Subtask,
-  EnemyEntity, Item, TaskTemplate
+  EnemyEntity, Item, TaskTemplate, NPC
 } from '../types';
 import { 
   generateId, generateNemesis, getSageWisdom, getVazarothLine, 
@@ -51,6 +51,16 @@ export const useGame = () => {
     return context;
 };
 
+// --- NOTIFICATION HELPER ---
+const sendNotification = (title: string, body: string) => {
+    if (Notification.permission === 'granted') {
+        new Notification(title, { 
+            body, 
+            icon: 'https://cdn-icons-png.flaticon.com/512/3062/3062634.png' // Generic fantasy icon or shield
+        });
+    }
+};
+
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, setState] = useState<GameState>(loadGame());
     const stateRef = useRef(state); 
@@ -60,6 +70,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
+
+    // MOVED: Request permissions on interaction, not mount, to avoid blocking
+    const ensurePermissions = () => {
+        if (Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        initAudio();
+        setVolume(state.settings?.masterVolume ?? 0.2);
+    };
 
     const ensureAudio = () => {
         initAudio();
@@ -87,13 +106,43 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             let hpDamage = 0;
             let baseDamage = 0;
             let needsUpdate = false;
+            let alertUpdate: Partial<GameState> | null = null;
 
-            // Combat calculation (compensated for slower tick rate)
+            // 1. COMBAT CALCULATION
             current.enemies.forEach(enemy => {
                 const task = current.tasks.find(t => t.id === enemy.taskId);
                 if (task && task.startTime <= now && !task.completed && !task.failed) {
                     const dps = (enemy.rank * 0.1) * (enemy.priority); 
                     baseDamage += dps;
+                }
+            });
+
+            // 2. 75% ALERT MECHANIC
+            const activeTasks = current.tasks.filter(t => !t.completed && !t.failed);
+            let triggeringTaskId: string | null = null;
+
+            activeTasks.forEach(task => {
+                const total = task.deadline - task.startTime;
+                const elapsed = now - task.startTime;
+                
+                // Only process tasks that have actually started and have a duration
+                if (elapsed > 0 && total > 0) {
+                    const progress = elapsed / total;
+                    
+                    // Trigger at 75%
+                    if (progress >= 0.75 && !task.crisisTriggered) {
+                        triggeringTaskId = task.id;
+                        sendNotification("⚠️ The Void Approaches", `Task "${task.title}" is 75% complete. Intervene now!`);
+                        playSfx('ERROR'); // Subtle warning sound
+                        
+                        // If no alert is currently active, show the Crisis Modal
+                        if (current.activeAlert === AlertType.NONE) {
+                            alertUpdate = {
+                                activeAlert: AlertType.CRISIS,
+                                alertTaskId: task.id
+                            };
+                        }
+                    }
                 }
             });
 
@@ -104,6 +153,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             let newPop = current.population;
             if (Math.random() > 0.66) { 
                 needsUpdate = true;
+                // Auto-generate resources based on roles
+                const smiths = current.population.filter(p => p.role === 'Smith').length;
+                if (smiths > 0) {
+                    // Smiths repair base passively
+                    baseDamage -= (smiths * 0.05); 
+                }
+
                 newPop = current.population.map(p => ({
                     ...p,
                     hunger: Math.min(100, p.hunger + 1),
@@ -111,11 +167,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }));
             }
 
-            if (baseDamage !== 0 || needsUpdate) {
+            if (baseDamage !== 0 || needsUpdate || alertUpdate || triggeringTaskId) {
                 setState(prev => {
                     const newBaseHp = Math.max(0, Math.min(prev.maxBaseHp, prev.baseHp - baseDamage));
+                    
+                    let nextTasks = prev.tasks;
+                    // Mark task as triggered to prevent spam
+                    if (triggeringTaskId) {
+                        nextTasks = prev.tasks.map(t => 
+                            t.id === triggeringTaskId ? { ...t, crisisTriggered: true } : t
+                        );
+                    }
+
                     return {
                         ...prev,
+                        ...alertUpdate,
+                        tasks: nextTasks,
                         baseHp: newBaseHp,
                         population: needsUpdate ? newPop : prev.population
                     };
@@ -199,7 +266,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const addTask = (title: string, startTime: number, deadline: number, priority: TaskPriority, subtasks: SubtaskDraft[], durationMinutes: number, description?: string, parentId?: string) => {
-        ensureAudio();
+        ensurePermissions(); // ASK FOR NOTIFICATION PERMISSION HERE
         resetIdleTimer();
         playSfx('UI_CLICK');
 
@@ -286,6 +353,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    // ... (editTask, deleteTask, moveTask, completeTask, completeSubtask, failTask, selectEnemy... remain unchanged for brevity, but are included in final file context)
     const editTask = (taskId: string, data: TaskUpdateData) => {
         ensureAudio();
         setState(prev => {
@@ -348,6 +416,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(prev => {
             const task = prev.tasks.find(t => t.id === taskId);
             if (!task) return prev;
+
+            sendNotification("⚔️ Victory!", `Enemy vanquished: ${task.title}`);
 
             const foresightMultiplier = 1.0 + (task.foresightBonus || 0);
             const xpGain = Math.floor((100 * task.priority) * foresightMultiplier);
@@ -464,6 +534,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const task = prev.tasks.find(t => t.id === taskId);
             if (!task) return prev;
             
+            sendNotification("❌ Defeat", `Task Failed: ${task.title}`);
+
             const next: GameState = {
                 ...prev,
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, failed: true } : t),
@@ -588,25 +660,82 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             playSfx('UI_CLICK');
             let next = { ...prev, gold: prev.gold - item.cost };
+            const effects: VisualEffect[] = [];
+            let populationUpdate = [...prev.population];
+            let historyUpdate = [...prev.history];
+            let vazarothMsg = prev.vazarothMessage;
             
             if (item.type === 'HEAL_HERO') next.heroHp = Math.min(next.maxHeroHp, next.heroHp + item.value);
             if (item.type === 'HEAL_BASE') next.baseHp = Math.min(next.maxBaseHp, next.baseHp + item.value);
             
             // ARCHITECTURE UPGRADES
-            if (item.type === 'UPGRADE_FORGE') next.structures.forgeLevel = Math.max(next.structures.forgeLevel, item.value);
-            if (item.type === 'UPGRADE_WALLS') next.structures.wallsLevel = Math.max(next.structures.wallsLevel, item.value);
-            if (item.type === 'UPGRADE_LIBRARY') next.structures.libraryLevel = Math.max(next.structures.libraryLevel, item.value);
+            if (item.type.startsWith('UPGRADE')) {
+                let structureName = "";
+                let specialistRole: NPC['role'] | null = null;
+
+                if (item.type === 'UPGRADE_FORGE') {
+                    next.structures.forgeLevel = Math.max(next.structures.forgeLevel, item.value);
+                    structureName = "Great Forge";
+                    specialistRole = "Smith";
+                    vazarothMsg = "You hammer steel while I hammer fate. Cute.";
+                }
+                if (item.type === 'UPGRADE_WALLS') {
+                    next.structures.wallsLevel = Math.max(next.structures.wallsLevel, item.value);
+                    structureName = "Bastion Walls";
+                    specialistRole = "Guard";
+                    vazarothMsg = "Walls only delay the inevitable.";
+                }
+                if (item.type === 'UPGRADE_LIBRARY') {
+                    next.structures.libraryLevel = Math.max(next.structures.libraryLevel, item.value);
+                    structureName = "Arcane Library";
+                    specialistRole = "Scholar";
+                    vazarothMsg = "Knowledge is a burden you cannot carry.";
+                }
+                
+                // COLONY SIM LOGIC: CONVERT PEASANT TO SPECIALIST
+                if (specialistRole) {
+                    const peasantIndex = populationUpdate.findIndex(p => p.role === 'Peasant');
+                    if (peasantIndex >= 0) {
+                        populationUpdate[peasantIndex] = {
+                            ...populationUpdate[peasantIndex],
+                            role: specialistRole,
+                            memories: [...populationUpdate[peasantIndex].memories, `Assigned to work in the ${structureName}.`]
+                        };
+                        effects.push({ id: generateId(), type: 'TEXT_XP', position: { x: 0, y: 3, z: 0 }, text: "New Specialist!", timestamp: Date.now() });
+                    }
+                }
+
+                // Add construction log
+                historyUpdate.unshift({
+                    id: generateId(),
+                    type: 'WORLD_EVENT',
+                    timestamp: Date.now(),
+                    message: "Construction Complete",
+                    details: `${structureName} established. The colony grows stronger.`
+                });
+
+                // Add construction effect
+                effects.push({ id: generateId(), type: 'TEXT_XP', position: { x: 0, y: 5, z: 0 }, text: "CONSTRUCTION COMPLETE", timestamp: Date.now() });
+                effects.push({ id: generateId(), type: 'EXPLOSION', position: { x: 0, y: 2, z: 0 }, timestamp: Date.now() });
+                playSfx('MAGIC');
+            }
             
             if (item.type === 'MERCENARY') {
                 const merc = { id: generateId(), type: 'WARRIOR', position: { x: 2, y: 0, z: 2 }, targetEnemyId: null, createdAt: Date.now() };
                 next.minions = [...(next.minions || []), merc as any];
             }
 
+            next.effects = [...prev.effects, ...effects];
+            next.population = populationUpdate;
+            next.history = historyUpdate.slice(0, 500);
+            next.vazarothMessage = vazarothMsg;
+
             syncNow(next);
             return next;
         });
     };
 
+    // ... (rest of context unchanged)
     const sellItem = (itemId: string) => {
         setState(prev => {
             const item = prev.inventory?.find(i => i.id === itemId);

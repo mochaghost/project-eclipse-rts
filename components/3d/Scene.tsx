@@ -277,6 +277,7 @@ const GameWorld = React.memo(({
                 variant={state.era} 
                 position={[0, 0, 0]} 
                 stats={{ hp: state.baseHp || 100, maxHp: state.maxBaseHp || 100 }}
+                structures={state.structures} // CRITICAL FIX: Pass structures
             />
 
             <EntityRenderer 
@@ -360,7 +361,8 @@ const GameWorld = React.memo(({
         prev.state.weather === next.state.weather &&
         prev.state.effects === next.state.effects &&
         prev.state.activeMapEvent === next.state.activeMapEvent &&
-        prev.state.selectedEnemyId === next.state.selectedEnemyId
+        prev.state.selectedEnemyId === next.state.selectedEnemyId &&
+        prev.state.structures === next.state.structures // CRITICAL FIX: Re-render on structure update
     );
 });
 

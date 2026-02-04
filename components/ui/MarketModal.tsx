@@ -13,6 +13,12 @@ export const MarketModal: React.FC = () => {
   const structures = SHOP_ITEMS.filter(i => i.tier && i.tier > 0);
   const inventory = state.inventory || [];
 
+  const handleBuyStructure = (itemId: string) => {
+      buyItem(itemId);
+      // Close market to show the construction effect/visual
+      toggleMarket();
+  };
+
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 pointer-events-auto">
       <div className="relative w-full max-w-4xl h-[80vh] bg-[#0c0a09] border-2 border-yellow-900/50 flex flex-col shadow-2xl">
@@ -89,7 +95,7 @@ export const MarketModal: React.FC = () => {
 
                                     {!isOwned && (
                                         <button 
-                                            onClick={() => buyItem(item.id)}
+                                            onClick={() => handleBuyStructure(item.id)}
                                             disabled={!isNext || state.gold < item.cost}
                                             className={`w-full py-3 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${
                                                 !isNext ? 'bg-stone-900 text-stone-600 border border-stone-800 cursor-not-allowed' :

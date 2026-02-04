@@ -129,6 +129,8 @@ const StructureForge = ({ level }: { level: number }) => {
             <mesh position={[0, 1, 0]}><boxGeometry args={[2, 2, 2]} /><meshStandardMaterial color="#44403c" /></mesh>
             <mesh position={[0, 2.5, 0]} rotation={[0,0.5,0]}><coneGeometry args={[1.5, 1.5, 4]} /><meshStandardMaterial color="#1c1917" /></mesh>
             <Fire position={[0.5, 0.5, 1.1]} scale={0.5} />
+            {/* Added Smoke to show activity */}
+            <Smoke position={[0, 3, 0]} /> 
         </InteractiveStructure>
     ); // Tier 1: Smithy
 
@@ -137,7 +139,7 @@ const StructureForge = ({ level }: { level: number }) => {
             <mesh position={[0, 1.5, 0]}><cylinderGeometry args={[1.5, 1.8, 3, 6]} /><meshStandardMaterial color="#1c1917" metalness={0.5} /></mesh>
             <mesh position={[0, 3.5, 0]}><cylinderGeometry args={[0.5, 0.8, 2]} /><meshStandardMaterial color="#0c0a09" /></mesh>
             <Fire position={[0, 3.5, 0]} scale={1} color="#ef4444" />
-            <Smoke position={[0, 4, 0]} />
+            <Smoke position={[0, 5, 0]} />
         </InteractiveStructure>
     ); // Tier 2: Foundry
 
@@ -148,6 +150,7 @@ const StructureForge = ({ level }: { level: number }) => {
             </Float>
             <mesh position={[0, 0.5, 0]}><cylinderGeometry args={[2, 2.5, 1, 8]} /><meshStandardMaterial color="#000" /></mesh>
             <pointLight position={[0, 3, 0]} color="#ea580c" intensity={5} distance={10} />
+            <Sparkles count={50} scale={4} size={10} color="#ea580c" speed={2} />
         </InteractiveStructure>
     ); // Tier 3: Titan Core
 }
@@ -159,6 +162,8 @@ const StructureLibrary = ({ level }: { level: number }) => {
         <InteractiveStructure name="Archives" position={[3, 0, 3]}>
             <mesh position={[0, 1, 0]}><boxGeometry args={[1.5, 2, 1.5]} /><meshStandardMaterial color="#3f2818" /></mesh>
             <mesh position={[0, 2.2, 0]}><coneGeometry args={[1.2, 1, 4]} /><meshStandardMaterial color="#1c1917" /></mesh>
+            {/* Added Light to show occupancy */}
+            <pointLight position={[0, 1, 0]} color="#fbbf24" distance={3} intensity={1} />
         </InteractiveStructure>
     ); // Tier 1: Wooden Building
 
@@ -167,6 +172,7 @@ const StructureLibrary = ({ level }: { level: number }) => {
             <mesh position={[0, 2, 0]}><cylinderGeometry args={[1, 1, 4, 8]} /><meshStandardMaterial color="#e7e5e4" /></mesh>
             <mesh position={[0, 4.5, 0]}><sphereGeometry args={[1.2, 16, 16, 0, Math.PI * 2, 0, Math.PI/2]} /><meshStandardMaterial color="#0c0a09" metalness={0.8} /></mesh>
             <mesh position={[0.5, 4.8, 0]} rotation={[0,0,-0.5]}><cylinderGeometry args={[0.1, 0.2, 1]} /><meshStandardMaterial color="#fbbf24" /></mesh>
+            <Sparkles count={20} scale={3} size={2} color="#fbbf24" />
         </InteractiveStructure>
     ); // Tier 2: Stone Observatory
 
@@ -176,7 +182,8 @@ const StructureLibrary = ({ level }: { level: number }) => {
                 <mesh position={[0, 3, 0]}><torusGeometry args={[1.5, 0.1, 16, 4]} /><meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={2} /></mesh>
             </Float>
             <mesh position={[0, 2.5, 0]}><coneGeometry args={[1, 5, 4]} /><meshStandardMaterial color="#2e1065" emissive="#581c87" /></mesh>
-            <Sparkles count={20} scale={3} color="#d8b4fe" />
+            <Sparkles count={50} scale={5} color="#d8b4fe" size={5} speed={0.5} />
+            <pointLight position={[0, 4, 0]} color="#a855f7" distance={10} intensity={3} />
         </InteractiveStructure>
     ); // Tier 3: Magic Spire
 }
@@ -192,11 +199,17 @@ const StructureWalls = ({ level }: { level: number }) => {
             {positions.map(([x, z], i) => (
                 <group key={i} position={[x, 0, z]}>
                     {level === 1 && <mesh position={[0, 1, 0]}><boxGeometry args={[1, 2, 1]} /><meshStandardMaterial color="#57534e" /></mesh>}
-                    {level === 2 && <mesh position={[0, 1.5, 0]}><cylinderGeometry args={[0.8, 1, 3, 6]} /><meshStandardMaterial color="#1c1917" /></mesh>}
+                    {level === 2 && (
+                        <group>
+                            <mesh position={[0, 1.5, 0]}><cylinderGeometry args={[0.8, 1, 3, 6]} /><meshStandardMaterial color="#1c1917" /></mesh>
+                            <mesh position={[0, 3.2, 0]}><coneGeometry args={[1, 0.5, 6]} /><meshStandardMaterial color="#000" /></mesh>
+                        </group>
+                    )}
                     {level === 3 && (
                         <group>
                             <mesh position={[0, 2, 0]}><cylinderGeometry args={[0.5, 0.8, 4, 6]} /><meshStandardMaterial color="#000" /></mesh>
                             <mesh position={[0, 4.2, 0]}><octahedronGeometry args={[0.5]} /><meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={2} /></mesh>
+                            <pointLight position={[0, 4, 0]} color="#3b82f6" distance={5} intensity={2} />
                         </group>
                     )}
                 </group>
@@ -253,6 +266,7 @@ const BaseComplex = ({ era, currentHp, maxHp, structures }: any) => {
     );
 };
 
+// ... (Rest of the file including Environment Details, Animals, and Exported Components remains unchanged)
 // --- ENVIRONMENT DETAILS ---
 
 export const GrassTuft: React.FC<{ position: [number, number, number] }> = ({ position }) => {
@@ -526,10 +540,17 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
 const VillagerAvatar = ({ role, name, status, onClick, currentAction }: any) => {
     let color = role === 'Guard' ? '#404040' : role === 'Noble' ? '#7f1d1d' : '#57534e';
     if (role === 'Cultist') color = '#3f0e0e';
+    if (role === 'Smith') color = '#ea580c'; // Orange for Smiths
+    if (role === 'Scholar') color = '#3b82f6'; // Blue for Scholars
+
     return (
         <group onClick={(e) => { e.stopPropagation(); onClick && onClick(); }}>
             <mesh position={[0,0.4,0]} castShadow><boxGeometry args={[0.3, 0.6, 0.3]} /><meshStandardMaterial color={color} /></mesh>
             <mesh position={[0,0.85,0]} castShadow><boxGeometry args={[0.2, 0.2, 0.2]} /><meshStandardMaterial color={PALETTE.SKIN} /></mesh>
+            
+            {/* Visual Indicators for Jobs */}
+            {role === 'Smith' && <mesh position={[0.2, 0.5, 0]} rotation={[0,0,-0.5]}><boxGeometry args={[0.1, 0.4, 0.1]} /><meshStandardMaterial color="#444" /></mesh>}
+            {role === 'Scholar' && <mesh position={[0.2, 0.5, 0]} rotation={[0,0,-0.5]}><boxGeometry args={[0.1, 0.3, 0.2]} /><meshStandardMaterial color="#e7e5e4" /></mesh>}
         </group>
     )
 }
