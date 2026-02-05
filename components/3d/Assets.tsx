@@ -4,7 +4,7 @@ import { Html, Float, Sparkles, Trail, useTexture, Instance, Instances } from '@
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PALETTE } from '../../constants';
-import { TaskPriority, Era, NPC, RaceType } from '../../types';
+import { TaskPriority, Era, NPC, RaceType, HeroEquipment } from '../../types';
 
 // --- UTILITY COMPONENTS ---
 
@@ -639,29 +639,122 @@ export const Crow = ({ position, rotation }: any) => (
 
 // --- HERO EVOLUTION (8 Tiers for 80 Levels) ---
 
-export const HeroAvatar = ({ level, winStreak, scale = 1 }: { level: number, winStreak?: number, scale?: number }) => {
-    // TIER 1: THE WRETCH (1-9)
-    if (level < 10) {
-        return (
-            <group scale={[scale, scale, scale]}>
-                <mesh position={[0, 0.7, 0]} castShadow><boxGeometry args={[0.4, 0.8, 0.3]} /><meshStandardMaterial color="#57534e" /></mesh>
-                <mesh position={[0, 1.3, 0]} castShadow><sphereGeometry args={[0.2, 16, 16]} /><meshStandardMaterial color="#fca5a5" /></mesh>
-                <mesh position={[0.3, 0.6, 0.3]} rotation={[0.2, 0, -0.2]}><boxGeometry args={[0.1, 0.8, 0.1]} /><meshStandardMaterial color="#7c2d12" /></mesh>
-            </group>
-        )
-    }
-    // TIER 2-8 ... (Abbreviated for brevity, logic remains from previous file)
-    // Assuming rest of HeroAvatar logic exists here as before.
+export const EquippedWeapon = ({ name }: { name: string }) => {
+    // Simple visual logic based on name keywords
+    const isGold = name.toLowerCase().includes('gold') || name.toLowerCase().includes('king');
+    const isVoid = name.toLowerCase().includes('void') || name.toLowerCase().includes('eclipse');
+    const isBig = name.toLowerCase().includes('great') || name.toLowerCase().includes('claymore');
+    
+    let color = "#cbd5e1"; // Steel
+    if (isGold) color = "#fbbf24";
+    if (isVoid) color = "#a855f7";
+    if (name.toLowerCase().includes('rust')) color = "#7c2d12";
+
     return (
-        <group scale={[scale, scale, scale]}>
-             <Float speed={2} rotationIntensity={0.1} floatIntensity={0.2}>
-                <mesh position={[0, 1, 0]} castShadow>
-                    <octahedronGeometry args={[0.6, 0]} />
-                    <meshStandardMaterial color="#a855f7" emissive="#6b21a8" emissiveIntensity={3} />
-                </mesh>
-             </Float>
+        <group position={[0.4, 0.8, 0.2]} rotation={[0, 0, -0.5]} scale={isBig ? 1.5 : 1}>
+            {/* Hilt */}
+            <mesh position={[0, -0.2, 0]}>
+                <cylinderGeometry args={[0.03, 0.04, 0.4]} />
+                <meshStandardMaterial color="#451a03" />
+            </mesh>
+            {/* Guard */}
+            <mesh position={[0, 0, 0]}>
+                <boxGeometry args={[0.3, 0.05, 0.1]} />
+                <meshStandardMaterial color={isGold ? "#d97706" : "#334155"} />
+            </mesh>
+            {/* Blade */}
+            <mesh position={[0, 0.6, 0]}>
+                <boxGeometry args={[0.08, 1.2, 0.02]} />
+                <meshStandardMaterial color={color} emissive={isVoid ? color : undefined} emissiveIntensity={isVoid ? 2 : 0} metalness={0.8} roughness={0.2} />
+            </mesh>
+            {isVoid && <Sparkles count={5} scale={1} size={2} color="#d8b4fe" />}
         </group>
     );
+};
+
+export const HeroAvatar = ({ level, winStreak, scale = 1, equipment }: { level: number, winStreak?: number, scale?: number, equipment?: HeroEquipment }) => {
+    const armorName = equipment?.armor || "Rags";
+    
+    const isPlate = armorName.toLowerCase().includes('plate') || armorName.toLowerCase().includes('mail') || armorName.toLowerCase().includes('iron');
+    const isRoyal = armorName.toLowerCase().includes('king') || armorName.toLowerCase().includes('sovereign') || armorName.toLowerCase().includes('regalia');
+    const isVoid = armorName.toLowerCase().includes('void') || armorName.toLowerCase().includes('eclipse') || armorName.toLowerCase().includes('cosmic');
+
+    let bodyColor = "#fca5a5"; // Skin
+    let torsoColor = "#78716c"; // Rags
+    
+    if (armorName.toLowerCase().includes('leather')) torsoColor = "#451a03";
+    if (isPlate) torsoColor = "#334155"; // Dark Steel
+    if (isRoyal) torsoColor = "#fbbf24"; // Gold
+    if (isVoid) torsoColor = "#000000";
+
+    return (
+        <group scale={[scale, scale, scale]}>
+            {/* Halo for streaks */}
+            {winStreak && winStreak > 3 && (
+                <Float speed={2} rotationIntensity={0} floatIntensity={0.5}>
+                    <mesh position={[0, 1.8, 0]} rotation={[Math.PI/2, 0, 0]}>
+                        <torusGeometry args={[0.3, 0.02, 8, 16]} />
+                        <meshBasicMaterial color="#fbbf24" />
+                    </mesh>
+                </Float>
+            )}
+
+            {/* Head */}
+            <mesh position={[0, 1.3, 0]} castShadow>
+                <sphereGeometry args={[0.2, 16, 16]} />
+                <meshStandardMaterial color={bodyColor} />
+            </mesh>
+            
+            {/* Crown/Helm */}
+            {(isRoyal || isVoid) && (
+                <mesh position={[0, 1.45, 0]}>
+                    <cylinderGeometry args={[0.22, 0.22, 0.1, 6]} />
+                    <meshStandardMaterial color={isVoid ? "#000" : "#fbbf24"} />
+                </mesh>
+            )}
+
+            {/* Torso */}
+            <mesh position={[0, 0.7, 0]} castShadow>
+                <boxGeometry args={[0.4, 0.8, 0.3]} />
+                <meshStandardMaterial color={torsoColor} />
+            </mesh>
+
+            {/* Pauldrons (Shoulders) for Plate+ */}
+            {(isPlate || isRoyal || isVoid) && (
+                <>
+                    <mesh position={[0.25, 1, 0]}>
+                        <boxGeometry args={[0.2, 0.2, 0.3]} />
+                        <meshStandardMaterial color={torsoColor} />
+                    </mesh>
+                    <mesh position={[-0.25, 1, 0]}>
+                        <boxGeometry args={[0.2, 0.2, 0.3]} />
+                        <meshStandardMaterial color={torsoColor} />
+                    </mesh>
+                </>
+            )}
+
+            {/* Cape for Royal */}
+            {isRoyal && (
+                <mesh position={[0, 0.7, -0.16]} rotation={[0.1, 0, 0]}>
+                    <boxGeometry args={[0.4, 0.9, 0.05]} />
+                    <meshStandardMaterial color="#7f1d1d" />
+                </mesh>
+            )}
+
+            {/* Legs */}
+            <mesh position={[-0.1, 0.2, 0]}>
+                <boxGeometry args={[0.15, 0.4, 0.15]} />
+                <meshStandardMaterial color="#1c1917" />
+            </mesh>
+            <mesh position={[0.1, 0.2, 0]}>
+                <boxGeometry args={[0.15, 0.4, 0.15]} />
+                <meshStandardMaterial color="#1c1917" />
+            </mesh>
+
+            {/* Weapon */}
+            <EquippedWeapon name={equipment?.weapon || "Fists"} />
+        </group>
+    )
 };
 
 export const MinionMesh = () => {

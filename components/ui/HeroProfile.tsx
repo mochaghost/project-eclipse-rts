@@ -6,6 +6,7 @@ import { OrbitControls, ContactShadows } from '@react-three/drei';
 import { HeroAvatar } from '../3d/Assets';
 import { useGame } from '../../context/GameContext';
 import { getEquipmentLore } from '../../utils/generators';
+import { HeroEquipment } from '../../types';
 
 interface HeroProfileProps {
   isOpen: boolean;
@@ -13,12 +14,12 @@ interface HeroProfileProps {
   level: number;
 }
 
-const HeroScene = ({ level }: { level: number }) => (
+const HeroScene = ({ level, equipment }: { level: number, equipment: HeroEquipment }) => (
     <>
       <ambientLight intensity={0.8} />
       <spotLight position={[10, 10, 10]} angle={0.15} intensity={1} castShadow />
       <group position={[0, -1.2, 0]}>
-        <HeroAvatar level={level} scale={2} />
+        <HeroAvatar level={level} scale={2} equipment={equipment} />
         <ContactShadows opacity={0.5} scale={10} blur={2} far={4} color="#000000" />
       </group>
       <OrbitControls autoRotate />
@@ -45,7 +46,7 @@ export const HeroProfile: React.FC<HeroProfileProps> = ({ isOpen, onClose, level
         <div className="w-1/3 h-full bg-gradient-to-b from-[#1c1917] to-black relative border-r border-stone-800">
             <div className="w-full h-full">
                 <Canvas camera={{ position: [0, 2, 4], fov: 40 }}>
-                    <Suspense fallback={null}><HeroScene level={level} /></Suspense>
+                    <Suspense fallback={null}><HeroScene level={level} equipment={equip} /></Suspense>
                 </Canvas>
             </div>
             <div className="absolute bottom-4 left-0 right-0 text-center">

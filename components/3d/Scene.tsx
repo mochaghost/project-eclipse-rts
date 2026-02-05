@@ -277,7 +277,7 @@ const GameWorld = React.memo(({
                 variant={state.era} 
                 position={[0, 0, 0]} 
                 stats={{ hp: state.baseHp || 100, maxHp: state.maxBaseHp || 100 }}
-                structures={state.structures} // CRITICAL FIX: Pass structures
+                structures={state.structures} 
             />
 
             <EntityRenderer 
@@ -285,6 +285,7 @@ const GameWorld = React.memo(({
                 variant={state.playerLevel as any} 
                 position={[4, 0, 4]} 
                 winStreak={state.winStreak}
+                equipment={state.heroEquipment} // PASS EQUIPMENT HERE
             />
 
             {state.minions?.map(minion => (
@@ -355,14 +356,15 @@ const GameWorld = React.memo(({
     // Only re-render if gameplay-affecting state changes
     return (
         prev.state.enemies === next.state.enemies &&
-        prev.state.tasks === next.state.tasks && // Added check for tasks update
+        prev.state.tasks === next.state.tasks &&
         prev.state.population === next.state.population &&
         prev.state.baseHp === next.state.baseHp &&
         prev.state.weather === next.state.weather &&
         prev.state.effects === next.state.effects &&
         prev.state.activeMapEvent === next.state.activeMapEvent &&
         prev.state.selectedEnemyId === next.state.selectedEnemyId &&
-        prev.state.structures === next.state.structures // CRITICAL FIX: Re-render on structure update
+        prev.state.structures === next.state.structures &&
+        prev.state.heroEquipment === next.state.heroEquipment // CHECK EQUIPMENT CHANGE
     );
 });
 
