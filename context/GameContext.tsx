@@ -623,8 +623,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (success) {
             playSfx('VICTORY');
             setState(prev => {
-                const subtaskDrafts: Subtask[] = newSubtasks.map(t => ({ id: generateId(), title: t, completed: false }));
-                const updatedTasks = prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: [...t.subtasks, ...subtaskDrafts] } : t);
+                const subtaskDrafts: Subtask[] = newSubtasks.map(t => ({ 
+                    id: generateId(), 
+                    title: t, 
+                    completed: false,
+                    startTime: Date.now(), // IMPORTANT: Give them a timestamp
+                    deadline: Date.now() + 3600000 
+                }));
+                
+                // SAFE SPREAD: Handle potentially undefined t.subtasks
+                const updatedTasks = prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), ...subtaskDrafts] } : t);
+                
                 const next = {
                     ...prev,
                     activeAlert: AlertType.NONE,

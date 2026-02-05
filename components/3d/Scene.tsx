@@ -295,7 +295,7 @@ const GameWorld = React.memo(({
             {state.enemies?.map(enemy => {
                 const task = state.tasks.find(t => t.id === enemy.taskId);
                 let startTime = task ? task.startTime : 0;
-                if (enemy.subtaskId && task) {
+                if (enemy.subtaskId && task && task.subtasks) { // Added safe check for task.subtasks
                     const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
                     if (sub && sub.startTime) startTime = sub.startTime;
                 }
