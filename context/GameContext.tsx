@@ -125,7 +125,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             let needsUpdate = false;
             let alertUpdate: Partial<GameState> | null = null;
 
-            // 1. COMBAT CALCULATION
+            // 1. COMBAT CALCULATION (Tasks vs Time)
             current.enemies.forEach(enemy => {
                 const task = current.tasks.find(t => t.id === enemy.taskId);
                 if (task && task.startTime <= now && !task.completed && !task.failed) {
@@ -142,22 +142,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const total = task.deadline - task.startTime;
                 const elapsed = now - task.startTime;
                 
-                // Only process tasks that have actually started and have a duration
                 if (elapsed > 0 && total > 0) {
                     const progress = elapsed / total;
-                    
-                    // Trigger at 75%
                     if (progress >= 0.75 && !task.crisisTriggered) {
                         triggeringTaskId = task.id;
                         sendNotification("⚠️ The Void Approaches", `Task "${task.title}" is 75% complete. Intervene now!`);
-                        playSfx('ERROR'); // Subtle warning sound
-                        
-                        // If no alert is currently active, show the Crisis Modal
+                        playSfx('ERROR'); 
                         if (current.activeAlert === AlertType.NONE) {
-                            alertUpdate = {
-                                activeAlert: AlertType.CRISIS,
-                                alertTaskId: task.id
-                            };
+                            alertUpdate = { activeAlert: AlertType.CRISIS, alertTaskId: task.id };
                         }
                     }
                 }
@@ -166,17 +158,40 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const regen = (current.structures.wallsLevel || 0) * 0.2;
             baseDamage -= regen;
 
+            // 3. RANDOM SIEGE EVENTS (New Mechanic)
+            // 2% chance per 2s tick to start a siege if map is quiet (~ every 2-3 mins)
+            if (current.activeMapEvent === 'NONE' && Math.random() > 0.98) {
+                // Find a hostile faction to blame
+                const hostile = current.factions.filter(f => f.reputation < 0);
+                const attacker = hostile.length > 0 ? hostile[Math.floor(Math.random() * hostile.length)] : null;
+                
+                alertUpdate = { 
+                    ...alertUpdate, 
+                    activeMapEvent: 'FACTION_SIEGE',
+                    vazarothMessage: attacker ? `The ${attacker.name} marches on your walls!` : "They are coming. Hold the gate!",
+                    history: [{ 
+                        id: generateId(), 
+                        type: 'SIEGE', 
+                        timestamp: Date.now(), 
+                        message: "Enemy Raid Detected", 
+                        details: attacker ? `${attacker.name} forces spotted.` : "Unknown assailants." 
+                    } as HistoryLog, ...current.history].slice(0, 500)
+                };
+                
+                // End siege automatically after 20s
+                setTimeout(() => {
+                    setState(prev => ({ ...prev, activeMapEvent: 'NONE' }));
+                }, 20000);
+            }
+
             // NPC Simulation - Only run if sufficient time passed
             let newPop = current.population;
             if (Math.random() > 0.66) { 
                 needsUpdate = true;
-                // Auto-generate resources based on roles
                 const smiths = current.population.filter(p => p.role === 'Smith').length;
                 if (smiths > 0) {
-                    // Smiths repair base passively
                     baseDamage -= (smiths * 0.05); 
                 }
-
                 newPop = current.population.map(p => ({
                     ...p,
                     hunger: Math.min(100, p.hunger + 1),
@@ -189,7 +204,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const newBaseHp = Math.max(0, Math.min(prev.maxBaseHp, prev.baseHp - baseDamage));
                     
                     let nextTasks = prev.tasks;
-                    // Mark task as triggered to prevent spam
                     if (triggeringTaskId) {
                         nextTasks = prev.tasks.map(t => 
                             t.id === triggeringTaskId ? { ...t, crisisTriggered: true } : t
@@ -282,12 +296,35 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }));
     };
 
+    // --- DAMAGE HANDLER FOR SIEGE MOBS ---
+    const takeBaseDamage = (amount: number, reason: string = "Attack") => {
+        setState(prev => {
+            // Apply Wall Mitigation (Armor)
+            const defense = (prev.structures.wallsLevel || 0) * 10; // 0, 10, 20, 30
+            const actualDamage = Math.max(0, amount - defense);
+            
+            // If completely blocked, no damage
+            if (actualDamage <= 0) return prev;
+
+            playSfx('COMBAT_HIT');
+            
+            const next = {
+                ...prev,
+                baseHp: Math.max(0, prev.baseHp - actualDamage)
+            };
+            // Only sync on significant damage to avoid spam
+            if (prev.baseHp - next.baseHp > 5) syncNow(next);
+            return next;
+        });
+    };
+
+    // ... (Existing addTask, editTask, etc. remain unchanged, just ensure takeBaseDamage is added to provider)
+    
     const addTask = (title: string, startTime: number, deadline: number, priority: TaskPriority, subtasks: SubtaskDraft[], durationMinutes: number, description?: string, parentId?: string) => {
-        ensurePermissions(); // ASK FOR NOTIFICATION PERMISSION HERE
+        ensurePermissions(); 
         resetIdleTimer();
         playSfx('UI_CLICK');
 
-        // --- CALCULATE FORESIGHT BONUS ---
         const now = new Date();
         const start = new Date(startTime);
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -456,7 +493,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             effects.push({ id: generateId(), type: 'TEXT_XP', position: { ...pos, y: 3 }, text: `+${xpGain} XP`, timestamp: Date.now() });
 
             // --- LOOT SYSTEM IMPROVED ---
-            // Ensure nextLevel is used to calculate appropriate tier
             const lootChanceBonus = (task.foresightBonus || 0) * 10; 
             const generatedLoot = generateLoot(nextLevel + lootChanceBonus);
             let inventoryUpdate = prev.inventory || [];
@@ -472,7 +508,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     isEquipped: false
                 };
                 inventoryUpdate = [...inventoryUpdate, newItem];
-                // FLASHY TEXT FOR LOOT
                 effects.push({ id: generateId(), type: 'TEXT_LOOT', position: { x: 4, y: 3, z: 4 }, text: `LOOT FOUND: ${newItem.name}`, timestamp: Date.now() });
                 playSfx('MAGIC');
             }
@@ -507,7 +542,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 realmStats: sim.newStats,
                 factions: sim.newFactions,
                 nemesisGraveyard: graveyardUpdate,
-                inventory: inventoryUpdate, // SAVE LOOT TO INVENTORY
+                inventory: inventoryUpdate,
                 history: [{ 
                     id: generateId(), 
                     type: generatedLoot ? 'LOOT' : 'VICTORY', 
@@ -687,7 +722,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (item.type === 'HEAL_HERO') next.heroHp = Math.min(next.maxHeroHp, next.heroHp + item.value);
             if (item.type === 'HEAL_BASE') next.baseHp = Math.min(next.maxBaseHp, next.baseHp + item.value);
             
-            // ARCHITECTURE UPGRADES
             if (item.type.startsWith('UPGRADE')) {
                 let structureName = "";
                 let specialistRole: NPC['role'] | null = null;
@@ -711,7 +745,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     vazarothMsg = "Knowledge is a burden you cannot carry.";
                 }
                 
-                // COLONY SIM LOGIC: CONVERT PEASANT TO SPECIALIST
                 if (specialistRole) {
                     const peasantIndex = populationUpdate.findIndex(p => p.role === 'Peasant');
                     if (peasantIndex >= 0) {
@@ -724,7 +757,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
                 }
 
-                // Add construction log
                 historyUpdate.unshift({
                     id: generateId(),
                     type: 'WORLD_EVENT',
@@ -733,7 +765,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     details: `${structureName} established. The colony grows stronger.`
                 });
 
-                // Add construction effect
                 effects.push({ id: generateId(), type: 'TEXT_XP', position: { x: 0, y: 5, z: 0 }, text: "CONSTRUCTION COMPLETE", timestamp: Date.now() });
                 effects.push({ id: generateId(), type: 'EXPLOSION', position: { x: 0, y: 2, z: 0 }, timestamp: Date.now() });
                 playSfx('MAGIC');
@@ -764,7 +795,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...prev,
                 gold: prev.gold + Math.floor(item.value / 2),
                 inventory: prev.inventory.filter(i => i.id !== itemId),
-                // Unequip if selling currently equipped
                 heroEquipment: {
                     weapon: prev.heroEquipment.weapon === item.name ? "Bare Fists" : prev.heroEquipment.weapon,
                     armor: prev.heroEquipment.armor === item.name ? "Rags" : prev.heroEquipment.armor,
@@ -802,7 +832,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const disconnectCloud = () => { disconnect(); setState(prev => ({ ...prev, syncConfig: { ...prev.syncConfig!, isConnected: false } })); };
     const closeVision = () => { setState(prev => ({ ...prev, activeMapEvent: 'NONE', activeVisionVideo: null })); };
     
-    // ... (rest of the file including rerollVision, interactWithNPC, etc. unchanged)
     const rerollVision = async () => { 
         let queue = [...(state.visionQueue || [])];
 
@@ -828,11 +857,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updateSettings = (settings: Partial<GameSettings>) => { 
         setState(prev => { 
             const next = { ...prev, settings: { ...prev.settings, ...settings } };
-            
             if (settings.googleSheetId !== undefined || settings.directVisionUrl !== undefined) {
                 next.visionQueue = []; 
             }
-
             setVolume(next.settings.masterVolume); 
             syncNow(next); 
             return next; 
@@ -883,7 +910,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             clearSave, exportSave, importSave, connectToCloud, loginWithGoogle, logout, disconnectCloud,
             addEffect, closeVision, rerollVision, interactWithNPC, updateSettings, castSpell,
             testCloudConnection, forcePull,
-            saveTemplate, deleteTemplate, requestPermissions
+            saveTemplate, deleteTemplate, requestPermissions, takeBaseDamage
         }}>
             {children}
         </GameContext.Provider>

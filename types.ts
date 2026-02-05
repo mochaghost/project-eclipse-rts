@@ -41,7 +41,7 @@ export enum AlertType {
   AEON_ENCOUNTER = 'AEON_ENCOUNTER'
 }
 
-export type MapEventType = 'NONE' | 'TITAN_GAZE' | 'VOID_STORM' | 'TREMOR' | 'MOCKING_RAID' | 'VISION_RITUAL' | 'PEASANT_RAID';
+export type MapEventType = 'NONE' | 'TITAN_GAZE' | 'VOID_STORM' | 'TREMOR' | 'MOCKING_RAID' | 'VISION_RITUAL' | 'PEASANT_RAID' | 'FACTION_SIEGE';
 export type WeatherType = 'CLEAR' | 'RAIN' | 'ASH_STORM' | 'VOID_MIST';
 
 export interface Vector3 {
@@ -52,7 +52,7 @@ export interface Vector3 {
 
 export interface VisualEffect {
   id: string;
-  type: 'TEXT_XP' | 'TEXT_DAMAGE' | 'TEXT_GOLD' | 'EXPLOSION' | 'TEXT_LOOT' | 'SPLAT_TOMATO' | 'SPLAT_MUD' | 'SPELL_CAST';
+  type: 'TEXT_XP' | 'TEXT_DAMAGE' | 'TEXT_GOLD' | 'EXPLOSION' | 'TEXT_LOOT' | 'SPLAT_TOMATO' | 'SPLAT_MUD' | 'SPELL_CAST' | 'SHIELD_BLOCK';
   position: Vector3;
   text?: string;
   timestamp: number;
@@ -137,7 +137,7 @@ export interface Task {
 export interface HistoryLog {
     id: string;
     timestamp: number;
-    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC';
+    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE';
     message: string;
     details?: string; 
 }
@@ -365,5 +365,6 @@ export interface GameContextType {
   forcePull: () => void;
   saveTemplate: (template: Omit<TaskTemplate, 'id'>) => void;
   deleteTemplate: (templateId: string) => void;
-  requestPermissions: () => Promise<void>; // Added for iOS support
+  requestPermissions: () => Promise<void>;
+  takeBaseDamage: (amount: number, reason?: string) => void; // New method
 }
