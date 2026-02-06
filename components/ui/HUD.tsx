@@ -38,14 +38,14 @@ const CycleHUD = () => {
     const isOverkill = defense > threat * 1.5;
 
     return (
-        <div className="absolute top-6 right-1/2 translate-x-1/2 md:translate-x-0 md:right-6 pointer-events-auto z-30 flex flex-col items-end gap-2">
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-auto z-30 flex flex-col items-center gap-2 group">
             
-            {/* The Cycle Meter */}
-            <div className="bg-[#0c0a09]/90 border border-stone-700 p-3 rounded shadow-lg w-56">
+            {/* The Cycle Meter - Compact Mode */}
+            <div className="bg-[#0c0a09]/90 border border-stone-700 p-2 rounded shadow-lg w-64 transition-all duration-300 opacity-80 group-hover:opacity-100">
                 
                 {/* Attacker Info */}
-                <div className="flex justify-between items-center mb-2 border-b border-stone-800 pb-1">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Incoming Siege</span>
+                <div className="flex justify-between items-center mb-1 border-b border-stone-800 pb-1">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Next Raid</span>
                     <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: attackerDef.color }}>
                         <Flag size={10} /> {attackerDef.name}
                     </div>
@@ -53,33 +53,26 @@ const CycleHUD = () => {
 
                 <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
                     <span className="text-red-500">Threat {Math.floor(threat)}</span>
-                    <span className="text-blue-500">Defense {defense}</span>
+                    <span className="text-blue-500">Def {defense}</span>
                 </div>
                 
-                <div className="h-2 w-full bg-stone-900 rounded-full flex overflow-hidden mb-2">
+                <div className="h-1.5 w-full bg-stone-900 rounded-full flex overflow-hidden mb-1">
                     <div className="h-full bg-red-700 transition-all duration-500" style={{ width: `${threatPct}%` }}></div>
                     <div className="h-full bg-blue-700 transition-all duration-500" style={{ width: `${defensePct}%` }}></div>
                 </div>
 
-                {/* Defense Breakdown */}
-                <div className="flex justify-between gap-1 text-[8px] text-stone-600 font-mono">
-                    <div title="Wall Defense">Walls: {walls}</div>
-                    <div title="Hero Power">Hero: {hero}</div>
-                    <div title="Army Power">Army: {minions}</div>
-                </div>
-
-                <div className={`text-center text-[10px] font-bold mt-2 pt-2 border-t border-stone-800 ${isOverkill ? 'text-yellow-500 animate-pulse' : isSafe ? 'text-green-500' : 'text-red-500'}`}>
-                    {isOverkill ? 'COUNTER-SIEGE READY' : isSafe ? 'DEFENSE HOLDING' : 'BREACH IMMINENT'}
+                <div className={`text-center text-[9px] font-bold ${isOverkill ? 'text-yellow-500' : isSafe ? 'text-green-500' : 'text-red-500'}`}>
+                    {isOverkill ? 'TOTAL DOMINANCE' : isSafe ? 'DEFENSES READY' : 'PREPARE FOR IMPACT'}
                 </div>
             </div>
 
             {/* End Day Button */}
             <button 
                 onClick={resolveNightPhase}
-                className="group relative overflow-hidden bg-indigo-950 border border-indigo-500 text-indigo-200 px-4 py-2 font-serif font-bold uppercase text-xs tracking-widest hover:bg-indigo-900 transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]"
+                className="group relative overflow-hidden bg-red-950 border border-red-800 text-red-200 px-6 py-2 font-serif font-bold uppercase text-sm tracking-widest hover:bg-red-900 transition-all shadow-[0_0_15px_rgba(153,27,27,0.3)] hover:shadow-[0_0_25px_rgba(153,27,27,0.6)]"
             >
                 <div className="flex items-center gap-2 relative z-10">
-                    <Moon size={14} className="group-hover:rotate-12 transition-transform" />
+                    <Moon size={16} className="group-hover:rotate-12 transition-transform" />
                     <span>Face the Night</span>
                 </div>
                 {/* Shine effect */}
@@ -144,14 +137,14 @@ const SplatterOverlay = () => {
 
 const EventTicker: React.FC = () => {
     const { state } = useGame();
-    const [logs, setLogs] = useState(state.history.slice(0, 5));
+    const [logs, setLogs] = useState(state.history.slice(0, 6));
 
     useEffect(() => {
-        setLogs(state.history.slice(0, 5));
+        setLogs(state.history.slice(0, 6));
     }, [state.history]);
 
     return (
-        <div className="absolute bottom-24 left-6 z-20 pointer-events-none max-w-sm hidden md:block">
+        <div className="absolute top-24 left-6 z-20 pointer-events-none max-w-sm hidden md:block">
             <h3 className="text-[10px] text-stone-500 font-bold uppercase tracking-widest mb-2 flex items-center gap-1"><ScrollText size={12}/> The Chronicle</h3>
             <div className="flex flex-col gap-1">
                 {logs.map((log) => {
@@ -189,7 +182,7 @@ const RealmStatusWidget: React.FC = () => {
     else if (stats.order < 30) { statusText = "ANARCHY"; statusColor = "text-orange-500"; }
 
     return (
-        <div className="absolute top-20 md:top-24 left-4 md:left-6 pointer-events-none z-20 flex items-center gap-3">
+        <div className="absolute top-24 right-6 pointer-events-none z-20 flex items-center gap-3">
             <div className={`flex items-center gap-2 px-3 py-1 border bg-black/80 ${statusColor} border-current`}>
                 {icon}
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{statusText}</span>
@@ -224,16 +217,16 @@ const SpellBar: React.FC = () => {
     const manaPercent = (state.mana / state.maxMana) * 100;
 
     return (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex flex-col items-center gap-2">
+        <div className="absolute bottom-6 right-6 z-30 pointer-events-auto flex flex-col items-end gap-2">
             {/* Mana Bar */}
-            <div className="w-48 md:w-64 h-2 bg-stone-900 border border-stone-700 relative overflow-hidden rounded-full">
+            <div className="w-32 h-2 bg-stone-900 border border-stone-700 relative overflow-hidden rounded-full">
                 <div className="absolute inset-0 bg-blue-900/50"></div>
                 <div className="absolute inset-0 bg-blue-500 transition-all duration-300" style={{ width: `${manaPercent}%` }}></div>
             </div>
             <div className="text-[8px] md:text-[10px] text-blue-300 font-bold tracking-widest uppercase">Mana: {Math.floor(state.mana)}</div>
 
             {/* Spells */}
-            <div className="flex gap-2 p-1 md:p-2 bg-black/80 border border-stone-800 rounded-lg scale-90 md:scale-100 origin-bottom">
+            <div className="flex gap-2 p-1 md:p-2 bg-black/80 border border-stone-800 rounded-lg scale-90 md:scale-100 origin-bottom-right">
                 {SPELLS.map(spell => {
                     const canAfford = state.mana >= spell.cost;
                     const needsTarget = spell.targetReq && !state.selectedEnemyId;

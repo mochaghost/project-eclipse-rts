@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft, TaskTemplate } from '../../types';
@@ -12,6 +11,62 @@ type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
 // Extended draft type for local state to handle completion toggling
 type LocalSubtaskState = SubtaskDraft & { id?: string; completed?: boolean };
+
+// --- MOVED OUTSIDE FOR PERFORMANCE AND TYPE SAFETY ---
+const TaskCard = ({ task, style, onClick, onDragStart, showFantasy }: { task: Task, style?: React.CSSProperties, onClick: (e:any)=>void, onDragStart: (e:any)=>void, showFantasy: boolean }) => {
+    const { state } = useGame();
+    const enemy = state.enemies.find(e => e.taskId === task.id && !e.subtaskId);
+    const displayName = showFantasy ? (enemy ? enemy.title : task.title) : task.title;
+    
+    let borderClass = "border-stone-700";
+    let bgClass = "bg-stone-800/90 text-stone-200";
+    
+    if (task.priority === TaskPriority.HIGH) { borderClass = "border-red-600"; bgClass = "bg-red-950/90 text-red-100"; }
+    else if (task.priority === TaskPriority.MEDIUM) { borderClass = "border-yellow-600"; bgClass = "bg-yellow-950/90 text-yellow-100"; }
+
+    let icon = null;
+    if (task.foresightBonus && task.foresightBonus >= 0.5) { icon = <Crown size={10} className="text-yellow-400" />; } 
+    else if (task.foresightBonus && task.foresightBonus >= 0.25) { icon = <Telescope size={10} className="text-purple-400" />; }
+    else if (task.foresightBonus && task.foresightBonus >= 0.1) { icon = <Star size={10} className="text-blue-400" />; }
+    
+    if (task.completed) { bgClass = "bg-green-950/50 text-green-300 opacity-60 border-green-800"; }
+    if (task.failed) { bgClass = "bg-red-950/90 text-red-100 border-red-500 animate-pulse-slow"; }
+
+    const subtaskCount = task.subtasks?.length || 0;
+    const completedSubtasks = task.subtasks?.filter(s => s.completed).length || 0;
+
+    return (
+        <div 
+          draggable 
+          onDragStart={onDragStart}
+          onClick={onClick}
+          className={`absolute rounded border overflow-hidden p-1.5 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.02] transition-transform z-10 ${bgClass} ${borderClass}`}
+          style={{ ...style, borderLeftWidth: '4px', borderStyle: task.parentId ? 'dashed' : 'solid' }}
+          title={displayName}
+        >
+            <div className="font-bold flex items-center justify-between gap-1 leading-tight">
+                <span className="truncate">{displayName}</span>
+                {icon}
+            </div>
+            
+            {subtaskCount > 0 && (
+                <div className="mt-auto flex items-center gap-1 text-[9px] opacity-80">
+                    <Network size={10} />
+                    <span>{completedSubtasks}/{subtaskCount}</span>
+                    <div className="h-1 flex-1 bg-black/30 rounded-full overflow-hidden">
+                        <div className="h-full bg-current" style={{ width: `${(completedSubtasks/subtaskCount)*100}%` }}></div>
+                    </div>
+                </div>
+            )}
+
+            {task.parentId && (
+                <div className="absolute top-0 right-0 p-0.5 bg-blue-900 text-blue-200 rounded-bl">
+                    <LinkIcon size={8}/>
+                </div>
+            )}
+        </div>
+    )
+};
 
 export const Grimoire: React.FC = () => {
   // @ts-ignore
@@ -330,61 +385,6 @@ export const Grimoire: React.FC = () => {
 
   if (!state.isGrimoireOpen) return null;
 
-  // --- HELPER: TASK CARD COMPONENT ---
-  const TaskCard = ({ task, style, onClick, onDragStart }: { task: Task, style?: React.CSSProperties, onClick: (e:any)=>void, onDragStart: (e:any)=>void }) => {
-      const enemy = state.enemies.find(e => e.taskId === task.id && !e.subtaskId);
-      const displayName = showFantasy ? (enemy ? enemy.title : task.title) : task.title;
-      
-      let borderClass = "border-stone-700";
-      let bgClass = "bg-stone-800/90 text-stone-200";
-      
-      if (task.priority === TaskPriority.HIGH) { borderClass = "border-red-600"; bgClass = "bg-red-950/90 text-red-100"; }
-      else if (task.priority === TaskPriority.MEDIUM) { borderClass = "border-yellow-600"; bgClass = "bg-yellow-950/90 text-yellow-100"; }
-
-      let icon = null;
-      if (task.foresightBonus && task.foresightBonus >= 0.5) { icon = <Crown size={10} className="text-yellow-400" />; } 
-      else if (task.foresightBonus && task.foresightBonus >= 0.25) { icon = <Telescope size={10} className="text-purple-400" />; }
-      else if (task.foresightBonus && task.foresightBonus >= 0.1) { icon = <Star size={10} className="text-blue-400" />; }
-      
-      if (task.completed) { bgClass = "bg-green-950/50 text-green-300 opacity-60 border-green-800"; }
-      if (task.failed) { bgClass = "bg-red-950/90 text-red-100 border-red-500 animate-pulse-slow"; }
-
-      const subtaskCount = task.subtasks?.length || 0;
-      const completedSubtasks = task.subtasks?.filter(s => s.completed).length || 0;
-
-      return (
-          <div 
-            draggable 
-            onDragStart={onDragStart}
-            onClick={onClick}
-            className={`absolute rounded border overflow-hidden p-1.5 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.02] transition-transform z-10 ${bgClass} ${borderClass}`}
-            style={{ ...style, borderLeftWidth: '4px', borderStyle: task.parentId ? 'dashed' : 'solid' }}
-            title={displayName}
-          >
-              <div className="font-bold flex items-center justify-between gap-1 leading-tight">
-                  <span className="truncate">{displayName}</span>
-                  {icon}
-              </div>
-              
-              {subtaskCount > 0 && (
-                  <div className="mt-auto flex items-center gap-1 text-[9px] opacity-80">
-                      <Network size={10} />
-                      <span>{completedSubtasks}/{subtaskCount}</span>
-                      <div className="h-1 flex-1 bg-black/30 rounded-full overflow-hidden">
-                          <div className="h-full bg-current" style={{ width: `${(completedSubtasks/subtaskCount)*100}%` }}></div>
-                      </div>
-                  </div>
-              )}
-
-              {task.parentId && (
-                  <div className="absolute top-0 right-0 p-0.5 bg-blue-900 text-blue-200 rounded-bl">
-                      <LinkIcon size={8}/>
-                  </div>
-              )}
-          </div>
-      )
-  };
-
   const handleDragStart = (e: React.DragEvent, task: Task) => {
       e.stopPropagation(); 
       e.dataTransfer.setData("taskId", task.id);
@@ -469,7 +469,7 @@ export const Grimoire: React.FC = () => {
                         const widthPct = 100 / columns.length;
                         const leftPct = colIndex * widthPct;
 
-                        return <TaskCard key={t.id} task={t} style={{ top: `${top}px`, height: `${height}px`, left: `${leftPct}%`, width: `${widthPct}%` }} onClick={(e) => {e.stopPropagation(); handleTaskClick(t)}} onDragStart={(e) => handleDragStart(e, t)} />
+                        return <TaskCard key={t.id} task={t} style={{ top: `${top}px`, height: `${height}px`, left: `${leftPct}%`, width: `${widthPct}%` }} onClick={(e) => {e.stopPropagation(); handleTaskClick(t)}} onDragStart={(e) => handleDragStart(e, t)} showFantasy={showFantasy} />
                     })}
                   </div>
               </div>
@@ -512,7 +512,7 @@ export const Grimoire: React.FC = () => {
                                   const date = new Date(t.startTime);
                                   const startH = date.getHours() + (date.getMinutes()/60);
                                   const durHrs = (t.deadline - t.startTime) / 3600000;
-                                  return <TaskCard key={t.id} task={t} style={{ top: `${startH * 64}px`, height: `${Math.max(24, durHrs * 64)}px`, width: '95%', left: '2.5%' }} onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} onDragStart={(e) => handleDragStart(e, t)} />
+                                  return <TaskCard key={t.id} task={t} style={{ top: `${startH * 64}px`, height: `${Math.max(24, durHrs * 64)}px`, width: '95%', left: '2.5%' }} onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} onDragStart={(e) => handleDragStart(e, t)} showFantasy={showFantasy} />
                               })}
                           </div>
                       )

@@ -1,12 +1,7 @@
-
 import { ThreeElements } from '@react-three/fiber';
 
-// Fix for missing JSX types in R3F environment
-declare global {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
-  }
-}
+// Note: Removed global JSX declaration as it was overriding React DOM elements (div, span, etc).
+// R3F types are automatically merged by @react-three/fiber.
 
 export enum Era {
   RUIN = 'RUIN',

@@ -1,216 +1,133 @@
 
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Sparkles, CameraShake, SpotLight, Trail } from '@react-three/drei';
+import { Sparkles, CameraShake, SpotLight } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGame } from '../../context/GameContext';
 import { VisionMirror } from './VisionMirror';
 import { FACTIONS } from '../../constants';
 import { playSfx } from '../../utils/audio';
 
-// --- BATTLE VISUAL COMPONENTS ---
+// --- COMBAT UNIT (MELEE) ---
 
-const DefenseProjectile: React.FC<{ start: THREE.Vector3, end: THREE.Vector3, color: string, delay: number }> = ({ start, end, color, delay }) => {
-    const meshRef = useRef<THREE.Mesh>(null);
-    const [active, setActive] = useState(false);
-    const progress = useRef(0);
+interface CombatUnitProps {
+    startPos: THREE.Vector3;
+    targetPos: THREE.Vector3;
+    color: string;
+    role: 'ATTACKER' | 'DEFENDER';
+    onDeath: () => void;
+    survives: boolean; // Pre-calculated deterministic outcome
+    killDelay: number; // Time until death (or victory animation)
+}
+
+const CombatUnit: React.FC<CombatUnitProps> = ({ startPos, targetPos, color, role, onDeath, survives, killDelay }) => {
+    const meshRef = useRef<THREE.Group>(null);
+    const [state, setState] = useState<'CHARGE' | 'FIGHT' | 'DEAD' | 'VICTORY'>('CHARGE');
+    
+    // Random offset for the "clash point" so they don't merge perfectly
+    const clashOffset = useMemo(() => new THREE.Vector3(
+        (Math.random() - 0.5) * 1.5, 
+        0, 
+        (Math.random() - 0.5) * 1.5
+    ), []);
+
+    const actualTarget = useMemo(() => targetPos.clone().add(clashOffset), [targetPos, clashOffset]);
 
     useEffect(() => {
-        const t = setTimeout(() => setActive(true), delay);
-        return () => clearTimeout(t);
-    }, [delay]);
+        // Schedule death or victory
+        const timer = setTimeout(() => {
+            if (!survives) {
+                setState('DEAD');
+                onDeath(); // Trigger particle effect in parent
+            } else {
+                setState('VICTORY');
+            }
+        }, killDelay);
+        return () => clearTimeout(timer);
+    }, [killDelay, survives]);
 
     useFrame((_, delta) => {
-        if (!active || !meshRef.current) return;
-        progress.current += delta * 2; // Speed
-        
-        if (progress.current >= 1) {
-            setActive(false); // Hit
-            return;
+        if (!meshRef.current || state === 'DEAD') return;
+
+        const pos = meshRef.current.position;
+
+        if (state === 'CHARGE') {
+            const dir = new THREE.Vector3().subVectors(actualTarget, pos).normalize();
+            const dist = pos.distanceTo(actualTarget);
+            
+            // Move
+            pos.add(dir.multiplyScalar(delta * 6)); // Fast charge
+            meshRef.current.lookAt(actualTarget);
+
+            // Bounce
+            meshRef.current.position.y = Math.abs(Math.sin(_.clock.elapsedTime * 15)) * 0.3;
+
+            if (dist < 1.0) {
+                setState('FIGHT');
+            }
         }
 
-        const pos = new THREE.Vector3().lerpVectors(start, end, progress.current);
-        pos.y += Math.sin(progress.current * Math.PI) * 3; // Arc
-        meshRef.current.position.copy(pos);
-    });
+        if (state === 'FIGHT') {
+            // Combat wobble
+            meshRef.current.rotation.y += Math.sin(_.clock.elapsedTime * 20) * 0.1;
+            meshRef.current.position.z += Math.sin(_.clock.elapsedTime * 30) * 0.02;
+            
+            // Lunges
+            if (Math.random() > 0.95) {
+                meshRef.current.position.add(new THREE.Vector3(0, 0.2, 0));
+                setTimeout(() => {
+                    if (meshRef.current) meshRef.current.position.y = 0;
+                }, 100);
+            }
+        }
 
-    if (!active) return null;
-
-    return (
-        <mesh ref={meshRef} position={start}>
-            <sphereGeometry args={[0.2]} />
-            <meshBasicMaterial color={color} />
-            <Trail width={0.5} length={4} color={new THREE.Color(color)} attenuation={(t) => t * t} />
-        </mesh>
-    );
-};
-
-const HeroUltimate: React.FC<{ type: 'SMITE' | 'NOVA' | 'ARROWS' }> = ({ type }) => {
-    const ref = useRef<THREE.Group>(null);
-    useFrame((state, delta) => {
-        if(ref.current) {
-            ref.current.rotation.y += delta * 5;
-            ref.current.scale.multiplyScalar(1.05);
+        if (state === 'VICTORY') {
+            // Jump for joy
+            meshRef.current.position.y = Math.abs(Math.sin(_.clock.elapsedTime * 5));
         }
     });
 
-    if (type === 'SMITE') {
+    if (state === 'DEAD') {
         return (
-            <group position={[0, 0, 0]}>
-                <mesh position={[0, 10, 0]}>
-                    <cylinderGeometry args={[0.5, 4, 20]} />
-                    <meshBasicMaterial color="#fbbf24" transparent opacity={0.5} />
+            <group position={meshRef.current?.position || startPos}>
+                <mesh rotation={[-Math.PI/2, 0, Math.random()]}>
+                    <planeGeometry args={[0.8, 0.8]} />
+                    <meshBasicMaterial color="#450a0a" transparent opacity={0.8} />
                 </mesh>
-                <Sparkles count={50} scale={10} color="yellow" speed={2} />
+                <mesh position={[0, 0.1, 0]} rotation={[Math.PI/2, 0, 0]}>
+                    <boxGeometry args={[0.4, 0.2, 0.4]} />
+                    <meshStandardMaterial color="#292524" />
+                </mesh>
             </group>
         )
     }
-    
-    // NOVA (Shockwave)
+
     return (
-        <group ref={ref} position={[0, 1, 0]}>
-            <mesh rotation={[-Math.PI/2, 0, 0]}>
-                <ringGeometry args={[4, 5, 32]} />
-                <meshBasicMaterial color="#3b82f6" transparent opacity={0.8} />
+        <group ref={meshRef} position={startPos}>
+            {/* Unit Body */}
+            <mesh position={[0, 0.5, 0]}>
+                <boxGeometry args={[0.4, 0.8, 0.4]} />
+                <meshStandardMaterial color={role === 'DEFENDER' ? '#1e3a8a' : color} />
             </mesh>
+            {/* Head */}
+            <mesh position={[0, 1, 0]}>
+                <sphereGeometry args={[0.25]} />
+                <meshStandardMaterial color={role === 'DEFENDER' ? '#93c5fd' : '#d6d3d1'} />
+            </mesh>
+            {/* Weapon */}
+            <mesh position={[0.3, 0.6, 0.3]} rotation={[0.5, 0, 0]}>
+                <boxGeometry args={[0.1, 0.1, 0.8]} />
+                <meshStandardMaterial color="#cbd5e1" />
+            </mesh>
+            {role === 'DEFENDER' && (
+                <mesh position={[-0.3, 0.6, 0]} rotation={[0, -0.5, 0]}>
+                    <boxGeometry args={[0.1, 0.6, 0.6]} />
+                    <meshStandardMaterial color="#1e40af" />
+                </mesh>
+            )}
         </group>
-    )
+    );
 };
-
-// --- SIEGE MOB MECHANICS ---
-
-interface SiegeMobProps {
-    spawnPosition: [number, number, number];
-    targetPosition: [number, number, number];
-    onHit: (type: 'PROJECTILE' | 'MELEE', damage: number) => void;
-    factionColor: string;
-    wallLevel: number; // 0 to 3
-    isCinematic?: boolean; // New prop for battle mode
-}
-
-const SiegeMob: React.FC<SiegeMobProps> = ({ spawnPosition, targetPosition, onHit, factionColor, wallLevel, isCinematic }) => {
-    const meshRef = useRef<THREE.Group>(null);
-    const [phase, setPhase] = useState<'CHARGE' | 'ATTACK' | 'RETREAT' | 'DIE'>('CHARGE');
-    const [projectile, setProjectile] = useState(false);
-    const projectileRef = useRef<THREE.Mesh>(null);
-    const throwProgress = useRef(0);
-    const speed = useRef(Math.random() * 2 + 4);
-    const attackCount = useRef(0);
-    
-    // Determine Attack Strength based on randomness (simulates different unit ranks)
-    const attackStrength = useRef(10 + Math.random() * 20); 
-    const defense = wallLevel * 10; // 0, 10, 20, 30
-
-    // Is this unit strong enough to hurt the wall?
-    const isFutile = defense > attackStrength.current;
-
-    useFrame((state, delta) => {
-        if (!meshRef.current) return;
-        
-        if (phase === 'DIE') {
-            meshRef.current.scale.multiplyScalar(0.9);
-            meshRef.current.rotation.x += 0.1;
-            if (meshRef.current.scale.x < 0.1) meshRef.current.visible = false;
-            return;
-        }
-
-        const currentPos = meshRef.current.position;
-        const target = new THREE.Vector3(...targetPosition);
-        const dist = currentPos.distanceTo(target);
-
-        if (phase === 'CHARGE') {
-            const dir = new THREE.Vector3().subVectors(target, currentPos).normalize();
-            currentPos.add(dir.multiplyScalar(delta * speed.current));
-            currentPos.y = Math.abs(Math.sin(state.clock.elapsedTime * 15)) * 0.2; // Running bob
-            meshRef.current.lookAt(target);
-
-            // Stop at wall range (radius 8 for base)
-            if (dist < 8) { 
-                setPhase('ATTACK');
-                setProjectile(true);
-            }
-        }
-
-        if (phase === 'ATTACK') {
-            if (projectileRef.current) {
-                projectileRef.current.visible = true;
-                throwProgress.current += delta * 2.5; 
-                
-                // Arc calculation
-                const start = new THREE.Vector3(0, 1, 0).applyMatrix4(meshRef.current.matrixWorld);
-                const end = new THREE.Vector3(target.x + (Math.random()-0.5), target.y + 2 + Math.random(), target.z + (Math.random()-0.5)); 
-                
-                const pos = new THREE.Vector3().lerpVectors(start, end, throwProgress.current);
-                pos.y += Math.sin(throwProgress.current * Math.PI) * 2; 
-                
-                projectileRef.current.position.copy(pos);
-
-                if (throwProgress.current >= 1) {
-                    // Impact!
-                    if (isFutile && !isCinematic) { // In cinematic, we allow chaos regardless of outcome
-                        onHit('PROJECTILE', 0); 
-                        setPhase('RETREAT');
-                    } else {
-                        onHit('PROJECTILE', attackStrength.current);
-                        attackCount.current += 1;
-                        if (attackCount.current > 3 && !isCinematic) {
-                            setPhase('RETREAT'); 
-                        } else {
-                            throwProgress.current = 0;
-                        }
-                    }
-                }
-            }
-        }
-
-        if (phase === 'RETREAT') {
-            const away = new THREE.Vector3().subVectors(currentPos, target).normalize();
-            currentPos.add(away.multiplyScalar(delta * (speed.current * 1.5))); 
-            meshRef.current.lookAt(currentPos.clone().add(away));
-            if (dist > 50) meshRef.current.visible = false;
-        }
-    });
-
-    // Kill trigger for Cinematic
-    useEffect(() => {
-        if (isCinematic) {
-            // Random death time between 6s and 9s (Hero Ult phase)
-            const deathTimer = setTimeout(() => {
-                if(Math.random() > 0.3) setPhase('DIE');
-                else setPhase('RETREAT');
-            }, 6000 + Math.random() * 3000);
-            return () => clearTimeout(deathTimer);
-        }
-    }, [isCinematic]);
-
-    return (
-        <>
-            <group ref={meshRef} position={spawnPosition}>
-                {/* Body */}
-                <mesh position={[0, 0.5, 0]}>
-                    <boxGeometry args={[0.3, 0.6, 0.3]} />
-                    <meshStandardMaterial color={factionColor} />
-                </mesh>
-                {/* Head */}
-                <mesh position={[0, 0.9, 0]}>
-                    <sphereGeometry args={[0.2]} />
-                    <meshStandardMaterial color="#d6d3d1" />
-                </mesh>
-                {/* Weapon Arm */}
-                <mesh position={[0.25, 0.6, 0.2]} rotation={[0.5, 0, 0]}>
-                    <boxGeometry args={[0.1, 0.1, 0.6]} />
-                    <meshStandardMaterial color="#57534e" />
-                </mesh>
-            </group>
-            
-            {/* Projectile (Rock/Fireball) */}
-            <mesh ref={projectileRef} visible={false}>
-                <sphereGeometry args={[0.15]} />
-                <meshStandardMaterial color={factionColor === '#000000' ? '#a855f7' : '#ef4444'} emissiveIntensity={0.5} />
-            </mesh>
-        </>
-    )
-}
 
 const AshRain: React.FC = () => (
     <Sparkles count={500} scale={100} size={8} speed={0.4} opacity={0.5} color="#450a0a" />
@@ -222,142 +139,120 @@ export const VazarothEffects: React.FC = () => {
     const isCinematic = event === 'BATTLE_CINEMATIC';
     const isFearful = (state.realmStats?.fear || 0) > 70;
 
-    // --- BATTLE SEQUENCER ---
-    const [ultActive, setUltActive] = useState(false);
-    const [defenseVolley, setDefenseVolley] = useState<any[]>([]);
+    // --- BATTLE ORCHESTRATOR ---
+    // Instead of random effects, we spawn actual pairs of fighters
+    const [combatPairs, setCombatPairs] = useState<any[]>([]);
 
     useEffect(() => {
         if (isCinematic) {
-            // 1. Audio Start
-            playSfx('ERROR'); 
+            playSfx('ERROR'); // War Horn
 
-            // 2. Defense Volley Sequence (3s - 6s)
-            const volleyTimer = setTimeout(() => {
-                playSfx('UI_CLICK'); // Arrows firing sound placeholder
-                // Spawn 20 projectiles targeting random directions
-                const projectiles = Array.from({length: 20}).map((_, i) => ({
+            // Determine Faction Color
+            let factionColor = "#ef4444"; 
+            const sortedFactions = [...state.factions].sort((a, b) => a.reputation - b.reputation);
+            const primaryEnemy = sortedFactions[0];
+            if (primaryEnemy && primaryEnemy.reputation < 0) {
+                const def = FACTIONS[primaryEnemy.id as keyof typeof FACTIONS];
+                if (def) factionColor = def.color;
+            }
+
+            // Generate Matchups
+            const newPairs = [];
+            const defenderCount = (state.minions?.length || 0) + 2; // Always at least 2 guards
+            const attackerCount = Math.floor(5 + (state.playerLevel / 2)); // Scales with level
+
+            // Create 1v1 duels
+            const fights = Math.max(defenderCount, attackerCount);
+            
+            for (let i = 0; i < fights; i++) {
+                const angle = (i / fights) * Math.PI * 2;
+                const spawnDist = 30;
+                
+                // Attacker Start
+                const attStart = new THREE.Vector3(Math.cos(angle) * spawnDist, 0, Math.sin(angle) * spawnDist);
+                // Defender Start (From Base)
+                const defStart = new THREE.Vector3(Math.cos(angle) * 2, 0, Math.sin(angle) * 2);
+                
+                // Meeting Point
+                const meetPoint = new THREE.Vector3(Math.cos(angle) * 10, 0, Math.sin(angle) * 10);
+
+                // Determine Winner (Simulated)
+                // If we have more defenders, defenders win more often
+                const defenderWins = i < defenderCount && (Math.random() > 0.4 || defenderCount > attackerCount);
+                
+                // Death time (staggered between 4s and 9s)
+                const deathTime = 4000 + (Math.random() * 5000);
+
+                newPairs.push({
                     id: i,
-                    start: new THREE.Vector3(0, 3, 0),
-                    end: new THREE.Vector3((Math.random()-0.5)*40, 0, (Math.random()-0.5)*40),
-                    delay: Math.random() * 2000,
-                    color: state.playerLevel > 20 ? '#3b82f6' : '#fff' // Blue magic vs arrows
-                }));
-                setDefenseVolley(projectiles);
-            }, 3000);
-
-            // 3. Hero Ultimate (6s)
-            const ultTimer = setTimeout(() => {
-                setUltActive(true);
-                playSfx('MAGIC');
-                addEffect('EXPLOSION', {x:0, y:2, z:0});
-            }, 6000);
+                    attStart,
+                    defStart,
+                    meetPoint,
+                    factionColor,
+                    defenderWins,
+                    deathTime
+                });
+            }
+            setCombatPairs(newPairs);
 
             // Cleanup
             const endTimer = setTimeout(() => {
-                setUltActive(false);
-                setDefenseVolley([]);
-            }, 10000);
-
-            return () => {
-                clearTimeout(volleyTimer);
-                clearTimeout(ultTimer);
-                clearTimeout(endTimer);
-                setUltActive(false);
-                setDefenseVolley([]);
-            };
+                setCombatPairs([]);
+            }, 12000);
+            return () => clearTimeout(endTimer);
         }
-    }, [isCinematic, state.playerLevel]);
-
-    // Generate Mob Spawn Points
-    const mobSpawns = useMemo(() => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-            const angle = (i / 8) * Math.PI * 2;
-            return [Math.cos(angle) * 40, 0, Math.sin(angle) * 40] as [number, number, number];
-    }), [event]); // Re-roll positions on new event
+    }, [isCinematic, state.playerLevel, state.minions]);
 
     if (event === 'VISION_RITUAL') return <VisionMirror />;
-    
-    // Determine Faction Color for Siege
-    let factionColor = "#ef4444"; // Default Red (Vazaroth)
-    
-    if (event === 'FACTION_SIEGE' || event === 'NIGHT_BATTLE' || isCinematic) {
-        const sortedFactions = [...state.factions].sort((a, b) => a.reputation - b.reputation);
-        const primaryEnemy = sortedFactions[0];
-        
-        if (primaryEnemy && primaryEnemy.reputation < 0) {
-            const def = FACTIONS[primaryEnemy.id as keyof typeof FACTIONS];
-            if (def) factionColor = def.color;
-        }
-    }
 
     return (
         <group>
             {isFearful && <AshRain />}
             
-            {/* NIGHT BATTLE INTENSITY */}
             {(event === 'NIGHT_BATTLE' || isCinematic) && (
                 <group>
                     <fogExp2 attach="fog" args={['#1a0505', 0.08]} />
-                    <CameraShake 
-                        maxPitch={0.05} maxRoll={0.05} maxYaw={0.05} 
-                        intensity={isCinematic ? 2 : 1} // Double shake in cinematic
-                        decay={isCinematic ? false : true}
-                    />
-                    <SpotLight position={[0, 50, 0]} target-position={[0, 0, 0]} color={factionColor} intensity={10} angle={0.5} />
+                    <CameraShake maxPitch={0.05} maxRoll={0.05} maxYaw={0.05} intensity={isCinematic ? 2 : 1} />
+                    <SpotLight position={[0, 50, 0]} target-position={[0, 0, 0]} color="#ef4444" intensity={5} angle={0.8} />
                 </group>
             )}
 
-            {/* CINEMATIC EFFECTS */}
-            {isCinematic && (
-                <group>
-                    {/* Defense Projectiles */}
-                    {defenseVolley.map(p => (
-                        <DefenseProjectile key={p.id} start={p.start} end={p.end} color={p.color} delay={p.delay} />
-                    ))}
-                    
-                    {/* Hero Ultimate */}
-                    {ultActive && (
-                        <HeroUltimate type={state.playerLevel > 40 ? 'SMITE' : 'NOVA'} />
-                    )}
+            {isCinematic && combatPairs.map(pair => (
+                <group key={pair.id}>
+                    {/* Attacker */}
+                    <CombatUnit 
+                        startPos={pair.attStart} 
+                        targetPos={pair.meetPoint} 
+                        color={pair.factionColor} 
+                        role="ATTACKER"
+                        survives={!pair.defenderWins}
+                        killDelay={pair.deathTime}
+                        onDeath={() => {
+                            addEffect('EXPLOSION', pair.meetPoint);
+                            addEffect('TEXT_XP', {x: pair.meetPoint.x, y: 3, z: pair.meetPoint.z}, "ENEMY SLAIN");
+                        }}
+                    />
+                    {/* Defender */}
+                    <CombatUnit 
+                        startPos={pair.defStart} 
+                        targetPos={pair.meetPoint} 
+                        color="#3b82f6" 
+                        role="DEFENDER"
+                        survives={pair.defenderWins}
+                        killDelay={pair.deathTime} // Same delay, synced fight
+                        onDeath={() => {
+                            addEffect('SPLAT_TOMATO', pair.meetPoint); // Blood splat on screen
+                            addEffect('TEXT_DAMAGE', {x: pair.meetPoint.x, y: 3, z: pair.meetPoint.z}, "GUARD FELL");
+                        }}
+                    />
                 </group>
-            )}
+            ))}
 
             {event === 'TITAN_GAZE' && (
                 <group>
                     <SpotLight position={[0, 40, -100]} target-position={[4, 0, 4]} color="#ff0000" intensity={15} angle={0.15} castShadow />
                     <fogExp2 attach="fog" args={['#2a0505', 0.04]} />
-                    <CameraShake maxPitch={0.01} maxRoll={0.01} maxYaw={0.01} intensity={0.5} />
                 </group>
-            )}
-
-            {/* SIEGE MECHANIC */}
-            {(event === 'FACTION_SIEGE' || event === 'PEASANT_RAID' || event === 'NIGHT_BATTLE' || isCinematic) && (
-                 <group>
-                     {mobSpawns.map((spawnPos, i) => (
-                         <SiegeMob 
-                            key={`siege-${i}`} 
-                            spawnPosition={spawnPos} 
-                            targetPosition={[0, 0, 0]} 
-                            factionColor={factionColor}
-                            wallLevel={state.structures.wallsLevel || 0}
-                            isCinematic={isCinematic} // Pass cinematic flag to control death/behavior
-                            onHit={(type, dmg) => {
-                                // Only take real damage if NOT cinematic, or add specific cinematic logic
-                                if (!isCinematic) {
-                                    if (dmg > 0) {
-                                        addEffect('EXPLOSION', { x: 0, y: 1, z: 0 });
-                                        addEffect('TEXT_DAMAGE', { x: (Math.random()-0.5)*2, y: 3, z: (Math.random()-0.5)*2 }, `-${Math.floor(dmg)}`);
-                                        takeBaseDamage(dmg, "Siege");
-                                    } else {
-                                        addEffect('TEXT_XP', { x: (Math.random()-0.5)*4, y: 4, z: (Math.random()-0.5)*4 }, "BLOCKED");
-                                    }
-                                } else {
-                                    // Visuals only for cinematic
-                                    addEffect('EXPLOSION', { x: (Math.random()-0.5)*2, y: 1, z: (Math.random()-0.5)*2 });
-                                }
-                            }} 
-                         />
-                     ))}
-                 </group>
             )}
         </group>
     );

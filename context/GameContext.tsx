@@ -71,7 +71,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [state, setState] = useState<GameState>(loadGame());
     const stateRef = useRef(state); 
     const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastTickRef = useRef<number>(Date.now());
     
     useEffect(() => {
         stateRef.current = state;
@@ -370,102 +369,77 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // 10 Second Delay for the battle animation
         setTimeout(() => {
             setState(prev => {
-                // 1. IDENTIFY ATTACKER (Lowest Reputation)
+                // 1. IDENTIFY ATTACKER
                 const sortedFactions = [...prev.factions].sort((a, b) => a.reputation - b.reputation);
                 const primaryEnemy = sortedFactions[0];
-                const attackerId = primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH'; // Default bad guy if everyone likes you
+                const attackerId = primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH'; 
                 const factionDef = FACTIONS[attackerId];
 
-                // 2. GENERATE SIEGE FLAVOR
-                let siegeFlavor = "The enemy attacks.";
-                if (attackerId === 'SOL') siegeFlavor = "The Kingdom of Sol demands you answer for your lack of Order. Their knights charge.";
-                if (attackerId === 'VAZAROTH') siegeFlavor = "Cultists emerge from the fog. They seek to extinguish your hope.";
-                if (attackerId === 'IRON') siegeFlavor = "Dwarven siege engines rumble. They come for the debts you owe.";
-                if (attackerId === 'UMBRA') siegeFlavor = "Shadows coalesce into teeth. The Apostles are hungry.";
-                if (attackerId === 'ASH') siegeFlavor = "Orc warhorns shatter the silence. They want only blood.";
-                if (attackerId === 'VERDANT') siegeFlavor = "The forest itself turns against you. Roots and arrows strike.";
-
-                // 3. CALCULATE THREAT
-                // Base threat from unfinished tasks
-                const activeEnemies = prev.enemies.filter(e => {
-                    const task = prev.tasks.find(t => t.id === e.taskId);
-                    return task && !task.completed && !task.failed;
-                });
-                const taskThreat = activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0);
+                // 2. GENERATE DETAILED BATTLE LOGIC (Dwarf Fortress Style)
+                const combatLogs: HistoryLog[] = [];
+                const defenders = prev.minions || [];
+                const attackerCount = Math.floor(5 + (prev.playerLevel / 2));
                 
-                // Faction Wrath (Magnitude of negative rep)
-                const wrath = Math.abs(Math.min(0, primaryEnemy.reputation)) * 2;
-                
-                const totalThreat = 50 + taskThreat + wrath;
-
-                // 4. CALCULATE DEFENSE
-                const defense = calculateDefense(prev);
-
-                // 5. DETERMINE OUTCOME
-                const diff = defense.total - totalThreat;
-                
-                let outcome: BattleReport['outcome'] = 'DEFEAT';
+                // Simulate individual casualties
+                let deadMinions = 0;
+                let deadEnemies = 0;
                 let damageTaken = 0;
-                let lootStolen = 0;
-                let enemiesDefeated = 0;
-                let conqueredFactionId: string | undefined = undefined;
-                let vazarothMsg = "The darkness recedes, but you are weaker.";
                 
-                if (diff >= 0) {
-                    // Victory
-                    outcome = 'VICTORY';
-                    enemiesDefeated = Math.floor(Math.random() * 5) + 1;
-                    vazarothMsg = "You survived. Merely postponing the inevitable.";
-                    
-                    // OVERKILL / COUNTER-ATTACK (Only if strong enough)
-                    if (prev.playerLevel >= 40 && diff > totalThreat * 0.5) {
-                        outcome = 'CRUSHING_VICTORY';
-                        // We counter-attack the specific faction that attacked us
-                        if (primaryEnemy.reputation < 0) {
-                            conqueredFactionId = primaryEnemy.id;
-                            vazarothMsg = `You pushed back the ${primaryEnemy.name} and burned their camp.`;
+                // Calculate outcomes
+                const defense = calculateDefense(prev);
+                const threat = 50 + (attackerCount * 10);
+                const winChance = Math.min(0.9, Math.max(0.1, defense.total / (threat * 1.2)));
+
+                // Resolve skirmishes
+                for(let i=0; i<Math.max(defenders.length, attackerCount); i++) {
+                    if (Math.random() < winChance) {
+                        deadEnemies++;
+                        if (Math.random() > 0.7) {
+                            // Flavour Text
+                            const guardName = i < defenders.length ? `Guard Unit-${i+1}` : "A Militia Volunteer";
+                            combatLogs.push({
+                                id: generateId(), type: 'VICTORY', timestamp: Date.now(),
+                                message: "Enemy Slain",
+                                details: `${guardName} struck down a ${factionDef.name} raider.`
+                            });
+                        }
+                    } else {
+                        damageTaken += 10;
+                        if (i < defenders.length) {
+                            deadMinions++;
+                            combatLogs.push({
+                                id: generateId(), type: 'DEFEAT', timestamp: Date.now(),
+                                message: "Defender Lost",
+                                details: `Minion #${i+1} was overwhelmed by the horde.`
+                            });
                         }
                     }
-                } else {
-                    // Defeat
-                    damageTaken = Math.abs(diff);
-                    lootStolen = Math.floor(prev.gold * 0.1); 
-                    vazarothMsg = "Your walls are paper. Your resolve is ash.";
                 }
 
-                // 6. APPLY RESULTS
+                // 3. FINAL OUTCOME
+                let outcome: BattleReport['outcome'] = 'DEFEAT';
+                if (damageTaken < threat * 0.5) outcome = 'VICTORY';
+                if (deadEnemies > attackerCount * 0.8 && damageTaken === 0) outcome = 'CRUSHING_VICTORY';
+
+                // 4. APPLY RESULTS
                 let newHp = Math.max(0, prev.baseHp - damageTaken);
-                let newGold = Math.max(0, prev.gold - lootStolen);
-                let newXp = prev.xp + (outcome !== 'DEFEAT' ? 100 + (enemiesDefeated*10) : 0);
+                let newGold = Math.max(0, prev.gold - (outcome === 'DEFEAT' ? 20 : 0));
+                let newXp = prev.xp + (outcome !== 'DEFEAT' ? 100 + (deadEnemies*10) : 0);
                 
-                // Update Factions
-                const newFactions = prev.factions.map(f => {
-                    if (f.id === conqueredFactionId) {
-                        // We beat them so bad they respect us (or fear us) -> Rep improves slightly towards Neutral (Fear)
-                        return { ...f, reputation: Math.min(0, f.reputation + 15), status: 'HOSTILE' as any };
-                    }
-                    return f;
-                });
+                // Reduce minion count based on casualties
+                const newMinions = defenders.slice(deadMinions);
 
                 const report: BattleReport = {
                     timestamp: Date.now(),
                     attackerFactionId: attackerId,
-                    siegeFlavor,
-                    threatLevel: totalThreat,
+                    siegeFlavor: `Skirmish against ${factionDef.name}`,
+                    threatLevel: threat,
                     defenseLevel: defense.total,
                     outcome,
                     damageTaken,
-                    lootStolen,
-                    enemiesDefeated,
-                    conqueredFaction: conqueredFactionId ? factionDef.name : undefined
-                };
-
-                const historyEntry: HistoryLog = {
-                    id: generateId(),
-                    type: 'DAILY_REPORT',
-                    timestamp: Date.now(),
-                    message: outcome === 'DEFEAT' ? `Siege Lost: ${factionDef.name}` : `Siege Repelled: ${factionDef.name}`,
-                    details: `Defended against ${totalThreat} threat. ${siegeFlavor}`
+                    lootStolen: outcome === 'DEFEAT' ? 20 : 0,
+                    enemiesDefeated: deadEnemies,
+                    conqueredFaction: undefined
                 };
 
                 playSfx(outcome === 'DEFEAT' ? 'FAILURE' : 'VICTORY');
@@ -475,18 +449,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     baseHp: newHp,
                     gold: newGold,
                     xp: newXp,
-                    factions: newFactions,
+                    minions: newMinions,
                     lastBattleReport: report,
                     activeAlert: AlertType.BATTLE_REPORT,
-                    activeMapEvent: 'NONE' as MapEventType, // Reset event to normal
-                    vazarothMessage: vazarothMsg,
-                    history: [historyEntry, ...prev.history].slice(0, 500)
+                    activeMapEvent: 'NONE' as MapEventType,
+                    vazarothMessage: outcome === 'DEFEAT' ? "Weakness disgusts me." : "You survived. For now.",
+                    history: [
+                        { id: generateId(), type: 'DAILY_REPORT', timestamp: Date.now(), message: `Siege Result: ${outcome}`, details: `Casualties: ${deadMinions} Friendly / ${deadEnemies} Hostile` },
+                        ...combatLogs, 
+                        ...prev.history
+                    ].slice(0, 500)
                 };
                 
                 syncNow(next);
                 return next;
             });
-        }, 12000); // 12 second cinematic duration
+        }, 12000); 
     };
 
     const closeBattleReport = () => {
