@@ -12,8 +12,16 @@ type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 // Extended draft type for local state to handle completion toggling
 type LocalSubtaskState = SubtaskDraft & { id?: string; completed?: boolean };
 
+interface TaskCardProps {
+    task: Task;
+    style?: React.CSSProperties;
+    onClick: (e: any) => void;
+    onDragStart: (e: any) => void;
+    showFantasy: boolean;
+}
+
 // --- MOVED OUTSIDE FOR PERFORMANCE AND TYPE SAFETY ---
-const TaskCard = ({ task, style, onClick, onDragStart, showFantasy }: { task: Task, style?: React.CSSProperties, onClick: (e:any)=>void, onDragStart: (e:any)=>void, showFantasy: boolean }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, style, onClick, onDragStart, showFantasy }) => {
     const { state } = useGame();
     const enemy = state.enemies.find(e => e.taskId === task.id && !e.subtaskId);
     const displayName = showFantasy ? (enemy ? enemy.title : task.title) : task.title;

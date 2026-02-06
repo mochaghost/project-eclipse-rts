@@ -366,65 +366,84 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         playSfx('ERROR'); // War horn
         setState(prev => ({ ...prev, activeMapEvent: 'BATTLE_CINEMATIC' }));
 
-        // 10 Second Delay for the battle animation
-        setTimeout(() => {
-            setState(prev => {
-                // 1. IDENTIFY ATTACKER
-                const sortedFactions = [...prev.factions].sort((a, b) => a.reputation - b.reputation);
-                const primaryEnemy = sortedFactions[0];
-                const attackerId = primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH'; 
-                const factionDef = FACTIONS[attackerId];
+        const prev = stateRef.current; // Grab latest state immediately
 
-                // 2. GENERATE DETAILED BATTLE LOGIC (Dwarf Fortress Style)
-                const combatLogs: HistoryLog[] = [];
-                const defenders = prev.minions || [];
-                const attackerCount = Math.floor(5 + (prev.playerLevel / 2));
-                
-                // Simulate individual casualties
-                let deadMinions = 0;
-                let deadEnemies = 0;
-                let damageTaken = 0;
-                
-                // Calculate outcomes
-                const defense = calculateDefense(prev);
-                const threat = 50 + (attackerCount * 10);
-                const winChance = Math.min(0.9, Math.max(0.1, defense.total / (threat * 1.2)));
+        // 1. IDENTIFY ATTACKER
+        const sortedFactions = [...prev.factions].sort((a, b) => a.reputation - b.reputation);
+        const primaryEnemy = sortedFactions[0];
+        const attackerId = primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH'; 
+        const factionDef = FACTIONS[attackerId];
 
-                // Resolve skirmishes
-                for(let i=0; i<Math.max(defenders.length, attackerCount); i++) {
-                    if (Math.random() < winChance) {
-                        deadEnemies++;
-                        if (Math.random() > 0.7) {
-                            // Flavour Text
-                            const guardName = i < defenders.length ? `Guard Unit-${i+1}` : "A Militia Volunteer";
-                            combatLogs.push({
-                                id: generateId(), type: 'VICTORY', timestamp: Date.now(),
-                                message: "Enemy Slain",
-                                details: `${guardName} struck down a ${factionDef.name} raider.`
-                            });
-                        }
-                    } else {
-                        damageTaken += 10;
-                        if (i < defenders.length) {
-                            deadMinions++;
-                            combatLogs.push({
-                                id: generateId(), type: 'DEFEAT', timestamp: Date.now(),
-                                message: "Defender Lost",
-                                details: `Minion #${i+1} was overwhelmed by the horde.`
-                            });
-                        }
-                    }
+        // 2. GENERATE DETAILED BATTLE LOGIC (Dwarf Fortress Style)
+        const combatLogs: HistoryLog[] = [];
+        const defenders = prev.minions || [];
+        const attackerCount = Math.floor(5 + (prev.playerLevel / 2));
+        
+        // Simulate individual casualties
+        let deadMinions = 0;
+        let deadEnemies = 0;
+        let damageTaken = 0;
+        
+        // Calculate outcomes
+        const defense = calculateDefense(prev);
+        const threat = 50 + (attackerCount * 10);
+        const winChance = Math.min(0.9, Math.max(0.1, defense.total / (threat * 1.2)));
+
+        // Resolve skirmishes
+        for(let i=0; i<Math.max(defenders.length, attackerCount); i++) {
+            if (Math.random() < winChance) {
+                deadEnemies++;
+                if (Math.random() > 0.7) {
+                    // Flavour Text
+                    const guardName = i < defenders.length ? `Guard Unit-${i+1}` : "A Militia Volunteer";
+                    combatLogs.push({
+                        id: generateId(), type: 'VICTORY', timestamp: Date.now(),
+                        message: "Enemy Slain",
+                        details: `${guardName} struck down a ${factionDef.name} raider.`
+                    });
                 }
+            } else {
+                damageTaken += 10;
+                if (i < defenders.length) {
+                    deadMinions++;
+                    combatLogs.push({
+                        id: generateId(), type: 'DEFEAT', timestamp: Date.now(),
+                        message: "Defender Lost",
+                        details: `Minion #${i+1} was overwhelmed by the horde.`
+                    });
+                }
+            }
+        }
 
+        // --- STREAMING LOGS LOGIC ---
+        // Instead of waiting until the end, we push logs gradually during the battle
+        let logIndex = 0;
+        const logInterval = setInterval(() => {
+            if (logIndex < combatLogs.length) {
+                const log = combatLogs[logIndex];
+                // Update history in real-time
+                setState(currentState => ({
+                    ...currentState,
+                    history: [log, ...currentState.history].slice(0, 500)
+                }));
+                logIndex++;
+            }
+        }, 1500); // 1.5s delay between messages
+
+        // 10 Second Delay for the battle animation result
+        setTimeout(() => {
+            clearInterval(logInterval); // Stop logging
+            
+            setState(currentState => {
                 // 3. FINAL OUTCOME
                 let outcome: BattleReport['outcome'] = 'DEFEAT';
                 if (damageTaken < threat * 0.5) outcome = 'VICTORY';
                 if (deadEnemies > attackerCount * 0.8 && damageTaken === 0) outcome = 'CRUSHING_VICTORY';
 
                 // 4. APPLY RESULTS
-                let newHp = Math.max(0, prev.baseHp - damageTaken);
-                let newGold = Math.max(0, prev.gold - (outcome === 'DEFEAT' ? 20 : 0));
-                let newXp = prev.xp + (outcome !== 'DEFEAT' ? 100 + (deadEnemies*10) : 0);
+                let newHp = Math.max(0, currentState.baseHp - damageTaken);
+                let newGold = Math.max(0, currentState.gold - (outcome === 'DEFEAT' ? 20 : 0));
+                let newXp = currentState.xp + (outcome !== 'DEFEAT' ? 100 + (deadEnemies*10) : 0);
                 
                 // Reduce minion count based on casualties
                 const newMinions = defenders.slice(deadMinions);
@@ -445,7 +464,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 playSfx(outcome === 'DEFEAT' ? 'FAILURE' : 'VICTORY');
 
                 const next = {
-                    ...prev,
+                    ...currentState,
                     baseHp: newHp,
                     gold: newGold,
                     xp: newXp,
@@ -456,8 +475,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     vazarothMessage: outcome === 'DEFEAT' ? "Weakness disgusts me." : "You survived. For now.",
                     history: [
                         { id: generateId(), type: 'DAILY_REPORT', timestamp: Date.now(), message: `Siege Result: ${outcome}`, details: `Casualties: ${deadMinions} Friendly / ${deadEnemies} Hostile` },
-                        ...combatLogs, 
-                        ...prev.history
+                        ...currentState.history // History already has the streamed logs
                     ].slice(0, 500)
                 };
                 
