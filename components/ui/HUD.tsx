@@ -1,32 +1,36 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
-import { SPELLS } from '../../constants';
+import { SPELLS, FACTIONS } from '../../constants';
 
 // --- NEW COMPONENT: CYCLE HUD ---
 const CycleHUD = () => {
     const { state, resolveNightPhase } = useGame();
     
-    // Calculate stats live for the meter
+    // Calculate attacker based on logic (replicated from Context for UI)
+    const sortedFactions = [...state.factions].sort((a, b) => a.reputation - b.reputation);
+    const primaryEnemy = sortedFactions[0];
+    const attackerId = primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH';
+    const attackerDef = FACTIONS[attackerId];
+
+    // Stats
     const activeEnemies = state.enemies.filter(e => {
         const task = state.tasks.find(t => t.id === e.taskId);
         return task && !task.completed && !task.failed;
     });
     
-    // Base threat + sum of enemy power
-    let threat = 50 + activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0);
-    // Add faction modifiers
-    state.factions.forEach(f => {
-        if (f.status === 'WAR') threat += 30;
-        if (f.status === 'HOSTILE') threat += 10;
-    });
-
-    const defense = ((state.structures.wallsLevel || 0) * 50) + ((state.minions?.length || 0) * 10) + (state.playerLevel * 5);
+    let threat = 50 + activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0) + (Math.abs(Math.min(0, primaryEnemy.reputation)) * 2);
     
-    // Ratio for the bar (clamped 0 to 1)
+    // Defense breakdown from cached stats
+    const defense = state.defenseStats?.total || 0;
+    const walls = state.defenseStats?.walls || 0;
+    const hero = state.defenseStats?.hero || 0;
+    const minions = state.defenseStats?.minions || 0;
+    
+    // Ratio
     const total = Math.max(1, threat + defense);
     const threatPct = (threat / total) * 100;
     const defensePct = (defense / total) * 100;
@@ -35,18 +39,37 @@ const CycleHUD = () => {
 
     return (
         <div className="absolute top-6 right-1/2 translate-x-1/2 md:translate-x-0 md:right-6 pointer-events-auto z-30 flex flex-col items-end gap-2">
+            
             {/* The Cycle Meter */}
-            <div className="bg-[#0c0a09]/90 border border-stone-700 p-2 rounded shadow-lg w-48">
-                <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                    <span>Threat</span>
-                    <span>Defense</span>
+            <div className="bg-[#0c0a09]/90 border border-stone-700 p-3 rounded shadow-lg w-56">
+                
+                {/* Attacker Info */}
+                <div className="flex justify-between items-center mb-2 border-b border-stone-800 pb-1">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Incoming Siege</span>
+                    <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: attackerDef.color }}>
+                        <Flag size={10} /> {attackerDef.name}
+                    </div>
                 </div>
-                <div className="h-2 w-full bg-stone-900 rounded-full flex overflow-hidden">
+
+                <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                    <span className="text-red-500">Threat {Math.floor(threat)}</span>
+                    <span className="text-blue-500">Defense {defense}</span>
+                </div>
+                
+                <div className="h-2 w-full bg-stone-900 rounded-full flex overflow-hidden mb-2">
                     <div className="h-full bg-red-700 transition-all duration-500" style={{ width: `${threatPct}%` }}></div>
                     <div className="h-full bg-blue-700 transition-all duration-500" style={{ width: `${defensePct}%` }}></div>
                 </div>
-                <div className={`text-center text-[10px] font-bold mt-1 ${isOverkill ? 'text-yellow-500 animate-pulse' : isSafe ? 'text-green-500' : 'text-red-500'}`}>
-                    {isOverkill ? 'COUNTER-SIEGE READY' : isSafe ? 'WALLS HOLDING' : 'BREACH IMMINENT'}
+
+                {/* Defense Breakdown */}
+                <div className="flex justify-between gap-1 text-[8px] text-stone-600 font-mono">
+                    <div title="Wall Defense">Walls: {walls}</div>
+                    <div title="Hero Power">Hero: {hero}</div>
+                    <div title="Army Power">Army: {minions}</div>
+                </div>
+
+                <div className={`text-center text-[10px] font-bold mt-2 pt-2 border-t border-stone-800 ${isOverkill ? 'text-yellow-500 animate-pulse' : isSafe ? 'text-green-500' : 'text-red-500'}`}>
+                    {isOverkill ? 'COUNTER-SIEGE READY' : isSafe ? 'DEFENSE HOLDING' : 'BREACH IMMINENT'}
                 </div>
             </div>
 

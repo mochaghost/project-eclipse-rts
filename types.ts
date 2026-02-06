@@ -42,7 +42,7 @@ export enum AlertType {
   BATTLE_REPORT = 'BATTLE_REPORT' // NEW
 }
 
-export type MapEventType = 'NONE' | 'TITAN_GAZE' | 'VOID_STORM' | 'TREMOR' | 'MOCKING_RAID' | 'VISION_RITUAL' | 'PEASANT_RAID' | 'FACTION_SIEGE' | 'NIGHT_BATTLE'; // Added NIGHT_BATTLE
+export type MapEventType = 'NONE' | 'TITAN_GAZE' | 'VOID_STORM' | 'TREMOR' | 'MOCKING_RAID' | 'VISION_RITUAL' | 'PEASANT_RAID' | 'FACTION_SIEGE' | 'NIGHT_BATTLE' | 'BATTLE_CINEMATIC'; 
 export type WeatherType = 'CLEAR' | 'RAIN' | 'ASH_STORM' | 'VOID_MIST';
 
 export interface Vector3 {
@@ -148,7 +148,7 @@ export interface ShopItem {
     name: string;
     description: string;
     cost: number;
-    type: 'HEAL_HERO' | 'HEAL_BASE' | 'MERCENARY' | 'UPGRADE_FORGE' | 'UPGRADE_WALLS' | 'UPGRADE_LIBRARY';
+    type: 'HEAL_HERO' | 'HEAL_BASE' | 'MERCENARY' | 'UPGRADE_FORGE' | 'UPGRADE_WALLS' | 'UPGRADE_LIBRARY' | 'BUY_TIME';
     value: number; 
     tier?: number; // 1, 2, 3
 }
@@ -239,9 +239,19 @@ export interface RealmStats {
     order: number; // 0-100
 }
 
+export interface DefenseStats {
+    total: number;
+    walls: number;
+    hero: number;
+    minions: number;
+    moraleBonus: number;
+}
+
 // NEW: Store the last battle results
 export interface BattleReport {
     timestamp: number;
+    attackerFactionId: FactionKey | 'UNKNOWN';
+    siegeFlavor: string;
     threatLevel: number;
     defenseLevel: number;
     outcome: 'VICTORY' | 'DEFEAT' | 'CRUSHING_VICTORY';
@@ -308,6 +318,7 @@ export interface GameState {
   // CYCLE OF THE ECLIPSE
   worldGenerationDay: number; 
   lastBattleReport?: BattleReport; // New
+  defenseStats?: DefenseStats; // Cached calculation
 
   syncConfig?: {
       firebase: FirebaseConfig;

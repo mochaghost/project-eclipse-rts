@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { FACTIONS } from '../../constants';
-import { X, HandCoins, MessageSquare, Sword, Scroll, Map as MapIcon, Flag } from 'lucide-react';
+import { X, HandCoins, MessageSquare, Sword, Scroll, Map as MapIcon, Flag, Lock } from 'lucide-react';
 import { FactionKey } from '../../types';
 
 export const DiplomacyMap: React.FC = () => {
@@ -14,6 +14,9 @@ export const DiplomacyMap: React.FC = () => {
     const factionList = state.factions || [];
     const activeFaction = selectedFaction ? factionList.find(f => f.id === selectedFaction) : null;
     const activeDef = activeFaction ? FACTIONS[activeFaction.id] : null;
+    
+    // Aggressive options locked until Level 20
+    const canDeclareWar = state.playerLevel >= 20;
 
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4 pointer-events-auto">
@@ -92,19 +95,19 @@ export const DiplomacyMap: React.FC = () => {
                                     onClick={() => interactWithFaction(activeFaction.id, 'INSULT')}
                                     className="p-6 border border-stone-700 flex flex-col items-center gap-2 hover:bg-red-950/20 transition-colors cursor-pointer"
                                 >
-                                    <Sword size={24} className="text-red-500" />
+                                    <MessageSquare size={24} className="text-red-500" />
                                     <span className="font-serif font-bold text-stone-200">Insult</span>
                                     <span className="text-xs text-stone-500">Free | -20 Rep</span>
                                 </button>
 
                                 <button 
-                                    onClick={() => interactWithFaction(activeFaction.id, 'PROPAGANDA')}
-                                    disabled={state.gold < 100}
-                                    className={`p-6 border flex flex-col items-center gap-2 hover:bg-[#151210] transition-colors ${state.gold < 100 ? 'opacity-50 border-stone-800 cursor-not-allowed' : 'border-stone-700 cursor-pointer'}`}
+                                    onClick={() => canDeclareWar ? interactWithFaction(activeFaction.id, 'PROPAGANDA') : null}
+                                    disabled={!canDeclareWar || state.gold < 100}
+                                    className={`p-6 border flex flex-col items-center gap-2 transition-colors ${!canDeclareWar ? 'opacity-50 cursor-not-allowed bg-stone-900 border-stone-800' : state.gold < 100 ? 'opacity-50 cursor-not-allowed border-stone-800' : 'hover:bg-[#151210] border-stone-700 cursor-pointer'}`}
                                 >
-                                    <MessageSquare size={24} className="text-purple-500" />
-                                    <span className="font-serif font-bold text-stone-200">Spread Lies</span>
-                                    <span className="text-xs text-yellow-600">Cost: 100g | -30 Rep | +Hope</span>
+                                    {!canDeclareWar ? <Lock size={24} className="text-stone-600"/> : <Sword size={24} className="text-purple-500" />}
+                                    <span className="font-serif font-bold text-stone-200">{canDeclareWar ? "Spread Lies" : "Locked"}</span>
+                                    <span className="text-xs text-yellow-600">{canDeclareWar ? "Cost: 100g" : "Lvl 20 Req"}</span>
                                 </button>
                             </div>
 

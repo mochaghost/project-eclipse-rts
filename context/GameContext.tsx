@@ -4,7 +4,7 @@ import {
   GameState, Task, SubtaskDraft, TaskPriority, AlertType, MapEventType, 
   VisualEffect, GameContextType, FirebaseConfig, TaskUpdateData, 
   Era, GameSettings, EntityType, MinionEntity, HistoryLog, Subtask,
-  EnemyEntity, Item, TaskTemplate, NPC, BattleReport, FactionKey
+  EnemyEntity, Item, TaskTemplate, NPC, BattleReport, FactionKey, DefenseStats
 } from '../types';
 import { 
   generateId, generateNemesis, getSageWisdom, getVazarothLine, 
@@ -25,6 +25,8 @@ export const SHOP_ITEMS = [
     { id: 'POTION', name: 'Potion of Clarity', description: 'Restores 50 HP to Hero.', cost: 50, type: 'HEAL_HERO', value: 50, tier: 0 },
     { id: 'REINFORCE', name: 'Field Repairs', description: 'Restores 50 HP to Base.', cost: 75, type: 'HEAL_BASE', value: 50, tier: 0 },
     { id: 'MERCENARY', name: 'Hire Mercenary', description: 'Summons a friendly unit.', cost: 100, type: 'MERCENARY', value: 1, tier: 0 },
+    // NEW: BUY TIME
+    { id: 'BUY_TIME', name: 'Decree of Leisure', description: 'Bribe Fate. Instantly creates a 1h completed task.', cost: 150, type: 'BUY_TIME', value: 60, tier: 0 },
     
     // ARCHITECTURE UPGRADES
     // FORGE
@@ -111,7 +113,33 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, 120000); 
     };
 
-    // --- GAME LOOP (HEARTBEAT) - OPTIMIZED ---
+    // --- DEFENSE CALCULATION HELPER ---
+    const calculateDefense = (currentState: GameState): DefenseStats => {
+        const wallDef = (currentState.structures.wallsLevel || 0) * 100;
+        
+        // Hero Equipment Bonus
+        let itemBonus = 0;
+        if (currentState.heroEquipment.weapon !== 'Fists') itemBonus += 10;
+        if (currentState.heroEquipment.armor !== 'Rags') itemBonus += 10;
+        if (currentState.heroEquipment.relic !== 'None') itemBonus += 20;
+        
+        const heroDef = (currentState.playerLevel * 15) + itemBonus;
+        const minionDef = (currentState.minions?.length || 0) * 20; // Minions are valuable
+        
+        // Morale Bonus (Hope > Fear)
+        const moraleRatio = (currentState.realmStats.hope || 50) / 100;
+        const moraleBonus = Math.floor((wallDef + heroDef + minionDef) * (moraleRatio - 0.5)); // Can be negative
+
+        return {
+            total: Math.max(0, wallDef + heroDef + minionDef + moraleBonus),
+            walls: wallDef,
+            hero: heroDef,
+            minions: minionDef,
+            moraleBonus
+        };
+    };
+
+    // --- GAME LOOP (HEARTBEAT) ---
     useEffect(() => {
         const tickRate = 2000; 
         const loop = setInterval(() => {
@@ -120,7 +148,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             if (current.isGrimoireOpen || current.isSettingsOpen) return;
 
-            let hpDamage = 0;
             let baseDamage = 0;
             let needsUpdate = false;
             let alertUpdate: Partial<GameState> | null = null;
@@ -158,10 +185,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const regen = (current.structures.wallsLevel || 0) * 0.2;
             baseDamage -= regen;
 
-            // 3. RANDOM SIEGE EVENTS (New Mechanic)
-            // 2% chance per 2s tick to start a siege if map is quiet (~ every 2-3 mins)
+            // 3. RANDOM SIEGE EVENTS
             if (current.activeMapEvent === 'NONE' && Math.random() > 0.98) {
-                // Find a hostile faction to blame
                 const hostile = current.factions.filter(f => f.reputation < 0);
                 const attacker = hostile.length > 0 ? hostile[Math.floor(Math.random() * hostile.length)] : null;
                 
@@ -178,20 +203,46 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     } as HistoryLog, ...current.history].slice(0, 500)
                 };
                 
-                // End siege automatically after 20s
                 setTimeout(() => {
                     setState(prev => ({ ...prev, activeMapEvent: 'NONE' }));
                 }, 20000);
             }
 
-            // NPC Simulation - Only run if sufficient time passed
+            // 4. SAGE INTERVENTION (Vision Ritual)
+            if (current.activeMapEvent === 'NONE' && current.activeAlert === AlertType.NONE && !current.isGrimoireOpen && !alertUpdate?.activeMapEvent) {
+                 const impendingTask = current.tasks.find(t => t.priority === TaskPriority.HIGH && !t.completed && !t.failed && t.startTime > now && (t.startTime - now) < 15 * 60 * 1000);
+                 let triggerVision = false;
+                 let sageMsg = current.sageMessage;
+
+                 if (impendingTask) {
+                     if (Math.random() > 0.95) {
+                         triggerVision = true;
+                         sageMsg = `The ${impendingTask.title} draws near. Clear your mind.`;
+                     }
+                 } else {
+                     if (Math.random() > 0.999) {
+                         triggerVision = true;
+                         sageMsg = "The noise of the world is deafening. Silence it.";
+                     }
+                 }
+
+                 if (triggerVision) {
+                     playSfx('MAGIC');
+                     alertUpdate = {
+                         ...alertUpdate,
+                         activeMapEvent: 'VISION_RITUAL',
+                         sageMessage: sageMsg,
+                         history: [{ id: generateId(), type: 'MAGIC', timestamp: Date.now(), message: "Sage's Intervention", details: "A vision has been granted." } as HistoryLog, ...current.history].slice(0, 500)
+                     };
+                 }
+            }
+
+            // NPC Simulation
             let newPop = current.population;
             if (Math.random() > 0.66) { 
                 needsUpdate = true;
                 const smiths = current.population.filter(p => p.role === 'Smith').length;
-                if (smiths > 0) {
-                    baseDamage -= (smiths * 0.05); 
-                }
+                if (smiths > 0) baseDamage -= (smiths * 0.05); 
                 newPop = current.population.map(p => ({
                     ...p,
                     hunger: Math.min(100, p.hunger + 1),
@@ -199,15 +250,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }));
             }
 
-            if (baseDamage !== 0 || needsUpdate || alertUpdate || triggeringTaskId) {
+            // Always update Defense Stats cache
+            const defStats = calculateDefense(current);
+
+            if (baseDamage !== 0 || needsUpdate || alertUpdate || triggeringTaskId || defStats.total !== current.defenseStats?.total) {
                 setState(prev => {
                     const newBaseHp = Math.max(0, Math.min(prev.maxBaseHp, prev.baseHp - baseDamage));
-                    
                     let nextTasks = prev.tasks;
                     if (triggeringTaskId) {
-                        nextTasks = prev.tasks.map(t => 
-                            t.id === triggeringTaskId ? { ...t, crisisTriggered: true } : t
-                        );
+                        nextTasks = prev.tasks.map(t => t.id === triggeringTaskId ? { ...t, crisisTriggered: true } : t);
                     }
 
                     return {
@@ -215,7 +266,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         ...alertUpdate,
                         tasks: nextTasks,
                         baseHp: newBaseHp,
-                        population: needsUpdate ? newPop : prev.population
+                        population: needsUpdate ? newPop : prev.population,
+                        defenseStats: defStats
                     };
                 });
             }
@@ -299,132 +351,142 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // --- DAMAGE HANDLER FOR SIEGE MOBS ---
     const takeBaseDamage = (amount: number, reason: string = "Attack") => {
         setState(prev => {
-            // Apply Wall Mitigation (Armor)
-            const defense = (prev.structures.wallsLevel || 0) * 10; // 0, 10, 20, 30
+            const defense = (prev.structures.wallsLevel || 0) * 10; 
             const actualDamage = Math.max(0, amount - defense);
-            
-            // If completely blocked, no damage
             if (actualDamage <= 0) return prev;
-
             playSfx('COMBAT_HIT');
-            
-            const next = {
-                ...prev,
-                baseHp: Math.max(0, prev.baseHp - actualDamage)
-            };
-            // Only sync on significant damage to avoid spam
+            const next = { ...prev, baseHp: Math.max(0, prev.baseHp - actualDamage) };
             if (prev.baseHp - next.baseHp > 5) syncNow(next);
             return next;
         });
     };
 
-    // --- THE NIGHT CYCLE RESOLVER ---
+    // --- THE NIGHT CYCLE RESOLVER (FACTION BASED) ---
     const resolveNightPhase = () => {
-        setState(prev => {
-            // 1. Calculate THREAT (Unfinished tasks)
-            const activeEnemies = prev.enemies.filter(e => {
-                const task = prev.tasks.find(t => t.id === e.taskId);
-                return task && !task.completed && !task.failed;
-            });
-            
-            // Base threat + sum of enemy power
-            let totalThreat = 50 + activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0);
-            
-            // Faction Modifiers
-            prev.factions.forEach(f => {
-                if (f.status === 'WAR') totalThreat += 30;
-                if (f.status === 'HOSTILE') totalThreat += 10;
-            });
+        // Trigger Cinematic Mode
+        playSfx('ERROR'); // War horn
+        setState(prev => ({ ...prev, activeMapEvent: 'BATTLE_CINEMATIC' }));
 
-            // 2. Calculate DEFENSE
-            const wallsDef = (prev.structures.wallsLevel || 0) * 50;
-            const minionDef = (prev.minions?.length || 0) * 10;
-            const heroDef = prev.playerLevel * 5;
-            const totalDefense = wallsDef + minionDef + heroDef;
+        // 10 Second Delay for the battle animation
+        setTimeout(() => {
+            setState(prev => {
+                // 1. IDENTIFY ATTACKER (Lowest Reputation)
+                const sortedFactions = [...prev.factions].sort((a, b) => a.reputation - b.reputation);
+                const primaryEnemy = sortedFactions[0];
+                const attackerId = primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH'; // Default bad guy if everyone likes you
+                const factionDef = FACTIONS[attackerId];
 
-            // 3. Determine Outcome
-            const diff = totalDefense - totalThreat;
-            
-            let outcome: BattleReport['outcome'] = 'DEFEAT';
-            let damageTaken = 0;
-            let lootStolen = 0;
-            let enemiesDefeated = 0;
-            let conqueredFactionId: string | undefined = undefined;
-            let vazarothMsg = "The darkness recedes, but you are weaker.";
-            
-            if (diff >= 0) {
-                // Victory
-                outcome = 'VICTORY';
-                enemiesDefeated = Math.floor(Math.random() * 5) + 1;
-                vazarothMsg = "You survived. Merely postponing the inevitable.";
+                // 2. GENERATE SIEGE FLAVOR
+                let siegeFlavor = "The enemy attacks.";
+                if (attackerId === 'SOL') siegeFlavor = "The Kingdom of Sol demands you answer for your lack of Order. Their knights charge.";
+                if (attackerId === 'VAZAROTH') siegeFlavor = "Cultists emerge from the fog. They seek to extinguish your hope.";
+                if (attackerId === 'IRON') siegeFlavor = "Dwarven siege engines rumble. They come for the debts you owe.";
+                if (attackerId === 'UMBRA') siegeFlavor = "Shadows coalesce into teeth. The Apostles are hungry.";
+                if (attackerId === 'ASH') siegeFlavor = "Orc warhorns shatter the silence. They want only blood.";
+                if (attackerId === 'VERDANT') siegeFlavor = "The forest itself turns against you. Roots and arrows strike.";
+
+                // 3. CALCULATE THREAT
+                // Base threat from unfinished tasks
+                const activeEnemies = prev.enemies.filter(e => {
+                    const task = prev.tasks.find(t => t.id === e.taskId);
+                    return task && !task.completed && !task.failed;
+                });
+                const taskThreat = activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0);
                 
-                // OVERKILL / SIEGE MECHANIC (Endgame)
-                if (prev.playerLevel >= 40 && diff > totalThreat * 0.5) {
-                    outcome = 'CRUSHING_VICTORY';
-                    // Find a hostile faction to conquer/raid
-                    const hostile = prev.factions.find(f => f.status === 'WAR' || f.status === 'HOSTILE');
-                    if (hostile) {
-                        conqueredFactionId = hostile.id;
-                        vazarothMsg = `You strike back at the ${hostile.name}. Their blood stains the snow.`;
+                // Faction Wrath (Magnitude of negative rep)
+                const wrath = Math.abs(Math.min(0, primaryEnemy.reputation)) * 2;
+                
+                const totalThreat = 50 + taskThreat + wrath;
+
+                // 4. CALCULATE DEFENSE
+                const defense = calculateDefense(prev);
+
+                // 5. DETERMINE OUTCOME
+                const diff = defense.total - totalThreat;
+                
+                let outcome: BattleReport['outcome'] = 'DEFEAT';
+                let damageTaken = 0;
+                let lootStolen = 0;
+                let enemiesDefeated = 0;
+                let conqueredFactionId: string | undefined = undefined;
+                let vazarothMsg = "The darkness recedes, but you are weaker.";
+                
+                if (diff >= 0) {
+                    // Victory
+                    outcome = 'VICTORY';
+                    enemiesDefeated = Math.floor(Math.random() * 5) + 1;
+                    vazarothMsg = "You survived. Merely postponing the inevitable.";
+                    
+                    // OVERKILL / COUNTER-ATTACK (Only if strong enough)
+                    if (prev.playerLevel >= 40 && diff > totalThreat * 0.5) {
+                        outcome = 'CRUSHING_VICTORY';
+                        // We counter-attack the specific faction that attacked us
+                        if (primaryEnemy.reputation < 0) {
+                            conqueredFactionId = primaryEnemy.id;
+                            vazarothMsg = `You pushed back the ${primaryEnemy.name} and burned their camp.`;
+                        }
                     }
+                } else {
+                    // Defeat
+                    damageTaken = Math.abs(diff);
+                    lootStolen = Math.floor(prev.gold * 0.1); 
+                    vazarothMsg = "Your walls are paper. Your resolve is ash.";
                 }
-            } else {
-                // Defeat
-                damageTaken = Math.abs(diff);
-                lootStolen = Math.floor(prev.gold * 0.1); // Lose 10% gold
-                vazarothMsg = "Your walls are paper. Your resolve is ash.";
-            }
 
-            // 4. Apply Results
-            let newHp = Math.max(0, prev.baseHp - damageTaken);
-            let newGold = Math.max(0, prev.gold - lootStolen);
-            let newXp = prev.xp + (outcome !== 'DEFEAT' ? 100 : 0);
-            
-            // Update Factions if Conquered
-            const newFactions = prev.factions.map(f => {
-                if (f.id === conqueredFactionId) {
-                    return { ...f, reputation: f.reputation + 20, status: (f.reputation + 20 > -20 ? 'NEUTRAL' : 'HOSTILE') as any };
-                }
-                return f;
+                // 6. APPLY RESULTS
+                let newHp = Math.max(0, prev.baseHp - damageTaken);
+                let newGold = Math.max(0, prev.gold - lootStolen);
+                let newXp = prev.xp + (outcome !== 'DEFEAT' ? 100 + (enemiesDefeated*10) : 0);
+                
+                // Update Factions
+                const newFactions = prev.factions.map(f => {
+                    if (f.id === conqueredFactionId) {
+                        // We beat them so bad they respect us (or fear us) -> Rep improves slightly towards Neutral (Fear)
+                        return { ...f, reputation: Math.min(0, f.reputation + 15), status: 'HOSTILE' as any };
+                    }
+                    return f;
+                });
+
+                const report: BattleReport = {
+                    timestamp: Date.now(),
+                    attackerFactionId: attackerId,
+                    siegeFlavor,
+                    threatLevel: totalThreat,
+                    defenseLevel: defense.total,
+                    outcome,
+                    damageTaken,
+                    lootStolen,
+                    enemiesDefeated,
+                    conqueredFaction: conqueredFactionId ? factionDef.name : undefined
+                };
+
+                const historyEntry: HistoryLog = {
+                    id: generateId(),
+                    type: 'DAILY_REPORT',
+                    timestamp: Date.now(),
+                    message: outcome === 'DEFEAT' ? `Siege Lost: ${factionDef.name}` : `Siege Repelled: ${factionDef.name}`,
+                    details: `Defended against ${totalThreat} threat. ${siegeFlavor}`
+                };
+
+                playSfx(outcome === 'DEFEAT' ? 'FAILURE' : 'VICTORY');
+
+                const next = {
+                    ...prev,
+                    baseHp: newHp,
+                    gold: newGold,
+                    xp: newXp,
+                    factions: newFactions,
+                    lastBattleReport: report,
+                    activeAlert: AlertType.BATTLE_REPORT,
+                    activeMapEvent: 'NONE' as MapEventType, // Reset event to normal
+                    vazarothMessage: vazarothMsg,
+                    history: [historyEntry, ...prev.history].slice(0, 500)
+                };
+                
+                syncNow(next);
+                return next;
             });
-
-            const report: BattleReport = {
-                timestamp: Date.now(),
-                threatLevel: totalThreat,
-                defenseLevel: totalDefense,
-                outcome,
-                damageTaken,
-                lootStolen,
-                enemiesDefeated,
-                conqueredFaction: conqueredFactionId ? FACTIONS[conqueredFactionId as keyof typeof FACTIONS].name : undefined
-            };
-
-            const historyEntry: HistoryLog = {
-                id: generateId(),
-                type: 'DAILY_REPORT',
-                timestamp: Date.now(),
-                message: outcome === 'DEFEAT' ? "Night Raid: Defeat" : "Night Raid: Defense Successful",
-                details: `Threat: ${totalThreat} vs Defense: ${totalDefense}.`
-            };
-
-            playSfx(outcome === 'DEFEAT' ? 'FAILURE' : 'VICTORY');
-
-            const next: GameState = {
-                ...prev,
-                baseHp: newHp,
-                gold: newGold,
-                xp: newXp,
-                factions: newFactions,
-                lastBattleReport: report,
-                activeAlert: AlertType.BATTLE_REPORT,
-                activeMapEvent: 'NIGHT_BATTLE' as MapEventType, 
-                vazarothMessage: vazarothMsg,
-                history: [historyEntry, ...prev.history].slice(0, 500)
-            };
-            
-            syncNow(next);
-            return next;
-        });
+        }, 12000); // 12 second cinematic duration
     };
 
     const closeBattleReport = () => {
@@ -847,6 +909,41 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (item.type === 'HEAL_HERO') next.heroHp = Math.min(next.maxHeroHp, next.heroHp + item.value);
             if (item.type === 'HEAL_BASE') next.baseHp = Math.min(next.maxBaseHp, next.baseHp + item.value);
             
+            // --- NEW: BUY TIME MECHANIC ---
+            if (item.type === 'BUY_TIME') {
+                const now = Date.now();
+                const taskId = generateId();
+                const newTask: Task = {
+                    id: taskId,
+                    title: "Royal Leisure",
+                    description: "Time bought with gold. The luxury of the idle king.",
+                    startTime: now,
+                    deadline: now + 3600000, // 1 Hour
+                    estimatedDuration: 60,
+                    createdAt: now,
+                    priority: TaskPriority.LOW,
+                    completed: true, // INSTANTLY COMPLETED
+                    failed: false,
+                    subtasks: [],
+                    crisisTriggered: false,
+                    hubris: false
+                };
+                
+                next.tasks = [...next.tasks, newTask];
+                next.xp += 20; // Small XP bonus for leisure
+                next.winStreak += 1; // Maintains streak!
+                
+                effects.push({ id: generateId(), type: 'TEXT_XP', position: { x: 0, y: 3, z: 0 }, text: "TIME BOUGHT", timestamp: Date.now() });
+                historyUpdate.unshift({
+                    id: generateId(),
+                    type: 'TRADE',
+                    timestamp: Date.now(),
+                    message: "Decree of Leisure",
+                    details: "You bribed Fate for an hour of peace."
+                });
+                vazarothMsg = "Buying time? A coward's strategy, but effective.";
+            }
+            
             if (item.type.startsWith('UPGRADE')) {
                 let structureName = "";
                 let specialistRole: NPC['role'] | null = null;
@@ -1023,6 +1120,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return next;
         });
     };
+
+    // Auto-trigger vision content when event starts
+    useEffect(() => {
+        if (state.activeMapEvent === 'VISION_RITUAL' && !state.activeVisionVideo) {
+            rerollVision();
+        }
+    }, [state.activeMapEvent]);
 
     return (
         <GameContext.Provider value={{
