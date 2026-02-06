@@ -1,10 +1,70 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 import { SPELLS } from '../../constants';
+
+// --- NEW COMPONENT: CYCLE HUD ---
+const CycleHUD = () => {
+    const { state, resolveNightPhase } = useGame();
+    
+    // Calculate stats live for the meter
+    const activeEnemies = state.enemies.filter(e => {
+        const task = state.tasks.find(t => t.id === e.taskId);
+        return task && !task.completed && !task.failed;
+    });
+    
+    // Base threat + sum of enemy power
+    let threat = 50 + activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0);
+    // Add faction modifiers
+    state.factions.forEach(f => {
+        if (f.status === 'WAR') threat += 30;
+        if (f.status === 'HOSTILE') threat += 10;
+    });
+
+    const defense = ((state.structures.wallsLevel || 0) * 50) + ((state.minions?.length || 0) * 10) + (state.playerLevel * 5);
+    
+    // Ratio for the bar (clamped 0 to 1)
+    const total = Math.max(1, threat + defense);
+    const threatPct = (threat / total) * 100;
+    const defensePct = (defense / total) * 100;
+    const isSafe = defense >= threat;
+    const isOverkill = defense > threat * 1.5;
+
+    return (
+        <div className="absolute top-6 right-1/2 translate-x-1/2 md:translate-x-0 md:right-6 pointer-events-auto z-30 flex flex-col items-end gap-2">
+            {/* The Cycle Meter */}
+            <div className="bg-[#0c0a09]/90 border border-stone-700 p-2 rounded shadow-lg w-48">
+                <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                    <span>Threat</span>
+                    <span>Defense</span>
+                </div>
+                <div className="h-2 w-full bg-stone-900 rounded-full flex overflow-hidden">
+                    <div className="h-full bg-red-700 transition-all duration-500" style={{ width: `${threatPct}%` }}></div>
+                    <div className="h-full bg-blue-700 transition-all duration-500" style={{ width: `${defensePct}%` }}></div>
+                </div>
+                <div className={`text-center text-[10px] font-bold mt-1 ${isOverkill ? 'text-yellow-500 animate-pulse' : isSafe ? 'text-green-500' : 'text-red-500'}`}>
+                    {isOverkill ? 'COUNTER-SIEGE READY' : isSafe ? 'WALLS HOLDING' : 'BREACH IMMINENT'}
+                </div>
+            </div>
+
+            {/* End Day Button */}
+            <button 
+                onClick={resolveNightPhase}
+                className="group relative overflow-hidden bg-indigo-950 border border-indigo-500 text-indigo-200 px-4 py-2 font-serif font-bold uppercase text-xs tracking-widest hover:bg-indigo-900 transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]"
+            >
+                <div className="flex items-center gap-2 relative z-10">
+                    <Moon size={14} className="group-hover:rotate-12 transition-transform" />
+                    <span>Face the Night</span>
+                </div>
+                {/* Shine effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+            </button>
+        </div>
+    )
+}
 
 const SplatterOverlay = () => {
     const { state } = useGame();
@@ -78,6 +138,7 @@ const EventTicker: React.FC = () => {
                     if (log.type === 'DEFEAT') color = 'text-red-500';
                     if (log.type === 'VICTORY') color = 'text-green-400';
                     if (log.type === 'MAGIC') color = 'text-purple-400';
+                    if (log.type === 'DAILY_REPORT') color = 'text-indigo-400 font-bold border-l-4 border-indigo-500 pl-2 bg-indigo-950/30';
 
                     return (
                         <div key={log.id} className={`text-xs font-serif bg-black/60 px-2 py-1 border-l-2 border-stone-800 ${color} animate-pulse-slow`}>
@@ -221,6 +282,7 @@ export const HUD: React.FC = () => {
       <WorldRumorHUD />
       <RealmStatusWidget />
       <RealTimeClock />
+      <CycleHUD />
       <EventTicker />
       <SplatterOverlay />
       <SpellBar />

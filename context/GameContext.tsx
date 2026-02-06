@@ -4,7 +4,7 @@ import {
   GameState, Task, SubtaskDraft, TaskPriority, AlertType, MapEventType, 
   VisualEffect, GameContextType, FirebaseConfig, TaskUpdateData, 
   Era, GameSettings, EntityType, MinionEntity, HistoryLog, Subtask,
-  EnemyEntity, Item, TaskTemplate, NPC
+  EnemyEntity, Item, TaskTemplate, NPC, BattleReport, FactionKey
 } from '../types';
 import { 
   generateId, generateNemesis, getSageWisdom, getVazarothLine, 
@@ -18,7 +18,7 @@ import {
   subscribeToAuth, subscribeToCloud, pushToCloud, disconnect, testConnection 
 } from '../services/firebase';
 import { playSfx, initAudio, setVolume } from '../utils/audio';
-import { LEVEL_THRESHOLDS, ERA_CONFIG, SPELLS } from '../constants';
+import { LEVEL_THRESHOLDS, ERA_CONFIG, SPELLS, FACTIONS } from '../constants';
 
 export const SHOP_ITEMS = [
     // CONSUMABLES
@@ -316,6 +316,123 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (prev.baseHp - next.baseHp > 5) syncNow(next);
             return next;
         });
+    };
+
+    // --- THE NIGHT CYCLE RESOLVER ---
+    const resolveNightPhase = () => {
+        setState(prev => {
+            // 1. Calculate THREAT (Unfinished tasks)
+            const activeEnemies = prev.enemies.filter(e => {
+                const task = prev.tasks.find(t => t.id === e.taskId);
+                return task && !task.completed && !task.failed;
+            });
+            
+            // Base threat + sum of enemy power
+            let totalThreat = 50 + activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0);
+            
+            // Faction Modifiers
+            prev.factions.forEach(f => {
+                if (f.status === 'WAR') totalThreat += 30;
+                if (f.status === 'HOSTILE') totalThreat += 10;
+            });
+
+            // 2. Calculate DEFENSE
+            const wallsDef = (prev.structures.wallsLevel || 0) * 50;
+            const minionDef = (prev.minions?.length || 0) * 10;
+            const heroDef = prev.playerLevel * 5;
+            const totalDefense = wallsDef + minionDef + heroDef;
+
+            // 3. Determine Outcome
+            const diff = totalDefense - totalThreat;
+            
+            let outcome: BattleReport['outcome'] = 'DEFEAT';
+            let damageTaken = 0;
+            let lootStolen = 0;
+            let enemiesDefeated = 0;
+            let conqueredFactionId: string | undefined = undefined;
+            let vazarothMsg = "The darkness recedes, but you are weaker.";
+            
+            if (diff >= 0) {
+                // Victory
+                outcome = 'VICTORY';
+                enemiesDefeated = Math.floor(Math.random() * 5) + 1;
+                vazarothMsg = "You survived. Merely postponing the inevitable.";
+                
+                // OVERKILL / SIEGE MECHANIC (Endgame)
+                if (prev.playerLevel >= 40 && diff > totalThreat * 0.5) {
+                    outcome = 'CRUSHING_VICTORY';
+                    // Find a hostile faction to conquer/raid
+                    const hostile = prev.factions.find(f => f.status === 'WAR' || f.status === 'HOSTILE');
+                    if (hostile) {
+                        conqueredFactionId = hostile.id;
+                        vazarothMsg = `You strike back at the ${hostile.name}. Their blood stains the snow.`;
+                    }
+                }
+            } else {
+                // Defeat
+                damageTaken = Math.abs(diff);
+                lootStolen = Math.floor(prev.gold * 0.1); // Lose 10% gold
+                vazarothMsg = "Your walls are paper. Your resolve is ash.";
+            }
+
+            // 4. Apply Results
+            let newHp = Math.max(0, prev.baseHp - damageTaken);
+            let newGold = Math.max(0, prev.gold - lootStolen);
+            let newXp = prev.xp + (outcome !== 'DEFEAT' ? 100 : 0);
+            
+            // Update Factions if Conquered
+            const newFactions = prev.factions.map(f => {
+                if (f.id === conqueredFactionId) {
+                    return { ...f, reputation: f.reputation + 20, status: (f.reputation + 20 > -20 ? 'NEUTRAL' : 'HOSTILE') as any };
+                }
+                return f;
+            });
+
+            const report: BattleReport = {
+                timestamp: Date.now(),
+                threatLevel: totalThreat,
+                defenseLevel: totalDefense,
+                outcome,
+                damageTaken,
+                lootStolen,
+                enemiesDefeated,
+                conqueredFaction: conqueredFactionId ? FACTIONS[conqueredFactionId as keyof typeof FACTIONS].name : undefined
+            };
+
+            const historyEntry: HistoryLog = {
+                id: generateId(),
+                type: 'DAILY_REPORT',
+                timestamp: Date.now(),
+                message: outcome === 'DEFEAT' ? "Night Raid: Defeat" : "Night Raid: Defense Successful",
+                details: `Threat: ${totalThreat} vs Defense: ${totalDefense}.`
+            };
+
+            playSfx(outcome === 'DEFEAT' ? 'FAILURE' : 'VICTORY');
+
+            const next: GameState = {
+                ...prev,
+                baseHp: newHp,
+                gold: newGold,
+                xp: newXp,
+                factions: newFactions,
+                lastBattleReport: report,
+                activeAlert: AlertType.BATTLE_REPORT,
+                activeMapEvent: 'NIGHT_BATTLE' as MapEventType, 
+                vazarothMessage: vazarothMsg,
+                history: [historyEntry, ...prev.history].slice(0, 500)
+            };
+            
+            syncNow(next);
+            return next;
+        });
+    };
+
+    const closeBattleReport = () => {
+        setState(prev => ({ 
+            ...prev, 
+            activeAlert: AlertType.NONE, 
+            activeMapEvent: 'NONE' // Stop the battle visual
+        }));
     };
 
     // ... (Existing addTask, editTask, etc. remain unchanged, just ensure takeBaseDamage is added to provider)
@@ -627,11 +744,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     id: generateId(), 
                     title: t, 
                     completed: false,
-                    startTime: Date.now(), // IMPORTANT: Give them a timestamp
+                    startTime: Date.now(), 
                     deadline: Date.now() + 3600000 
                 }));
                 
-                // SAFE SPREAD: Handle potentially undefined t.subtasks
                 const updatedTasks = prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), ...subtaskDrafts] } : t);
                 
                 const next = {
@@ -919,7 +1035,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             clearSave, exportSave, importSave, connectToCloud, loginWithGoogle, logout, disconnectCloud,
             addEffect, closeVision, rerollVision, interactWithNPC, updateSettings, castSpell,
             testCloudConnection, forcePull,
-            saveTemplate, deleteTemplate, requestPermissions, takeBaseDamage
+            saveTemplate, deleteTemplate, requestPermissions, takeBaseDamage,
+            resolveNightPhase, closeBattleReport
         }}>
             {children}
         </GameContext.Provider>

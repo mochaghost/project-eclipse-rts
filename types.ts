@@ -38,10 +38,11 @@ export enum AlertType {
   CRISIS = 'CRISIS',
   RITUAL_MORNING = 'RITUAL_MORNING',
   RITUAL_EVENING = 'RITUAL_EVENING',
-  AEON_ENCOUNTER = 'AEON_ENCOUNTER'
+  AEON_ENCOUNTER = 'AEON_ENCOUNTER',
+  BATTLE_REPORT = 'BATTLE_REPORT' // NEW
 }
 
-export type MapEventType = 'NONE' | 'TITAN_GAZE' | 'VOID_STORM' | 'TREMOR' | 'MOCKING_RAID' | 'VISION_RITUAL' | 'PEASANT_RAID' | 'FACTION_SIEGE';
+export type MapEventType = 'NONE' | 'TITAN_GAZE' | 'VOID_STORM' | 'TREMOR' | 'MOCKING_RAID' | 'VISION_RITUAL' | 'PEASANT_RAID' | 'FACTION_SIEGE' | 'NIGHT_BATTLE'; // Added NIGHT_BATTLE
 export type WeatherType = 'CLEAR' | 'RAIN' | 'ASH_STORM' | 'VOID_MIST';
 
 export interface Vector3 {
@@ -137,7 +138,7 @@ export interface Task {
 export interface HistoryLog {
     id: string;
     timestamp: number;
-    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE';
+    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE' | 'DAILY_REPORT';
     message: string;
     details?: string; 
 }
@@ -238,6 +239,18 @@ export interface RealmStats {
     order: number; // 0-100
 }
 
+// NEW: Store the last battle results
+export interface BattleReport {
+    timestamp: number;
+    threatLevel: number;
+    defenseLevel: number;
+    outcome: 'VICTORY' | 'DEFEAT' | 'CRUSHING_VICTORY';
+    damageTaken: number;
+    lootStolen: number;
+    enemiesDefeated: number;
+    conqueredFaction?: string;
+}
+
 export interface GameState {
   playerLevel: number;
   xp: number;
@@ -287,12 +300,15 @@ export interface GameState {
   factions: FactionReputation[]; 
   heroEquipment: HeroEquipment; 
   inventory: Item[]; 
-  templates: TaskTemplate[]; // NEW: Saved Templates
+  templates: TaskTemplate[]; 
   
   // Graveyard for Nemesis System
   nemesisGraveyard: { name: string, clan: string, deathTime: number, killer: 'HERO' | 'TIME' }[];
 
+  // CYCLE OF THE ECLIPSE
   worldGenerationDay: number; 
+  lastBattleReport?: BattleReport; // New
+
   syncConfig?: {
       firebase: FirebaseConfig;
       roomId: string; 
@@ -366,5 +382,9 @@ export interface GameContextType {
   saveTemplate: (template: Omit<TaskTemplate, 'id'>) => void;
   deleteTemplate: (templateId: string) => void;
   requestPermissions: () => Promise<void>;
-  takeBaseDamage: (amount: number, reason?: string) => void; // New method
+  takeBaseDamage: (amount: number, reason?: string) => void;
+  
+  // NEW
+  resolveNightPhase: () => void;
+  closeBattleReport: () => void;
 }

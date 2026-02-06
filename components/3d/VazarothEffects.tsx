@@ -152,7 +152,7 @@ export const VazarothEffects: React.FC = () => {
     
     // Determine Faction Color for Siege
     let factionColor = "#ef4444"; // Default Red (Vazaroth)
-    if (event === 'FACTION_SIEGE') {
+    if (event === 'FACTION_SIEGE' || event === 'NIGHT_BATTLE') {
         const hostile = state.factions.filter(f => f.reputation < 0);
         if (hostile.length > 0) {
             // Pick based on time/random seeded by event
@@ -166,6 +166,15 @@ export const VazarothEffects: React.FC = () => {
         <group>
             {isFearful && <AshRain />}
             
+            {/* NIGHT BATTLE INTENSITY */}
+            {event === 'NIGHT_BATTLE' && (
+                <group>
+                    <fogExp2 attach="fog" args={['#1a0505', 0.08]} />
+                    <CameraShake maxPitch={0.05} maxRoll={0.05} maxYaw={0.05} intensity={1} />
+                    <SpotLight position={[0, 50, 0]} target-position={[0, 0, 0]} color="#ff0000" intensity={10} angle={0.5} />
+                </group>
+            )}
+
             {event === 'TITAN_GAZE' && (
                 <group>
                     <SpotLight position={[0, 40, -100]} target-position={[4, 0, 4]} color="#ff0000" intensity={15} angle={0.15} castShadow />
@@ -175,7 +184,7 @@ export const VazarothEffects: React.FC = () => {
             )}
 
             {/* SIEGE MECHANIC */}
-            {(event === 'FACTION_SIEGE' || event === 'PEASANT_RAID') && (
+            {(event === 'FACTION_SIEGE' || event === 'PEASANT_RAID' || event === 'NIGHT_BATTLE') && (
                  <group>
                      {mobSpawns.map((spawnPos, i) => (
                          <SiegeMob 
