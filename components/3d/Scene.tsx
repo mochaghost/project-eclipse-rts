@@ -1,6 +1,6 @@
 
 import React, { useMemo, Suspense, useRef, useLayoutEffect, useState, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { MapControls, Stars, Ring, Sparkles, Html, Float, Line } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import { useGame } from '../../context/GameContext';
@@ -255,10 +255,21 @@ const GameWorld = React.memo(({
     selectEnemy: any, 
     interactWithNPC: any 
 }) => {
-    
+    const { camera } = useThree();
     const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
     const isHighQuality = (state.settings?.graphicsQuality || 'HIGH') === 'HIGH';
+    const isBattle = state.activeMapEvent === 'BATTLE_CINEMATIC';
     const now = Date.now();
+
+    // CINEMATIC CAMERA CONTROLLER
+    useFrame((_, delta) => {
+        if (isBattle) {
+            // Smoothly move camera closer to the action center (0, 5, 10) look at (0,0,0)
+            const targetPos = new THREE.Vector3(0, 8, 12);
+            camera.position.lerp(targetPos, delta * 0.5);
+            camera.lookAt(0, 0, 0);
+        }
+    });
 
     return (
         <>
@@ -285,7 +296,7 @@ const GameWorld = React.memo(({
                 variant={state.playerLevel as any} 
                 position={[4, 0, 4]} 
                 winStreak={state.winStreak}
-                equipment={state.heroEquipment} // PASS EQUIPMENT HERE
+                equipment={state.heroEquipment} 
             />
 
             {state.minions?.map(minion => (
@@ -295,7 +306,7 @@ const GameWorld = React.memo(({
             {state.enemies?.map(enemy => {
                 const task = state.tasks.find(t => t.id === enemy.taskId);
                 let startTime = task ? task.startTime : 0;
-                if (enemy.subtaskId && task && task.subtasks) { // Added safe check for task.subtasks
+                if (enemy.subtaskId && task && task.subtasks) { 
                     const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
                     if (sub && sub.startTime) startTime = sub.startTime;
                 }
@@ -341,7 +352,8 @@ const GameWorld = React.memo(({
             <VisualEffectsRenderer />
             <VazarothEffects />
             
-            <MapControls makeDefault maxPolarAngle={Math.PI / 2.2} />
+            {/* Disable user controls during Cinematic */}
+            <MapControls makeDefault maxPolarAngle={Math.PI / 2.2} enabled={!isBattle} />
 
             {isHighQuality && (
                 <EffectComposer enableNormalPass={false}>
@@ -352,7 +364,6 @@ const GameWorld = React.memo(({
         </>
     )
 }, (prev, next) => {
-    // CUSTOM COMPARISON FUNCTION TO PREVENT RE-RENDERS ON UI CHANGES
     // Only re-render if gameplay-affecting state changes
     return (
         prev.state.enemies === next.state.enemies &&
@@ -364,7 +375,7 @@ const GameWorld = React.memo(({
         prev.state.activeMapEvent === next.state.activeMapEvent &&
         prev.state.selectedEnemyId === next.state.selectedEnemyId &&
         prev.state.structures === next.state.structures &&
-        prev.state.heroEquipment === next.state.heroEquipment // CHECK EQUIPMENT CHANGE
+        prev.state.heroEquipment === next.state.heroEquipment
     );
 });
 

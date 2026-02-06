@@ -400,7 +400,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         id: generateId(), type: 'VICTORY', timestamp: Date.now(),
                         message: "Enemy Slain",
                         details: `${guardName} struck down a ${factionDef.name} raider.`
-                    });
+                    } as HistoryLog);
                 }
             } else {
                 damageTaken += 10;
@@ -410,7 +410,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         id: generateId(), type: 'DEFEAT', timestamp: Date.now(),
                         message: "Defender Lost",
                         details: `Minion #${i+1} was overwhelmed by the horde.`
-                    });
+                    } as HistoryLog);
                 }
             }
         }
@@ -474,7 +474,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     activeMapEvent: 'NONE' as MapEventType,
                     vazarothMessage: outcome === 'DEFEAT' ? "Weakness disgusts me." : "You survived. For now.",
                     history: [
-                        { id: generateId(), type: 'DAILY_REPORT', timestamp: Date.now(), message: `Siege Result: ${outcome}`, details: `Casualties: ${deadMinions} Friendly / ${deadEnemies} Hostile` },
+                        { 
+                            id: generateId(), 
+                            type: 'DAILY_REPORT', 
+                            timestamp: Date.now(), 
+                            message: `Siege Result: ${outcome}`, 
+                            details: `Casualties: ${deadMinions} Friendly / ${deadEnemies} Hostile` 
+                        } as HistoryLog,
                         ...currentState.history // History already has the streamed logs
                     ].slice(0, 500)
                 };
