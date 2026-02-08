@@ -2,7 +2,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { EntityType, Era, TaskPriority, NPC, RaceType, Structures, HeroEquipment } from '../../types';
+import { EntityType, Era, TaskPriority, NPC, RaceType, Structures, HeroEquipment, Task } from '../../types';
 import { HeroAvatar, BaseComplex, EnemyMesh, VillagerAvatar, MinionMesh, ForestStag, WolfConstruct, Crow } from './Assets';
 
 interface EntityRendererProps {
@@ -24,8 +24,10 @@ interface EntityRendererProps {
   failed?: boolean;
   structures?: Structures; 
   equipment?: HeroEquipment;
+  task?: Task; // New Prop for passing task data to enemies
 }
 
+// Moves entities randomly (Villagers, Animals)
 const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { children?: React.ReactNode, initialPos: [number,number,number], type: EntityType, speed?: number }) => {
     const group = useRef<THREE.Group>(null);
     const target = useRef(new THREE.Vector3(...initialPos));
@@ -41,7 +43,6 @@ const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { childr
 
         // Only Villagers and Animals wander autonomously
         if (type !== EntityType.VILLAGER && type !== EntityType.ANIMAL) {
-            // Smooth lerp to prop position update for non-autonomous entities (like Hero)
             group.current.position.lerp(new THREE.Vector3(...initialPos), delta * 2);
             return;
         }
@@ -50,7 +51,6 @@ const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { childr
         if (state === 'IDLE') {
             waitTime.current -= delta;
             if (waitTime.current <= 0) {
-                // Pick new target nearby original spawn to keep them local
                 const range = type === EntityType.ANIMAL ? 15 : 8;
                 const angle = Math.random() * Math.PI * 2;
                 const dist = Math.random() * range;
@@ -67,15 +67,11 @@ const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { childr
             
             if (dist < 0.2) {
                 setState('IDLE');
-                waitTime.current = 2 + Math.random() * 5; // Wait 2-7 seconds
+                waitTime.current = 2 + Math.random() * 5; 
             } else {
-                // Move towards target
                 const dir = new THREE.Vector3().subVectors(target.current, pos).normalize();
-                // Face target
                 const lookTarget = new THREE.Vector3(target.current.x, pos.y, target.current.z);
                 group.current.lookAt(lookTarget);
-                
-                // Move
                 pos.add(dir.multiplyScalar(delta * speed));
             }
         }
@@ -84,18 +80,75 @@ const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { childr
     return <group ref={group} position={initialPos}>{children}</group>;
 }
 
-export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment }) => {
+// Moves Enemies closer to the center based on Deadline
+const ApproachingEnemyWrapper = ({ children, initialPos, task }: { children?: React.ReactNode, initialPos: [number,number,number], task?: Task }) => {
+    const group = useRef<THREE.Group>(null);
+    
+    // Constants for map size
+    const SPAWN_RADIUS = 60; // Far edge of map
+    const WALL_RADIUS = 8;   // Where the base walls are
+
+    useFrame((_, delta) => {
+        if (!group.current || !task) return;
+
+        // Breathing animation
+        const breath = Math.sin(_.clock.elapsedTime * 2) * 0.05;
+        group.current.scale.y = 1 + breath;
+
+        const now = Date.now();
+        const startTime = task.startTime;
+        const deadline = task.deadline;
+        
+        let targetRadius = SPAWN_RADIUS;
+
+        if (task.failed) {
+            // If failed, they are bashing the walls
+            targetRadius = WALL_RADIUS - 1; 
+        } else if (task.completed) {
+            // Should be removed, but just in case
+            targetRadius = SPAWN_RADIUS;
+        } else {
+            // Calculate progress 0.0 to 1.0
+            const totalDuration = Math.max(1, deadline - startTime);
+            const elapsed = Math.max(0, now - startTime);
+            const progress = Math.min(1, elapsed / totalDuration);
+            
+            // Linear interpolation from Spawn to Wall
+            // Progress 0 = 60, Progress 1 = 8
+            targetRadius = SPAWN_RADIUS - (progress * (SPAWN_RADIUS - WALL_RADIUS));
+        }
+
+        // Determine angle from initial Spawn Position (Keep them in their lane)
+        const initialVector = new THREE.Vector3(...initialPos);
+        const angle = Math.atan2(initialVector.z, initialVector.x);
+
+        const targetX = Math.cos(angle) * targetRadius;
+        const targetZ = Math.sin(angle) * targetRadius;
+        const targetPos = new THREE.Vector3(targetX, 0, targetZ);
+
+        // Move towards calculate position smoothly
+        const currentPos = group.current.position;
+        currentPos.lerp(targetPos, delta * 1); // Smooth movement updates
+
+        // Always face the center (0,0,0)
+        group.current.lookAt(0, 0, 0);
+    });
+
+    return <group ref={group} position={initialPos}>{children}</group>;
+}
+
+export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task }) => {
   const content = useMemo(() => {
     switch (type) {
       case EntityType.HERO:
         return <HeroAvatar level={variant === Era.RUIN ? 0 : 3} winStreak={winStreak || 0} equipment={equipment} />;
       case EntityType.BUILDING_BASE:
-        // Pass structures to BaseComplex to render Forge, Library, etc.
         return <BaseComplex era={variant as Era} currentHp={stats?.hp || 100} maxHp={stats?.maxHp || 100} structures={structures} />;
       case EntityType.ENEMY:
         let visualArchetype = archetype || 'MONSTER';
         if (race === 'HUMAN' && archetype === 'KNIGHT') visualArchetype = 'KNIGHT';
-        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={onClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} failed={failed} />;
+        // Pass task down to EnemyMesh for the Label
+        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={onClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} failed={failed} task={task} />;
       case EntityType.MINION:
           return <MinionMesh />;
       case EntityType.VILLAGER:
@@ -107,9 +160,18 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
       default:
         return null;
     }
-  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment]);
+  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task]);
 
-  if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null; // Handled by Scene Instances now
+  if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null;
+
+  // Use specialized wrapper for Enemies to handle the "Approaching" mechanic
+  if (type === EntityType.ENEMY && task) {
+      return (
+          <ApproachingEnemyWrapper initialPos={position} task={task}>
+              {content}
+          </ApproachingEnemyWrapper>
+      )
+  }
 
   return (
     <MovingEntityWrapper initialPos={position} type={type} speed={type === EntityType.ANIMAL ? 2 : 0.8}>

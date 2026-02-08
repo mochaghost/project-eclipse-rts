@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft, TaskTemplate } from '../../types';
@@ -20,9 +21,27 @@ interface TaskCardProps {
     showFantasy: boolean;
 }
 
+// Helper for formatting time
+const formatTimeLeft = (deadline: number) => {
+    const now = Date.now();
+    const diff = deadline - now;
+    const isOverdue = diff < 0;
+    const absDiff = Math.abs(diff);
+    
+    const h = Math.floor(absDiff / 3600000);
+    const m = Math.floor((absDiff % 3600000) / 60000);
+    const s = Math.floor((absDiff % 60000) / 1000);
+    
+    return {
+        text: `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`,
+        isOverdue
+    };
+};
+
 // --- MOVED OUTSIDE FOR PERFORMANCE AND TYPE SAFETY ---
 const TaskCard: React.FC<TaskCardProps> = ({ task, style, onClick, onDragStart, showFantasy }) => {
     const { state } = useGame();
+    const [timeLeft, setTimeLeft] = useState(formatTimeLeft(task.deadline));
     const enemy = state.enemies.find(e => e.taskId === task.id && !e.subtaskId);
     const displayName = showFantasy ? (enemy ? enemy.title : task.title) : task.title;
     
@@ -43,6 +62,15 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, style, onClick, onDragStart, 
     const subtaskCount = task.subtasks?.length || 0;
     const completedSubtasks = task.subtasks?.filter(s => s.completed).length || 0;
 
+    // Timer logic
+    useEffect(() => {
+        if (task.completed || task.failed) return;
+        const interval = setInterval(() => {
+            setTimeLeft(formatTimeLeft(task.deadline));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [task.deadline, task.completed, task.failed]);
+
     return (
         <div 
           draggable 
@@ -57,8 +85,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, style, onClick, onDragStart, 
                 {icon}
             </div>
             
+            {/* Countdown Timer */}
+            {!task.completed && !task.failed && (
+                <div className={`mt-1 font-mono text-[10px] flex items-center gap-1 ${timeLeft.isOverdue ? 'text-red-500 animate-pulse font-bold' : 'text-stone-400'}`}>
+                    <Clock size={8} />
+                    {timeLeft.isOverdue ? '-' : ''}{timeLeft.text}
+                </div>
+            )}
+            
             {subtaskCount > 0 && (
-                <div className="mt-auto flex items-center gap-1 text-[9px] opacity-80">
+                <div className="mt-auto flex items-center gap-1 text-[9px] opacity-80 pt-1">
                     <Network size={10} />
                     <span>{completedSubtasks}/{subtaskCount}</span>
                     <div className="h-1 flex-1 bg-black/30 rounded-full overflow-hidden">

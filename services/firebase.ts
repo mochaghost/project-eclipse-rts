@@ -53,7 +53,7 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
         return false;
     }
 
-    // 3. Initialize Services
+    // 3. Initialize Services with Fallback Strategy
     try {
         // Init DB if not ready
         if (app && !db) {
@@ -61,8 +61,14 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
                 console.warn("[Cloud] Config is missing databaseURL. Cloud Save Disabled.");
                 db = null;
             } else {
-                // Pass URL explicitly to ensure correct shard connection
-                db = getDatabase(app, activeConfig.databaseURL);
+                try {
+                    // Try standard init
+                    db = getDatabase(app, activeConfig.databaseURL);
+                } catch (dbErr) {
+                    console.warn("[Cloud] Standard DB Init failed, attempting fallback to default instance...", dbErr);
+                    // Fallback: This fixes "Service not available" if app instance mismatch occurs in modular builds
+                    db = getDatabase(undefined, activeConfig.databaseURL);
+                }
                 console.log("[Cloud] Database Service Initialized");
             }
         }
@@ -73,7 +79,12 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
 
     try {
         if (app && !auth) {
-            auth = getAuth(app);
+            try {
+                auth = getAuth(app);
+            } catch (authErr) {
+                console.warn("[Cloud] Standard Auth Init failed, attempting fallback to default instance...", authErr);
+                auth = getAuth();
+            }
             console.log("[Cloud] Auth Service Initialized");
         }
     } catch (e) {

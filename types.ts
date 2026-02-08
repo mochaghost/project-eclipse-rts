@@ -1,3 +1,4 @@
+
 import { ThreeElements } from '@react-three/fiber';
 
 // Note: Removed global JSX declaration as it was overriding React DOM elements (div, span, etc).
@@ -127,7 +128,8 @@ export interface Task {
   parentId?: string; 
   crisisTriggered: boolean; 
   hubris: boolean; 
-  foresightBonus?: number; 
+  foresightBonus?: number;
+  lastNotificationLevel?: number; // 0=None, 1=25%, 2=50%, 3=75%, 4=90% 
 }
 
 export interface HistoryLog {

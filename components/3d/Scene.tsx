@@ -306,6 +306,8 @@ const GameWorld = React.memo(({
             {state.enemies?.map(enemy => {
                 const task = state.tasks.find(t => t.id === enemy.taskId);
                 let startTime = task ? task.startTime : 0;
+                
+                // Handle Subtask Time
                 if (enemy.subtaskId && task && task.subtasks) { 
                     const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
                     if (sub && sub.startTime) startTime = sub.startTime;
@@ -318,7 +320,7 @@ const GameWorld = React.memo(({
                         key={enemy.id}
                         type={EntityType.ENEMY}
                         variant={enemy.priority}
-                        position={[enemy.position.x, enemy.position.y, enemy.position.z]}
+                        position={[enemy.position.x, enemy.position.y, enemy.position.z]} // Initial pos is passed, but renderer calculates actual pos based on task
                         name={enemy.name}
                         onClick={() => selectEnemy(enemy.id)}
                         isSelected={state.selectedEnemyId === enemy.id}
@@ -326,6 +328,7 @@ const GameWorld = React.memo(({
                         archetype={enemy.race === 'HUMAN' || enemy.race === 'DWARF' ? 'KNIGHT' : 'MONSTER'}
                         race={enemy.race}
                         failed={task?.failed}
+                        task={task} // PASS THE TASK FOR TIME CALCS
                     />
                 );
             })}

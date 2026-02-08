@@ -232,7 +232,7 @@ export const getSageWisdom = (context: 'GENERAL' | 'CRISIS' | 'STREAK' | 'FAIL' 
     return pool[Math.floor(Math.random() * pool.length)];
 };
 
-// ... (Vision Mirror logic updated for Smart Parsing) ...
+// --- VISION MIRROR LOGIC ---
 export interface VisionContent {
     type: 'VIDEO' | 'IMAGE' | 'SOCIAL';
     embedUrl: string;
@@ -241,117 +241,124 @@ export interface VisionContent {
 }
 
 const DEFAULT_SHEET_ID = "1Hhfl7Cq28FvcyNrH_hodeNlIz9SCunUY5eJw67sWSM4"; 
+
+// --- USER PROVIDED LIBRARY ---
+// This list contains only the valid links provided by the user.
 const VOID_LIBRARY_DEFAULTS = [
-    "https://www.youtube.com/embed/S2qT6w04x18?autoplay=1&controls=0&mute=0&loop=1&playlist=S2qT6w04x18", 
-    "https://www.youtube.com/embed/I5gMv2sM7yM?autoplay=1&controls=0&mute=0&loop=1&playlist=I5gMv2sM7yM",
-    "https://www.youtube.com/embed/7I0D-aN5tJE?autoplay=1&controls=0&mute=0&loop=1&playlist=7I0D-aN5tJE"
+    "https://www.instagram.com/reel/DF3dhFat9Xe/",
+    "https://pin.it/5LurwnARZ",
+    "https://www.instagram.com/p/DFna0CKoGyB/",
+    "https://www.instagram.com/reel/DFxZM3oxxVw/",
+    "https://www.instagram.com/reel/DF616FUOpfd/",
+    "https://www.instagram.com/reel/DGgYY0Is4Km/",
+    "https://www.instagram.com/reel/DA7OSduNpUW/",
+    "https://www.instagram.com/p/DHJF6WOsxlm/",
+    "https://www.instagram.com/reel/DHbwnEfgO98/",
+    "https://www.instagram.com/p/DHjxZdVxb4b/",
+    "https://www.instagram.com/p/DHtSx6Fp8lr/",
+    "https://www.instagram.com/p/DHtF1nhzf0i/", // Extracted from HTML Block
+    "https://www.instagram.com/p/DH4Sd4dx4Op/",
+    "https://www.instagram.com/p/DH4ZOaTod_e/",
+    "https://www.instagram.com/reel/DIFApuXxUvj/",
+    "https://www.instagram.com/p/DJxJjQLh9tF/",
+    "https://www.instagram.com/reel/DJ4aCOOpn7_/",
+    "https://www.instagram.com/p/DJ1fzKNMd4n/",
+    "https://www.instagram.com/reel/DJqdFCMR0La/",
+    "https://www.instagram.com/p/DKE7AXbxruF/",
+    "https://www.instagram.com/p/DKFDgDZoGC8/",
+    "https://www.instagram.com/p/DJki1bOMmWN/",
+    "https://www.instagram.com/reel/DQEK1piCI5Y/",
+    "https://www.instagram.com/reel/DPw7tlYCKGd/",
+    "https://pin.it/Qo3Sh44UO",
+    "https://pin.it/4PUd6Kf3t",
+    "https://i.pinimg.com/736x/05/af/1c/05af1c3f6c5c7deecfe543c4568b696f.jpg"
 ];
 
 export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
     if (!rawInput) return null;
     
-    // 1. EXTRACT URL FROM TEXT BLOB (e.g. HTML Embed Code)
+    // 1. EXTRACT URL FROM TEXT BLOB (HTML Embed Code handling)
     let cleanUrl = rawInput.trim();
     
-    // Check if input is a complex HTML block
-    if (rawInput.includes('<') && rawInput.includes('>')) {
-        // Try extracting Instagram permalink specifically
+    // Special handling for Instagram HTML Embeds
+    if (rawInput.includes('<blockquote') && rawInput.includes('instagram-media')) {
         const permalinkMatch = rawInput.match(/data-instgrm-permalink="([^"]+)"/);
         if (permalinkMatch && permalinkMatch[1]) {
             cleanUrl = permalinkMatch[1];
-        } else {
-            // Fallback: Find the first http/https link in the blob
-            const httpMatch = rawInput.match(/(https?:\/\/[^\s"<>]+)/);
-            if (httpMatch && httpMatch[1]) {
-                cleanUrl = httpMatch[1];
-            } else {
-                return null; 
-            }
+        } 
+    } 
+    // Generic URL extractor if not blockquote but still messy
+    else if (rawInput.includes('<') || rawInput.includes('>')) {
+        const httpMatch = rawInput.match(/(https?:\/\/[^\s"<>]+)/);
+        if (httpMatch && httpMatch[1]) {
+            cleanUrl = httpMatch[1];
         }
     }
 
-    // 2. CLEANUP
+    // 2. CLEANUP & PARSE
     cleanUrl = cleanUrl.replace(/&amp;/g, '&');
-    // Remove query params if needed, but keeping them is safer for social share links usually
-    let urlObj: URL;
+    
+    // Remove query parameters for cleaner storage/display (except for images where they might be needed)
     try {
-        urlObj = new URL(cleanUrl);
+        const urlObj = new URL(cleanUrl);
+        // We keep query params for now as some CDNs need them, but for social we strip tracking
+        if (urlObj.hostname.includes('instagram.com') || urlObj.hostname.includes('facebook.com')) {
+            urlObj.search = ''; 
+            cleanUrl = urlObj.toString();
+        }
+        
+        // 3. DETECT PLATFORM
+        
+        // --- DIRECT IMAGE ---
+        if (cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('i.pinimg.com')) {
+             return { type: 'IMAGE', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
+        }
+
+        // --- INSTAGRAM ---
+        if (urlObj.hostname.includes('instagram.com')) {
+            // Ensure trailing slash removed for consistency if needed, but standardizing
+            return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'INSTAGRAM' };
+        }
+
+        // --- PINTEREST (Social Link) ---
+        // Support both short links (pin.it) and standard (pinterest.com/pin/...)
+        if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) {
+            return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'PINTEREST' };
+        }
+
+        // --- TIKTOK ---
+        if (urlObj.hostname.includes('tiktok')) {
+            return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'TIKTOK' };
+        }
+
+        // Default Fallback
+        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
+
     } catch(e) {
         return null;
     }
-    
-    // 3. DETECT PLATFORM
-    
-    // --- DIRECT IMAGE (Pinterest or others) ---
-    if (cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('i.pinimg.com')) {
-         return { type: 'IMAGE', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
-    }
-
-    // --- YOUTUBE ---
-    if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-        let id = '';
-        if (urlObj.pathname.includes('/shorts/')) {
-            id = urlObj.pathname.split('/shorts/')[1]?.split('/')[0];
-        } else if (urlObj.hostname.includes('youtu.be')) {
-            id = urlObj.pathname.slice(1);
-        } else if (urlObj.searchParams.has('v')) {
-            id = urlObj.searchParams.get('v') || '';
-        }
-
-        if (id) {
-            return {
-                type: 'VIDEO',
-                embedUrl: `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${id}&playsinline=1`,
-                originalUrl: cleanUrl,
-                platform: 'YOUTUBE'
-            };
-        }
-    }
-
-    // --- INSTAGRAM ---
-    if (urlObj.hostname.includes('instagram.com')) {
-        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'INSTAGRAM' };
-    }
-
-    // --- PINTEREST (Social Link) ---
-    if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) {
-        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'PINTEREST' };
-    }
-
-    // --- TIKTOK ---
-    if (urlObj.hostname.includes('tiktok')) {
-        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'TIKTOK' };
-    }
-
-    // Default Fallback
-    return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
 };
 
 // SMART PARSING FOR MIXED CONTENT BLOCKS
 export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
+    // 1. Try Direct URL Input First
     if (directUrl && directUrl.trim().length > 0) {
         const results: VisionContent[] = [];
         
-        // 1. Extract specifically formatted HTML Attributes first (High confidence)
+        // Extract HTML embeds first
         const instaMatches = directUrl.matchAll(/data-instgrm-permalink="([^"]+)"/g);
         for (const match of instaMatches) {
             const res = convertToEmbedUrl(match[1]);
             if (res) results.push(res);
         }
 
-        // 2. Extract standard URLs that are NOT inside the HTML attributes we just found
-        // Simple approach: Split by whitespace/commas, filter valid URLs, deduplicate
-        // This is messy if we mix it with the above.
-        // BETTER STRATEGY:
-        // If the user pasted a raw block with HTML, `matchAll` handles the hidden links.
-        // If the user pasted a list of links, we need to find them.
-        
+        // Extract Standard URLs
         const urlRegex = /(https?:\/\/[^\s,;"'<]+)/g;
         const allUrls = directUrl.matchAll(urlRegex);
         
         for (const match of allUrls) {
             const raw = match[1];
-            // Avoid duplicates if we already caught it via HTML attribute
+            // Avoid duplicates from HTML extract
             if (!results.some(r => r.originalUrl.includes(raw) || raw.includes(r.originalUrl))) {
                 const res = convertToEmbedUrl(raw);
                 if (res) results.push(res);
@@ -359,68 +366,71 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
         }
 
         if (results.length > 0) {
-            // Deduplicate by URL
+            // Deduplicate by original URL
             const unique = results.filter((v,i,a)=>a.findIndex(t=>(t.originalUrl === v.originalUrl))===i);
             return unique;
         }
     }
 
-    // ... (Fallback to Sheet logic remains unchanged)
+    // 2. Try Google Sheet (Existing logic)
     let fetchUrl = "";
-    let sheetInput = customSheetId || DEFAULT_SHEET_ID;
+    let sheetInput = customSheetId;
     
-    if (sheetInput.includes("2PACX-")) {
-        if (sheetInput.includes("http")) {
-             const parts = sheetInput.split('/pub');
-             fetchUrl = `${parts[0]}/pub?output=csv`;
-        } else {
-             fetchUrl = `https://docs.google.com/spreadsheets/d/e/${sheetInput}/pub?output=csv`;
-        }
-    } 
-    else if (!sheetInput.includes("http") && sheetInput.length > 20) {
-        fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetInput}/gviz/tq?tqx=out:csv`;
-    } 
-    else if (sheetInput.includes("/d/")) {
-         const match = sheetInput.match(/\/d\/([a-zA-Z0-9-_]+)/);
-         const id = match ? match[1] : sheetInput;
-         fetchUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
-    }
-    else {
-        fetchUrl = `https://docs.google.com/spreadsheets/d/${DEFAULT_SHEET_ID}/gviz/tq?tqx=out:csv`;
-    }
-
-    try {
-        console.log("[Vision] Fetching from:", fetchUrl);
-        const response = await fetch(fetchUrl);
-        if (response.ok) {
-            const text = await response.text();
-            const urlRegex = /(https?:\/\/[^\s",<]+)/g;
-            const allMatches = text.match(urlRegex);
-            const validItems: VisionContent[] = [];
-            
-            if (allMatches) {
-                allMatches.forEach(rawUrl => {
-                    const result = convertToEmbedUrl(rawUrl);
-                    if (result && !validItems.some(v => v.originalUrl === result.originalUrl)) {
-                        validItems.push(result);
-                    }
-                });
-            }
-
-            if (validItems.length > 0) {
-                return validItems;
+    // Only attempt fetch if ID is provided and valid length
+    if (sheetInput && sheetInput.length > 10) {
+        if (sheetInput.includes("2PACX-")) {
+            if (sheetInput.includes("http")) {
+                 const parts = sheetInput.split('/pub');
+                 fetchUrl = `${parts[0]}/pub?output=csv`;
+            } else {
+                 fetchUrl = `https://docs.google.com/spreadsheets/d/e/${sheetInput}/pub?output=csv`;
             }
         } 
-    } catch (e) { 
-        console.warn("[Vision] Network error", e); 
+        else if (!sheetInput.includes("http")) {
+            fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetInput}/gviz/tq?tqx=out:csv`;
+        } 
+        else if (sheetInput.includes("/d/")) {
+             const match = sheetInput.match(/\/d\/([a-zA-Z0-9-_]+)/);
+             const id = match ? match[1] : sheetInput;
+             fetchUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`;
+        }
+
+        try {
+            console.log("[Vision] Fetching from Sheet:", fetchUrl);
+            const response = await fetch(fetchUrl);
+            if (response.ok) {
+                const text = await response.text();
+                // Broad regex to capture URLs in CSV cells (handles quotes)
+                const urlRegex = /(https?:\/\/[^\s",<]+)/g;
+                const allMatches = text.match(urlRegex);
+                const validItems: VisionContent[] = [];
+                
+                if (allMatches) {
+                    allMatches.forEach(rawUrl => {
+                        // Clean quotes if present
+                        const clean = rawUrl.replace(/^"|"$/g, '');
+                        const result = convertToEmbedUrl(clean);
+                        if (result && !validItems.some(v => v.originalUrl === result.originalUrl)) {
+                            validItems.push(result);
+                        }
+                    });
+                }
+
+                if (validItems.length > 0) {
+                    console.log(`[Vision] Found ${validItems.length} items in sheet.`);
+                    return validItems;
+                }
+            } else {
+                console.warn(`[Vision] Sheet fetch failed: ${response.status}`);
+            }
+        } catch (e) { 
+            console.warn("[Vision] Network error fetching sheet", e); 
+        }
     }
 
-    return VOID_LIBRARY_DEFAULTS.map(url => ({ 
-        type: 'VIDEO', 
-        embedUrl: url, 
-        originalUrl: url, 
-        platform: 'YOUTUBE' 
-    }));
+    // 3. FALLBACK TO CLEANED USER LIBRARY
+    // If no sheet or sheet failed, use the static list
+    return VOID_LIBRARY_DEFAULTS.map(url => convertToEmbedUrl(url)).filter(item => item !== null) as VisionContent[];
 };
 
 export const generateWorldRumor = (): { message: string, details: string } => {

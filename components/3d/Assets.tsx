@@ -1,10 +1,11 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Html, Float, Sparkles, Trail, useTexture, Instance, Instances } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PALETTE } from '../../constants';
-import { TaskPriority, Era, NPC, RaceType, HeroEquipment } from '../../types';
+import { TaskPriority, Era, NPC, RaceType, HeroEquipment, Task } from '../../types';
+import { Clock, AlertTriangle } from 'lucide-react';
 
 // --- UTILITY COMPONENTS ---
 
@@ -789,7 +790,50 @@ const VazarothTitan = () => (
     </group>
 );
 
-const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype = 'MONSTER', subtaskCount = 0, race, failed }: { priority: TaskPriority, name: string, onClick?: () => void, isSelected?: boolean, scale?: number, archetype?: 'MONSTER' | 'KNIGHT', subtaskCount?: number, race?: string, failed?: boolean }) => {
+// --- ENEMY TIMER COMPONENT ---
+const EnemyTimer = ({ deadline }: { deadline: number }) => {
+    const [timeLeft, setTimeLeft] = useState("");
+    const [isUrgent, setIsUrgent] = useState(false);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const diff = deadline - now;
+            
+            if (diff <= 0) {
+                setTimeLeft("00:00:00");
+                setIsUrgent(true);
+                return;
+            }
+
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            
+            setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+            
+            // Urgent if less than 1 hour or negative
+            if (diff < 3600000) setIsUrgent(true);
+            else setIsUrgent(false);
+
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [deadline]);
+
+    return (
+        <Html position={[0, 3.5, 0]} center distanceFactor={15} style={{ pointerEvents: 'none' }}>
+            <div className={`
+                flex items-center gap-1 px-2 py-0.5 rounded font-mono text-xs font-bold tracking-wider backdrop-blur-sm border
+                ${isUrgent ? 'bg-red-950/80 border-red-500 text-red-100 animate-pulse' : 'bg-black/60 border-stone-600 text-stone-200'}
+            `}>
+                <Clock size={10} />
+                {timeLeft}
+            </div>
+        </Html>
+    );
+}
+
+const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype = 'MONSTER', subtaskCount = 0, race, failed, task }: { priority: TaskPriority, name: string, onClick?: () => void, isSelected?: boolean, scale?: number, archetype?: 'MONSTER' | 'KNIGHT', subtaskCount?: number, race?: string, failed?: boolean, task?: Task }) => {
     // If failed, make it visually dominant/scary
     const finalScale = failed ? (scale * 1.3) : (scale || (0.5 + (priority * 0.3)));
     
@@ -821,6 +865,9 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
                 <meshBasicMaterial transparent opacity={0} />
             </mesh>
 
+            {/* COUNTDOWN TIMER OVERHEAD */}
+            {task && !task.completed && !task.failed && <EnemyTimer deadline={task.deadline} />}
+
             <group position={[0, finalScale - 1, 0]} scale={[finalScale, finalScale, finalScale]}>
                 {failed && (
                     <mesh position={[0, 1, 0]}>
@@ -841,7 +888,7 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
             </group>
             
              <Html 
-                position={[0, finalScale * 3.5, 0]} 
+                position={[0, finalScale * 4.5, 0]} // Moved up to make room for Timer
                 center 
                 distanceFactor={20} 
                 style={{pointerEvents: 'none'}}
@@ -852,7 +899,7 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
                     ${failed ? 'border-red-600 bg-red-900/50 text-white animate-pulse' : ''}
                 `}>
                     {name}
-                    {failed && <span className="text-[8px] bg-red-600 text-white px-1 mt-1">FAILED</span>}
+                    {failed && <span className="text-[8px] bg-red-600 text-white px-1 mt-1 flex items-center gap-1"><AlertTriangle size={8} /> FAILED</span>}
                 </div>
             </Html>
         </group>

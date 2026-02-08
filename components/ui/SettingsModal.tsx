@@ -217,11 +217,12 @@ export const SettingsModal: React.FC = () => {
                                             <summary className="font-bold flex items-center gap-1 hover:text-stone-300 select-none">
                                                 <Info size={10} /> How to Automate (Pinterest &rarr; Game)
                                             </summary>
-                                            <div className="mt-2 pl-2 border-l border-stone-700 space-y-1 text-stone-400 leading-relaxed">
-                                                <p>1. Create a public Google Sheet.</p>
-                                                <p>2. Use IFTTT/Zapier: "If New Pin on Board &rarr; Add Row to Sheet".</p>
-                                                <p>3. Paste the Sheet ID above.</p>
-                                                <p>4. The game will now fetch your latest pins automatically.</p>
+                                            <div className="mt-2 pl-2 border-l border-stone-700 space-y-2 text-stone-400 leading-relaxed font-mono">
+                                                <p>1. Create a public Google Sheet (File > Share > Publish to Web > CSV).</p>
+                                                <p>2. Use <strong>IFTTT</strong> or <strong>Zapier</strong> (Free tiers).</p>
+                                                <p className="text-purple-400">Trigger: "New Pin on Board"</p>
+                                                <p className="text-purple-400">Action: "Add row to Google Sheet"</p>
+                                                <p>3. Paste the Sheet ID above. The game will now fetch new pins automatically.</p>
                                             </div>
                                         </details>
                                     </div>
