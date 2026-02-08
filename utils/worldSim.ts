@@ -1,5 +1,4 @@
-
-import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship } from '../types';
+import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile } from '../types';
 import { generateId, generateNemesis } from './generators';
 import { RACES, TRAITS, FACTIONS } from '../constants';
 
@@ -16,7 +15,43 @@ const generateNPCName = (race: string) => {
     return base;
 };
 
-const getRandomTrait = () => TRAITS[Math.floor(Math.random() * TRAITS.length)];
+// --- PSYCHOLOGY ENGINE ---
+
+const generatePsychProfile = (race: string, role: string): PsychProfile => {
+    const r = () => Math.floor(Math.random() * 100);
+    
+    // Base Baseline
+    let profile: PsychProfile = {
+        openness: r(),
+        conscientiousness: r(),
+        extroversion: r(),
+        agreeableness: r(),
+        neuroticism: r(),
+        bravery: r(),
+        greed: r(),
+        faith: r()
+    };
+
+    // Racial Modifiers
+    if (race === 'DWARF') { profile.conscientiousness += 20; profile.greed += 10; profile.bravery += 10; }
+    if (race === 'ELF') { profile.openness += 20; profile.faith += 10; }
+    if (race === 'ORC') { profile.agreeableness -= 30; profile.bravery += 30; profile.neuroticism -= 10; }
+    if (race === 'CONSTRUCT') { profile.neuroticism = 0; profile.conscientiousness = 100; profile.faith = 0; }
+
+    // Role Modifiers
+    if (role === 'Guard') { profile.bravery += 20; profile.conscientiousness += 10; }
+    if (role === 'Noble') { profile.greed += 30; profile.agreeableness -= 10; profile.neuroticism += 10; }
+    if (role === 'Cultist') { profile.faith -= 50; profile.openness += 30; profile.neuroticism += 20; }
+    if (role === 'Scholar') { profile.openness += 30; profile.extroversion -= 10; }
+
+    // Clamp
+    Object.keys(profile).forEach(k => {
+        // @ts-ignore
+        profile[k] = Math.max(0, Math.min(100, profile[k]));
+    });
+
+    return profile;
+};
 
 export const createNPC = (role: NPC['role'] = 'Peasant'): NPC => {
     const race = RACES[Math.floor(Math.random() * RACES.length)] as NPC['race'];
@@ -26,7 +61,8 @@ export const createNPC = (role: NPC['role'] = 'Peasant'): NPC => {
         name: generateNPCName(race),
         role,
         race,
-        traits: [getRandomTrait()],
+        traits: [],
+        psych: generatePsychProfile(race, role),
         stats: {
             strength: Math.floor(Math.random() * 10) + 1,
             intellect: Math.floor(Math.random() * 10) + 1,
@@ -137,7 +173,7 @@ interface SimResult {
 
 // --- DWARF FORTRESS LITE LOGIC ---
 
-// 1. Social Ripple (El pánico se contagia)
+// 1. Social Ripple (Causalidad Emocional)
 const propagateEmotion = (npcs: NPC[], sourceId: string, emotion: 'FEAR' | 'ANGER', intensity: number) => {
     return npcs.map(n => {
         if (n.id === sourceId || n.status !== 'ALIVE') return n;
@@ -149,8 +185,12 @@ const propagateEmotion = (npcs: NPC[], sourceId: string, emotion: 'FEAR' | 'ANGE
 
         if (isFriend || isNearby) {
             let sanityDmg = intensity;
-            if (n.traits.includes('STOIC')) sanityDmg *= 0.5;
-            if (n.traits.includes('COWARDLY')) sanityDmg *= 1.5;
+            if (n.psych) {
+                // Bravery reduces fear impact
+                if (emotion === 'FEAR') sanityDmg *= (1 - (n.psych.bravery / 200)); 
+                // Neuroticism increases all emotional impact
+                sanityDmg *= (1 + (n.psych.neuroticism / 200));
+            }
             
             n.sanity = Math.max(0, n.sanity - sanityDmg);
             if (emotion === 'FEAR') n.memories.push(isFriend ? `Witnessed my friend ${sourceId} panic.` : `Heard screams nearby.`);
@@ -159,22 +199,86 @@ const propagateEmotion = (npcs: NPC[], sourceId: string, emotion: 'FEAR' | 'ANGE
     });
 };
 
-// 2. Trait Mutation (El trauma cambia a la gente)
-const mutateTraits = (npc: NPC): NPC => {
-    if (npc.sanity < 20 && !npc.traits.includes('MAD')) {
-        if (Math.random() > 0.7) {
-            npc.traits.push('MAD');
-            npc.memories.push("My mind has fractured.");
+// 2. Trait Mutation (El trauma cambia la personalidad)
+const mutatePsychology = (npc: NPC): NPC => {
+    if (!npc.psych) npc.psych = generatePsychProfile(npc.race, npc.role); // Polyfill for old saves
+
+    if (npc.sanity < 20) {
+        // Trauma increases neuroticism and decreases openness
+        if (Math.random() > 0.8) {
+            npc.psych.neuroticism = Math.min(100, npc.psych.neuroticism + 5);
+            npc.psych.openness = Math.max(0, npc.psych.openness - 5);
+            if (!npc.traits.includes('MAD')) npc.traits.push('MAD');
         }
     }
     // Hardened survivor logic
-    if (npc.age > 40 && npc.sanity > 80 && !npc.traits.includes('STOIC')) {
+    if (npc.age > 40 && npc.sanity > 80 && npc.psych.bravery < 80) {
         if (Math.random() > 0.9) {
-            npc.traits.push('STOIC');
-            npc.memories.push("I have seen enough to no longer fear.");
+            npc.psych.bravery += 5;
+            npc.psych.neuroticism -= 2;
+            if (!npc.traits.includes('STOIC')) npc.traits.push('STOIC');
         }
     }
     return npc;
+};
+
+// 3. Complex Interaction (Causalidad Relacional)
+const resolveSocialInteraction = (actor: NPC, target: NPC): { action: string, memoryActor: string, memoryTarget: string, relChange: number, relType?: NPCRelationship['type'] } => {
+    const aPsych = actor.psych || generatePsychProfile(actor.race, actor.role);
+    const tPsych = target.psych || generatePsychProfile(target.race, target.role);
+
+    // Default: Chat
+    let result: { action: string, memoryActor: string, memoryTarget: string, relChange: number, relType?: NPCRelationship['type'] } = { 
+        action: 'Chatting', 
+        memoryActor: `Spoke with ${target.name}.`, 
+        memoryTarget: `Spoke with ${actor.name}.`, 
+        relChange: 2 
+    };
+
+    // Scenario 1: Aggression (Low Agreeableness + High Strength/Bravery)
+    if (aPsych.agreeableness < 30 && aPsych.bravery > 60) {
+        result = {
+            action: 'Insulting',
+            memoryActor: `Mocked ${target.name} for their weakness.`,
+            memoryTarget: `Was humiliated by ${actor.name}.`,
+            relChange: -15,
+            relType: 'RIVAL'
+        };
+    }
+    // Scenario 2: Theft (High Greed + Low Conscientiousness)
+    else if (aPsych.greed > 70 && aPsych.conscientiousness < 40) {
+        if (target.role === 'Noble' || target.role === 'Guard') {
+            result = {
+                action: 'Stealing',
+                memoryActor: `Stole a trinket from ${target.name}.`,
+                memoryTarget: `Suspects ${actor.name} of theft.`,
+                relChange: -30,
+                relType: 'ENEMY'
+            };
+        }
+    }
+    // Scenario 3: Shared Faith (High Faith match)
+    else if (aPsych.faith > 70 && tPsych.faith > 70) {
+        result = {
+            action: 'Praying',
+            memoryActor: `Shared a holy vision with ${target.name}.`,
+            memoryTarget: `Found spiritual kinship with ${actor.name}.`,
+            relChange: 15,
+            relType: 'FRIEND'
+        };
+    }
+    // Scenario 4: Attraction (High Extroversion + High Openness)
+    else if (aPsych.extroversion > 60 && tPsych.openness > 60 && Math.random() > 0.8) {
+        result = {
+            action: 'Flirting',
+            memoryActor: `Admired ${target.name}.`,
+            memoryTarget: `Was complimented by ${actor.name}.`,
+            relChange: 10,
+            relType: 'LOVER'
+        };
+    }
+
+    return result;
 };
 
 export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' | 'DEFEAT'): SimResult => {
@@ -224,7 +328,8 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
-        
+        if (!newNpc.psych) newNpc.psych = generatePsychProfile(newNpc.race, newNpc.role);
+
         // --- NEEDS SYSTEM ---
         newNpc.hunger += 2 + (Math.random() * 2);
         newNpc.fatigue += 1 + (Math.random() * 2);
@@ -234,9 +339,9 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         newNpc.sanity = Math.max(0, Math.min(100, newNpc.sanity - sanityDrain));
 
         // --- TRAIT EVOLUTION ---
-        newNpc = mutateTraits(newNpc);
+        newNpc = mutatePsychology(newNpc);
 
-        // --- BEHAVIOR TREE ---
+        // --- BEHAVIOR TREE (PRIORITY QUEUE) ---
         
         // 1. CRITICAL NEEDS
         if (newNpc.hunger > 80) {
@@ -248,7 +353,8 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         } 
         // 2. EMOTIONAL BREAKDOWNS (Causality Trigger)
         else if (newNpc.sanity < 20) {
-            if (newStats.fear > 70) {
+            // Fight or Flight determined by Bravery
+            if (newNpc.psych.bravery < 40 || newStats.fear > 80) {
                 newNpc.currentAction = 'COWERING';
                 newNpc.mood = 'TERRIFIED';
             } else {
@@ -257,21 +363,21 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 riotTriggered = true;
                 riotSourceId = newNpc.id;
                 
-                if (Math.random() > 0.9) {
+                // Aggressive breakdown
+                if (newNpc.psych.agreeableness < 30) {
                     goldChange -= 1;
-                    logs.push({ id: generateId(), timestamp: Date.now(), type: 'WORLD_EVENT', message: 'Theft', details: `${newNpc.name} stole gold in a mania.` });
+                    logs.push({ id: generateId(), timestamp: Date.now(), type: 'WORLD_EVENT', message: 'Vandalism', details: `${newNpc.name} smashed a stall in a rage.` });
                 }
             }
         }
-        // 3. JOBS & PRODUCTIVITY
-        else {
+        // 3. JOBS & PRODUCTIVITY (Determined by Conscientiousness)
+        else if (newNpc.psych.conscientiousness > 40 || Math.random() > 0.5) {
             if (newNpc.role === 'Smith') {
                 newNpc.currentAction = 'WORKING';
                 forgeProgress += 1;
             } else if (newNpc.role === 'Guard') {
                 newNpc.currentAction = 'WORKING';
                 newStats.order += 0.1;
-                // Guards suppress riots passively
                 if (newStats.order > 80) newNpc.mood = 'HOPEFUL';
             } else if (newNpc.role === 'Peasant') {
                 newNpc.currentAction = 'WORKING'; 
@@ -283,36 +389,44 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 newNpc.currentAction = 'IDLE';
             }
         }
+        // 4. SOCIALIZING (Fallback)
+        else {
+            newNpc.currentAction = 'IDLE';
+        }
 
         // --- RELATIONSHIPS (The Gossip Engine) ---
-        if (Math.random() > 0.95 && pop.length > 1) {
+        if (Math.random() > 0.90 && pop.length > 1) {
             const target = pop[Math.floor(Math.random() * pop.length)];
             if (target.id !== newNpc.id) {
                 let rel = newNpc.relationships.find(r => r.targetId === target.id);
                 if (!rel) {
-                    rel = { targetId: target.id, type: 'FRIEND', score: 0 };
+                    rel = { targetId: target.id, type: 'FRIEND', score: 0, lastInteraction: Date.now() };
                     newNpc.relationships.push(rel);
                 }
                 
-                // Interaction Logic - Expanded
-                if (newNpc.traits.includes('MAD')) {
-                    rel.score -= 5;
-                    newNpc.memories.push(`Screamed at ${target.name}.`);
-                } else if (newNpc.traits.includes('ZEALOT') && target.role === 'Cultist') {
-                    rel.score += 10;
-                    newNpc.memories.push(`Discussed the Void with ${target.name}.`);
-                } else if (newNpc.traits.includes('GREEDY') && target.role === 'Noble') {
-                    rel.score += 5;
-                    newNpc.memories.push(`Envied ${target.name}'s wealth.`);
-                } else {
-                    rel.score += 1;
-                    newNpc.memories.push(`Chatted with ${target.name}.`);
-                }
+                // RUN INTERACTION MATRIX
+                const interaction = resolveSocialInteraction(newNpc, target);
+                
+                rel.score += interaction.relChange;
+                rel.lastInteraction = Date.now();
+                if (interaction.relType) rel.type = interaction.relType;
+                
+                newNpc.memories.push(interaction.memoryActor);
+                
+                // NOTE: We can't easily update target memory here due to map constraints, 
+                // so we rely on the target processing their own turn or simple abstraction.
+                // In a perfect ECS we would push an event to the target. 
+                // For now, we simulate the target remembering later via a global log or similar, 
+                // OR we accept unilateral memory for optimization.
+                
+                // Hack: Apply state to target if possible? No, react immutability.
+                // We'll settle for unilateral memory on this tick.
             }
         }
 
         // --- THE APOSTLE TRANSFORMATION (Berserk Reference) ---
-        if (newNpc.sanity <= 0 && newNpc.status === 'ALIVE' && Math.random() > 0.8) {
+        // High despair + Low Faith = Transformation Risk
+        if (newNpc.sanity <= 5 && newNpc.psych.faith < 20 && newNpc.status === 'ALIVE' && Math.random() > 0.9) {
             newNpc.status = 'DEAD'; 
             newNpc.memories.push("Succumbed to the Void and transformed.");
             

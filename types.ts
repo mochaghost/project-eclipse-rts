@@ -153,8 +153,22 @@ export interface ShopItem {
 // --- DEEP SIMULATION TYPES ---
 export interface NPCRelationship {
     targetId: string;
-    type: 'FRIEND' | 'RIVAL' | 'LOVER' | 'ENEMY';
+    type: 'FRIEND' | 'RIVAL' | 'LOVER' | 'ENEMY' | 'VICTIM';
     score: number; // -100 to 100
+    lastInteraction: number; // timestamp
+}
+
+export interface PsychProfile {
+    openness: number;      // 0-100: Curiosity vs Consistency
+    conscientiousness: number; // 0-100: Duty vs Laziness
+    extroversion: number;  // 0-100: Social vs Solitary
+    agreeableness: number; // 0-100: Compassion vs Aggression
+    neuroticism: number;   // 0-100: Stability vs Anxiety
+    
+    // Hidden stats
+    bravery: number;       // 0-100: Fight vs Flight
+    greed: number;         // 0-100: Crime probability
+    faith: number;         // 0-100: Resistance to Void corruption
 }
 
 export interface NPC {
@@ -163,21 +177,22 @@ export interface NPC {
     role: 'Peasant' | 'Smith' | 'Guard' | 'Noble' | 'Scholar' | 'Cultist' | 'Beggar' | 'Artificer' | 'Ranger' | 'Militia';
     race: RaceType;
     factionId?: FactionKey; 
-    traits: string[];
+    traits: string[]; // Legacy descriptive tags
+    psych?: PsychProfile; // NEW: The Brain
     stats: { strength: number, intellect: number, loyalty: number };
     status: 'ALIVE' | 'DEAD' | 'MARRIED' | 'EXILED' | 'HEROIC' | 'MAD';
-    mood: 'HOPEFUL' | 'NEUTRAL' | 'TERRIFIED' | 'REBELLIOUS' | 'MANIC' | 'INSPIRED';
+    mood: 'HOPEFUL' | 'NEUTRAL' | 'TERRIFIED' | 'REBELLIOUS' | 'MANIC' | 'INSPIRED' | 'VENGEFUL' | 'BROKEN';
     sanity: number; // 0-100.
     
-    // Deep Sim
+    // Deep Sim States
     hunger: number; // 0-100
     fatigue: number; // 0-100
-    currentAction: 'IDLE' | 'WORKING' | 'PRAYING' | 'COWERING' | 'RIOTING' | 'FIGHTING' | 'SLEEPING' | 'EATING' | 'SOCIALIZING';
+    currentAction: 'IDLE' | 'WORKING' | 'PRAYING' | 'COWERING' | 'RIOTING' | 'FIGHTING' | 'SLEEPING' | 'EATING' | 'SOCIALIZING' | 'SCHEMING' | 'MOURNING';
     targetEntityId?: string; // What are they interacting with?
     
     age: number;
     relationships: NPCRelationship[]; 
-    memories: string[]; 
+    memories: string[]; // Log of events
 }
 
 export interface FactionReputation {
