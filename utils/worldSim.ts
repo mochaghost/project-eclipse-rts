@@ -1,3 +1,4 @@
+
 import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile } from '../types';
 import { generateId, generateNemesis } from './generators';
 import { RACES, TRAITS, FACTIONS } from '../constants';
@@ -412,15 +413,6 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 if (interaction.relType) rel.type = interaction.relType;
                 
                 newNpc.memories.push(interaction.memoryActor);
-                
-                // NOTE: We can't easily update target memory here due to map constraints, 
-                // so we rely on the target processing their own turn or simple abstraction.
-                // In a perfect ECS we would push an event to the target. 
-                // For now, we simulate the target remembering later via a global log or similar, 
-                // OR we accept unilateral memory for optimization.
-                
-                // Hack: Apply state to target if possible? No, react immutability.
-                // We'll settle for unilateral memory on this tick.
             }
         }
 

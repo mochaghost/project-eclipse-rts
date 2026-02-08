@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { 
     GameState, GameContextType, TaskPriority, EntityType, Era, AlertType, 
     VisualEffect, Task, SubtaskDraft, TaskTemplate, FirebaseConfig, 
-    FactionKey, MapEventType, WeatherType, ShopItem, HistoryLog 
+    FactionKey, MapEventType, WeatherType, ShopItem, HistoryLog, GameSettings 
 } from '../types';
 import { 
     generateId, generateNemesis, generateLoot, getSageWisdom, 
@@ -572,7 +572,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // --- VISION MIRROR ---
     const rerollVision = async () => {
-        const settings = state.settings || {};
+        const settings = state.settings || {} as GameSettings; // Cast to avoid TS error on empty object
         const videos = await fetchMotivationVideos(settings.googleSheetId, settings.directVisionUrl);
         const video = videos[Math.floor(Math.random() * videos.length)];
         
