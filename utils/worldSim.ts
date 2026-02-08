@@ -1,5 +1,5 @@
 
-import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile } from '../types';
+import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile, DailyNarrative } from '../types';
 import { generateId, generateNemesis } from './generators';
 import { RACES, TRAITS, FACTIONS } from '../constants';
 
@@ -94,6 +94,102 @@ export const initializePopulation = (count: number): NPC[] => {
     return pop;
 };
 
+// --- DAILY NARRATIVE ENGINE ---
+
+const NARRATIVE_TEMPLATES = {
+    FEAR: {
+        titles: ["The Whispering Mist", "Shadows in the Keep", "The Prophet's Warning"],
+        incidents: ["Citizens report strange sounds from the sewers.", "A guard was found babbling nonsense.", "The crows are gathering in unusual numbers."],
+        rising: ["Panic spreads. Production slows.", "Symbols of the Void appear on walls.", "The people demand safety."],
+        climax: ["A Void manifestation attacks the market!", "A riot breaks out in fear!", "Mass hysteria threatens the gates."]
+    },
+    HOPE: {
+        titles: ["The Golden Dawn", "A Gift from the Stars", "The Festival of Light"],
+        incidents: ["A traveling bard sings of a great hero.", "A star fell near the mountains.", "Crops are blooming overnight."],
+        rising: ["Morale is high. People work harder.", "Pilgrims arrive seeking blessing.", "A feast is prepared."],
+        climax: ["A grand celebration unites the factions!", "An ancient relic is unearthed!", "A diplomatic breakthrough!"]
+    },
+    ORDER: {
+        titles: ["The Iron Decree", "Inspection Day", "The Merchant's Guild"],
+        incidents: ["A royal inspector arrives.", "The smiths demand better tools.", "A census is called."],
+        rising: ["Efficiency improves, but tension rises.", "Strict laws are enforced.", "Gold flows, but freedom suffers."],
+        climax: ["A guild strike must be resolved!", "The inspector judges your rule!", "A massive trade deal is struck!"]
+    },
+    CHAOS: {
+        titles: ["The Wild Hunt", "Broken Chains", "The Storm"],
+        incidents: ["A prisoner has escaped.", "Wild magic surges in the air.", "Beasts circle the walls."],
+        rising: ["Laws are ignored. Looting begins.", "Magic goes haywire.", "The guards are overwhelmed."],
+        climax: ["The prison is breached!", "An elemental storm strikes!", "Anarchy in the streets!"]
+    }
+};
+
+const updateDailyNarrative = (current: DailyNarrative | undefined, stats: RealmStats): { narrative: DailyNarrative, log?: HistoryLog } => {
+    const now = new Date();
+    const hour = now.getHours();
+    const todayId = now.toISOString().split('T')[0];
+
+    // 1. INIT NEW DAY
+    if (!current || current.dayId !== todayId) {
+        // Pick theme based on dominant stat
+        let theme: DailyNarrative['theme'] = 'ORDER';
+        let cause = "Routine cycle.";
+        
+        if (stats.fear > 60) { theme = 'FEAR'; cause = `Triggered by high Fear (${stats.fear}%)`; }
+        else if (stats.hope > 60) { theme = 'HOPE'; cause = `Triggered by high Hope (${stats.hope}%)`; }
+        else if (Math.random() > 0.7) { theme = 'CHAOS'; cause = "Random entropic fluctuation."; }
+
+        const template = NARRATIVE_TEMPLATES[theme];
+        const title = template.titles[Math.floor(Math.random() * template.titles.length)];
+        const incident = template.incidents[Math.floor(Math.random() * template.incidents.length)];
+
+        return {
+            narrative: {
+                dayId: todayId,
+                title,
+                theme,
+                stage: 'INCIDENT',
+                logs: [incident],
+                intensity: 20 + Math.floor(Math.random() * 20),
+                resolved: false,
+                cause
+            },
+            log: { id: generateId(), timestamp: Date.now(), type: 'NARRATIVE', message: `Dawn: ${title}`, details: incident, cause }
+        };
+    }
+
+    // 2. PROGRESS NARRATIVE BASED ON TIME
+    let next = { ...current };
+    let log: HistoryLog | undefined;
+    const template = NARRATIVE_TEMPLATES[next.theme];
+
+    // RISING ACTION (11:00 - 17:00)
+    if (next.stage === 'INCIDENT' && hour >= 11) {
+        next.stage = 'RISING';
+        const detail = template.rising[Math.floor(Math.random() * template.rising.length)];
+        next.logs.push(detail);
+        next.intensity += 20;
+        log = { id: generateId(), timestamp: Date.now(), type: 'NARRATIVE', message: `Noon: Situation Develops`, details: detail, cause: `Progressing from '${current.title}'` };
+    }
+    // CLIMAX (17:00 - 21:00)
+    else if (next.stage === 'RISING' && hour >= 17) {
+        next.stage = 'CLIMAX';
+        const detail = template.climax[Math.floor(Math.random() * template.climax.length)];
+        next.logs.push(detail);
+        next.intensity += 30;
+        log = { id: generateId(), timestamp: Date.now(), type: 'NARRATIVE', message: `Dusk: The Climax`, details: detail, cause: "Narrative tension reached peak." };
+    }
+    // RESOLUTION (21:00+)
+    else if (next.stage === 'CLIMAX' && hour >= 21 && !next.resolved) {
+        next.stage = 'RESOLUTION';
+        next.resolved = true;
+        const outcome = next.intensity > 80 ? "The day ends in turmoil." : "Order is restored.";
+        next.logs.push(outcome);
+        log = { id: generateId(), timestamp: Date.now(), type: 'NARRATIVE', message: `Night: Resolution`, details: outcome, cause: "Day cycle concluding." };
+    }
+
+    return { narrative: next, log };
+};
+
 // --- SIMULATION ENGINE ---
 
 export const updateRealmStats = (current: RealmStats, event: 'VICTORY' | 'DEFEAT' | 'NEGLECT' | 'TRADE'): RealmStats => {
@@ -152,7 +248,8 @@ export const updateFactions = (factions: FactionReputation[], event: 'VICTORY' |
                 timestamp: Date.now(),
                 type: 'DIPLOMACY',
                 message: `Relations changed with ${f.name}`,
-                details: `They now consider us ${newStatus}.`
+                details: `They now consider us ${newStatus}.`,
+                cause: `Due to recent ${event.toLowerCase()} interactions.`
             });
         }
 
@@ -170,6 +267,7 @@ interface SimResult {
     goldChange?: number;
     hpChange?: number;
     structuresChange?: { forge?: number, wall?: number };
+    dailyNarrative?: DailyNarrative;
 }
 
 // --- DWARF FORTRESS LITE LOGIC ---
@@ -307,9 +405,12 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     }
 
     const safetyBonus = (state.structures?.wallsLevel || 0) * 10;
+    const maxPop = 10 + (state.structures?.wallsLevel || 0) * 10;
 
-    // 3. IMMIGRATION (Only if Hope is decent)
-    if ((newStats.hope + safetyBonus) > 70 && pop.length < 30 && Math.random() > 0.8) {
+    // 3. IMMIGRATION (BALANCED: Requires Gold + Space + Hope)
+    const canAffordNewcomers = state.gold > 50; // Newcomers cost upkeep immediately
+    // FIXED: Chance reduced, requires Gold check to prevent infinite loop
+    if ((newStats.hope + safetyBonus) > 60 && pop.length < maxPop && canAffordNewcomers && Math.random() > 0.95) {
         const newcomer = createNPC('Peasant');
         newcomer.memories.push("Seeking the safety of your high walls.");
         pop.push(newcomer);
@@ -318,18 +419,33 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
             timestamp: Date.now(),
             type: 'WORLD_EVENT',
             message: `Immigrant Arrived`,
-            details: `${newcomer.name} joins the citadel.`
+            details: `${newcomer.name} joins the citadel.`,
+            cause: `Attracted by high Hope (${Math.floor(newStats.hope)}%)`
         });
     }
 
-    // 4. DEEP SIMULATION LOOP (Needs & Jobs & Traumas)
+    // 4. DAILY NARRATIVE PROGRESSION
+    const narrativeResult = updateDailyNarrative(state.dailyNarrative, newStats);
+    if (narrativeResult.log) logs.push(narrativeResult.log);
+
+    // 5. DEEP SIMULATION LOOP (Needs & Jobs & Traumas)
     let riotTriggered = false;
     let riotSourceId = '';
-
+    
+    // ECONOMIC THERMOSTAT
+    // Upkeep: roughly 1g per person every 20-30 seconds (probabilistic)
+    // Production: Only conscientious peasants work
+    
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
         if (!newNpc.psych) newNpc.psych = generatePsychProfile(newNpc.race, newNpc.role);
+
+        // --- UPKEEP (Food/Tax) ---
+        // 3% chance per tick to consume 1g.
+        if (Math.random() > 0.97) {
+            goldChange -= 1; 
+        }
 
         // --- NEEDS SYSTEM ---
         newNpc.hunger += 2 + (Math.random() * 2);
@@ -366,13 +482,21 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 
                 // Aggressive breakdown
                 if (newNpc.psych.agreeableness < 30) {
-                    goldChange -= 1;
-                    logs.push({ id: generateId(), timestamp: Date.now(), type: 'WORLD_EVENT', message: 'Vandalism', details: `${newNpc.name} smashed a stall in a rage.` });
+                    goldChange -= 5; // Vandalism costs more now
+                    logs.push({ 
+                        id: generateId(), 
+                        timestamp: Date.now(), 
+                        type: 'WORLD_EVENT', 
+                        message: 'Vandalism', 
+                        details: `${newNpc.name} smashed a stall in a rage.`,
+                        cause: "Breakdown due to low Sanity." 
+                    });
                 }
             }
         }
         // 3. JOBS & PRODUCTIVITY (Determined by Conscientiousness)
-        else if (newNpc.psych.conscientiousness > 40 || Math.random() > 0.5) {
+        // BALANCED GOLD GENERATION: Only high conscientiousness generates gold regularly.
+        else if (newNpc.psych.conscientiousness > 40 || Math.random() > 0.8) {
             if (newNpc.role === 'Smith') {
                 newNpc.currentAction = 'WORKING';
                 forgeProgress += 1;
@@ -382,10 +506,14 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 if (newStats.order > 80) newNpc.mood = 'HOPEFUL';
             } else if (newNpc.role === 'Peasant') {
                 newNpc.currentAction = 'WORKING'; 
-                goldChange += 0.5;
+                // Only generate gold if they work AND pass a check
+                if (Math.random() > 0.92) {
+                    goldChange += 1; // Slower income
+                }
             } else if (newNpc.role === 'Noble') {
                 newNpc.currentAction = 'SOCIALIZING';
-                if (Math.random() > 0.9) newStats.order += 0.5;
+                // Nobles generate more gold but rarely work
+                if (Math.random() > 0.98) goldChange += 5;
             } else {
                 newNpc.currentAction = 'IDLE';
             }
@@ -413,6 +541,11 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 if (interaction.relType) rel.type = interaction.relType;
                 
                 newNpc.memories.push(interaction.memoryActor);
+                
+                // Crime check (Greed)
+                if (interaction.action === 'Stealing') {
+                    goldChange -= 2;
+                }
             }
         }
 
@@ -427,16 +560,18 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 timestamp: Date.now(),
                 type: 'LORE',
                 message: "A BEHELIT SCREAMS",
-                details: `${newNpc.name} twisted into a demon!`
+                details: `${newNpc.name} twisted into a demon!`,
+                cause: `Total Sanity collapse + Low Faith.`
             });
 
             // Spawn the Enemy
-            const demon = generateNemesis("TRANSFORMATION", TaskPriority.HIGH, [], 0);
+            const demon = generateNemesis("TRANSFORMATION", TaskPriority.HIGH, [], 0, undefined, undefined, 60, state.realmStats);
             demon.race = 'DEMON';
             demon.factionId = 'UMBRA';
             demon.name = `Apostle ${newNpc.name}`;
             demon.title = `The Twisted Form of ${newNpc.name}`;
             demon.position = { x: 0, y: 0, z: 0 }; 
+            demon.origin = `Mutated form of villager ${newNpc.name}.`;
             spawnedEnemies.push(demon);
             
             // Critical: Transformation causes MASSIVE fear ripple
@@ -461,6 +596,7 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         newFactions, 
         spawnedEnemies, 
         goldChange: Math.floor(goldChange), 
-        hpChange 
+        hpChange,
+        dailyNarrative: narrativeResult.narrative
     };
 };

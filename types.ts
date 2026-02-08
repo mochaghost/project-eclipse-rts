@@ -35,7 +35,7 @@ export enum AlertType {
   RITUAL_MORNING = 'RITUAL_MORNING',
   RITUAL_EVENING = 'RITUAL_EVENING',
   AEON_ENCOUNTER = 'AEON_ENCOUNTER',
-  BATTLE_REPORT = 'BATTLE_REPORT' // NEW
+  BATTLE_REPORT = 'BATTLE_REPORT'
 }
 
 export type MapEventType = 'NONE' | 'TITAN_GAZE' | 'VOID_STORM' | 'TREMOR' | 'MOCKING_RAID' | 'VISION_RITUAL' | 'PEASANT_RAID' | 'FACTION_SIEGE' | 'NIGHT_BATTLE' | 'BATTLE_CINEMATIC'; 
@@ -75,6 +75,9 @@ export interface EnemyEntity {
   memories: string[]; 
   lineage: string; 
   
+  // NEW: The Reason for their existence
+  origin: string; // e.g., "Spawned by High Fear", "Avenging Kin", "Attracted by Gold"
+
   // Combat Stats
   hp: number;
   maxHp: number;
@@ -135,9 +138,10 @@ export interface Task {
 export interface HistoryLog {
     id: string;
     timestamp: number;
-    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE' | 'DAILY_REPORT';
+    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE' | 'DAILY_REPORT' | 'NARRATIVE';
     message: string;
-    details?: string; 
+    details?: string;
+    cause?: string; // NEW: Why did this happen?
 }
 
 export interface ShopItem {
@@ -273,6 +277,18 @@ export interface BattleReport {
     conqueredFaction?: string;
 }
 
+// NEW: Daily Narrative System
+export interface DailyNarrative {
+    dayId: string; // YYYY-MM-DD
+    title: string; // "The Day of the Red Sun"
+    theme: 'FEAR' | 'HOPE' | 'ORDER' | 'CHAOS';
+    stage: 'INCIDENT' | 'RISING' | 'CLIMAX' | 'RESOLUTION'; 
+    logs: string[]; // What happened so far today
+    intensity: number; // 0-100, determines difficulty of Climax
+    resolved: boolean;
+    cause: string; // "Triggered by low Hope"
+}
+
 export interface GameState {
   playerLevel: number;
   xp: number;
@@ -329,8 +345,11 @@ export interface GameState {
 
   // CYCLE OF THE ECLIPSE
   worldGenerationDay: number; 
-  lastBattleReport?: BattleReport; // New
-  defenseStats?: DefenseStats; // Cached calculation
+  lastBattleReport?: BattleReport; 
+  defenseStats?: DefenseStats;
+  
+  // NEW: Narrative Engine
+  dailyNarrative?: DailyNarrative;
 
   syncConfig?: {
       firebase: FirebaseConfig;

@@ -144,7 +144,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         type: 'DEFEAT',
                         timestamp: now,
                         message: `Task Failed: ${t.title}`,
-                        details: "The Void grows stronger."
+                        details: "The Void grows stronger.",
+                        cause: "Deadline Missed"
                     });
                     
                     // Take Damage
@@ -199,6 +200,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const simResult = simulateReactiveTurn(updated);
                 updated.population = simResult.newPopulation;
                 updated.realmStats = simResult.newStats;
+                updated.dailyNarrative = simResult.dailyNarrative; // SYNC DAILY NARRATIVE
                 
                 if (simResult.goldChange && simResult.goldChange !== 0) {
                     updated.gold += simResult.goldChange;
@@ -266,12 +268,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             hubris: false
         };
 
-        // Generate Enemy
-        const enemy = generateNemesis(id, priority, state.nemesisGraveyard, state.winStreak, undefined, undefined, durationMinutes);
+        // Generate Enemy (Now with context!)
+        const enemy = generateNemesis(
+            id, 
+            priority, 
+            state.nemesisGraveyard, 
+            state.winStreak, 
+            undefined, 
+            title, // Pass title for keyword matching
+            durationMinutes,
+            state.realmStats // Pass global stats for reactive spawning
+        );
 
         // Generate Minions for subtasks
         const minionEnemies = newTask.subtasks.map(sub => 
-            generateNemesis(id, TaskPriority.LOW, [], 0, sub.id, sub.title, durationMinutes / newTask.subtasks.length)
+            generateNemesis(id, TaskPriority.LOW, [], 0, sub.id, sub.title, durationMinutes / newTask.subtasks.length, state.realmStats)
         );
 
         setState(prev => {
@@ -396,7 +407,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 lossStreak: 0,
                 nemesisGraveyard: graveyard,
                 inventory: newInventory,
-                history: [{ id: generateId(), type: 'VICTORY', timestamp: Date.now(), message: `Vanquished: ${task.title}`, details: `+${xpGain} XP, +${goldGain}g` } as HistoryLog, ...historyUpdate, ...prev.history],
+                history: [{ id: generateId(), type: 'VICTORY', timestamp: Date.now(), message: `Vanquished: ${task.title}`, details: `+${xpGain} XP, +${goldGain}g`, cause: "Combat Victory" } as HistoryLog, ...historyUpdate, ...prev.history],
                 vazarothMessage: getVazarothLine('WIN', prev.winStreak + 1),
                 sageMessage: getSageWisdom('STREAK'),
                 // Visual FX
@@ -491,7 +502,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (!task) return prev;
                 // Add subtasks
                 const subs = newSubtasks.map(title => ({ id: generateId(), title, completed: false }));
-                const minions = subs.map(s => generateNemesis(taskId, TaskPriority.LOW, [], 0, s.id, s.title, 30));
+                const minions = subs.map(s => generateNemesis(taskId, TaskPriority.LOW, [], 0, s.id, s.title, 30, prev.realmStats));
                 
                 return {
                     ...prev,
