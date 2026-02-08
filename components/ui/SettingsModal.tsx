@@ -213,16 +213,17 @@ export const SettingsModal: React.FC = () => {
                                             className="w-full bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500"
                                             placeholder="e.g. 1Hhfl7Cq28FvcyNrH..."
                                         />
-                                        <details className="mt-2 text-[10px] text-stone-500 bg-black/30 p-2 rounded cursor-pointer group">
+                                        <details className="mt-2 text-[10px] text-stone-500 bg-black/30 p-2 rounded cursor-pointer group" open>
                                             <summary className="font-bold flex items-center gap-1 hover:text-stone-300 select-none">
-                                                <Info size={10} /> How to Automate (Pinterest &rarr; Game)
+                                                <Info size={10} /> Personal Account Method (100% Free)
                                             </summary>
                                             <div className="mt-2 pl-2 border-l border-stone-700 space-y-2 text-stone-400 leading-relaxed font-mono">
-                                                <p>1. Create a public Google Sheet (File > Share > Publish to Web > CSV).</p>
-                                                <p>2. Use <strong>IFTTT</strong> or <strong>Zapier</strong> (Free tiers).</p>
-                                                <p className="text-purple-400">Trigger: "New Pin on Board"</p>
-                                                <p className="text-purple-400">Action: "Add row to Google Sheet"</p>
-                                                <p>3. Paste the Sheet ID above. The game will now fetch new pins automatically.</p>
+                                                <p>1. Make your Pinterest Board <strong>Public</strong>.</p>
+                                                <p>2. Your Feed URL is: <br/><span className="text-purple-400 break-all select-all">https://www.pinterest.com/USERNAME/BOARD.rss</span></p>
+                                                <p>3. Use <strong>Zapier</strong> or <strong>IFTTT</strong>.</p>
+                                                <p className="text-yellow-600">Trigger: "RSS Feed" (NOT Pinterest)</p>
+                                                <p>Action: "Google Sheets" &rarr; "Add Row".</p>
+                                                <p>4. Paste Sheet ID above.</p>
                                             </div>
                                         </details>
                                     </div>
