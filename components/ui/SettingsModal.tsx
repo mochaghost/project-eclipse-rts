@@ -222,7 +222,7 @@ export const SettingsModal: React.FC = () => {
                                                 <p>2. Your Feed URL is: <br/><span className="text-purple-400 break-all select-all">https://www.pinterest.com/USERNAME/BOARD.rss</span></p>
                                                 <p>3. Use <strong>Zapier</strong> or <strong>IFTTT</strong>.</p>
                                                 <p className="text-yellow-600">Trigger: "RSS Feed" (NOT Pinterest)</p>
-                                                <p>Action: "Google Sheets" &rarr; "Add Row".</p>
+                                                <p>Action: "Google Sheets" &rarr; "Create Spreadsheet Row".</p>
                                                 <p>4. Paste Sheet ID above.</p>
                                             </div>
                                         </details>

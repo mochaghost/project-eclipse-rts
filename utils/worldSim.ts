@@ -135,6 +135,48 @@ interface SimResult {
     structuresChange?: { forge?: number, wall?: number };
 }
 
+// --- DWARF FORTRESS LITE LOGIC ---
+
+// 1. Social Ripple (El pánico se contagia)
+const propagateEmotion = (npcs: NPC[], sourceId: string, emotion: 'FEAR' | 'ANGER', intensity: number) => {
+    return npcs.map(n => {
+        if (n.id === sourceId || n.status !== 'ALIVE') return n;
+        
+        // Find if they know the source or are nearby (simulated by index proximity in array for now)
+        const isFriend = n.relationships.some(r => r.targetId === sourceId && r.score > 20);
+        // Random chance represents "physical proximity" in abstract simulation
+        const isNearby = Math.random() > 0.8; 
+
+        if (isFriend || isNearby) {
+            let sanityDmg = intensity;
+            if (n.traits.includes('STOIC')) sanityDmg *= 0.5;
+            if (n.traits.includes('COWARDLY')) sanityDmg *= 1.5;
+            
+            n.sanity = Math.max(0, n.sanity - sanityDmg);
+            if (emotion === 'FEAR') n.memories.push(isFriend ? `Witnessed my friend ${sourceId} panic.` : `Heard screams nearby.`);
+        }
+        return n;
+    });
+};
+
+// 2. Trait Mutation (El trauma cambia a la gente)
+const mutateTraits = (npc: NPC): NPC => {
+    if (npc.sanity < 20 && !npc.traits.includes('MAD')) {
+        if (Math.random() > 0.7) {
+            npc.traits.push('MAD');
+            npc.memories.push("My mind has fractured.");
+        }
+    }
+    // Hardened survivor logic
+    if (npc.age > 40 && npc.sanity > 80 && !npc.traits.includes('STOIC')) {
+        if (Math.random() > 0.9) {
+            npc.traits.push('STOIC');
+            npc.memories.push("I have seen enough to no longer fear.");
+        }
+    }
+    return npc;
+};
+
 export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' | 'DEFEAT'): SimResult => {
     let pop = [...state.population];
     let logs: HistoryLog[] = [];
@@ -142,7 +184,6 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     let goldChange = 0;
     let hpChange = 0;
     let forgeProgress = 0;
-    let wallProgress = 0;
     
     // 1. Update Global Stats
     let newStats = state.realmStats || { hope: 50, fear: 10, order: 50 };
@@ -176,13 +217,15 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         });
     }
 
-    // 4. DEEP SIMULATION LOOP (Needs & Jobs)
+    // 4. DEEP SIMULATION LOOP (Needs & Jobs & Traumas)
+    let riotTriggered = false;
+    let riotSourceId = '';
+
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
         
         // --- NEEDS SYSTEM ---
-        // Hunger increases every tick
         newNpc.hunger += 2 + (Math.random() * 2);
         newNpc.fatigue += 1 + (Math.random() * 2);
 
@@ -190,18 +233,20 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         const sanityDrain = Math.max(0, (newStats.fear - newStats.hope) * 0.05);
         newNpc.sanity = Math.max(0, Math.min(100, newNpc.sanity - sanityDrain));
 
+        // --- TRAIT EVOLUTION ---
+        newNpc = mutateTraits(newNpc);
+
         // --- BEHAVIOR TREE ---
         
         // 1. CRITICAL NEEDS
         if (newNpc.hunger > 80) {
             newNpc.currentAction = 'EATING';
-            newNpc.hunger = 0; // Instant eat for simulation simplicity
-            // Cost of food? Maybe subtract gold later
+            newNpc.hunger = 0; 
         } else if (newNpc.fatigue > 90) {
             newNpc.currentAction = 'SLEEPING';
             newNpc.fatigue = 0;
         } 
-        // 2. EMOTIONAL BREAKDOWNS
+        // 2. EMOTIONAL BREAKDOWNS (Causality Trigger)
         else if (newNpc.sanity < 20) {
             if (newStats.fear > 70) {
                 newNpc.currentAction = 'COWERING';
@@ -209,6 +254,9 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
             } else {
                 newNpc.currentAction = 'RIOTING';
                 newNpc.mood = 'MANIC';
+                riotTriggered = true;
+                riotSourceId = newNpc.id;
+                
                 if (Math.random() > 0.9) {
                     goldChange -= 1;
                     logs.push({ id: generateId(), timestamp: Date.now(), type: 'WORLD_EVENT', message: 'Theft', details: `${newNpc.name} stole gold in a mania.` });
@@ -221,14 +269,15 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 newNpc.currentAction = 'WORKING';
                 forgeProgress += 1;
             } else if (newNpc.role === 'Guard') {
-                newNpc.currentAction = 'WORKING'; // Patrolling
+                newNpc.currentAction = 'WORKING';
                 newStats.order += 0.1;
+                // Guards suppress riots passively
+                if (newStats.order > 80) newNpc.mood = 'HOPEFUL';
             } else if (newNpc.role === 'Peasant') {
-                newNpc.currentAction = 'WORKING'; // Farming/Labor
+                newNpc.currentAction = 'WORKING'; 
                 goldChange += 0.5;
             } else if (newNpc.role === 'Noble') {
                 newNpc.currentAction = 'SOCIALIZING';
-                // Nobles generate intrigue or order
                 if (Math.random() > 0.9) newStats.order += 0.5;
             } else {
                 newNpc.currentAction = 'IDLE';
@@ -236,7 +285,6 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         }
 
         // --- RELATIONSHIPS (The Gossip Engine) ---
-        // Pick a random other NPC to interact with
         if (Math.random() > 0.95 && pop.length > 1) {
             const target = pop[Math.floor(Math.random() * pop.length)];
             if (target.id !== newNpc.id) {
@@ -246,8 +294,11 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                     newNpc.relationships.push(rel);
                 }
                 
-                // Interaction Logic
-                if (newNpc.traits.includes('ZEALOT') && target.role === 'Cultist') {
+                // Interaction Logic - Expanded
+                if (newNpc.traits.includes('MAD')) {
+                    rel.score -= 5;
+                    newNpc.memories.push(`Screamed at ${target.name}.`);
+                } else if (newNpc.traits.includes('ZEALOT') && target.role === 'Cultist') {
                     rel.score += 10;
                     newNpc.memories.push(`Discussed the Void with ${target.name}.`);
                 } else if (newNpc.traits.includes('GREEDY') && target.role === 'Noble') {
@@ -281,14 +332,21 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
             demon.title = `The Twisted Form of ${newNpc.name}`;
             demon.position = { x: 0, y: 0, z: 0 }; 
             spawnedEnemies.push(demon);
+            
+            // Critical: Transformation causes MASSIVE fear ripple
+            riotTriggered = true;
+            riotSourceId = newNpc.id;
         }
 
         return newNpc;
     });
 
-    // Handle Structure Upgrades via Labor
-    // Note: Actual leveling requires huge numbers, this simulates progress
-    // In a real game, this would fill a progress bar. Here we just abstract it.
+    // 5. SOCIAL RIPPLE EFFECT (Causalidad en Cadena)
+    if (riotTriggered) {
+        pop = propagateEmotion(pop, riotSourceId, 'FEAR', 20); // 20 Sanity damage to nearby
+        newStats.fear += 5;
+        newStats.order -= 5;
+    }
 
     return { 
         newPopulation: pop, 

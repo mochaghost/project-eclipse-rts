@@ -823,10 +823,12 @@ const EnemyTimer = ({ deadline }: { deadline: number }) => {
     return (
         <Html position={[0, 3.5, 0]} center distanceFactor={15} style={{ pointerEvents: 'none' }}>
             <div className={`
-                flex items-center gap-1 px-2 py-0.5 rounded font-mono text-xs font-bold tracking-wider backdrop-blur-sm border
-                ${isUrgent ? 'bg-red-950/80 border-red-500 text-red-100 animate-pulse' : 'bg-black/60 border-stone-600 text-stone-200'}
+                flex items-center gap-1 px-3 py-1 rounded-full font-mono text-sm font-black tracking-widest backdrop-blur-md border-2 shadow-[0_0_15px_rgba(0,0,0,0.8)] transition-all duration-500
+                ${isUrgent 
+                    ? 'bg-red-950/90 border-red-500 text-red-100 animate-pulse scale-110' 
+                    : 'bg-black/80 border-stone-600 text-stone-200'}
             `}>
-                <Clock size={10} />
+                <Clock size={12} className={isUrgent ? 'animate-spin' : ''} />
                 {timeLeft}
             </div>
         </Html>
@@ -865,7 +867,7 @@ const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype =
                 <meshBasicMaterial transparent opacity={0} />
             </mesh>
 
-            {/* COUNTDOWN TIMER OVERHEAD */}
+            {/* COUNTDOWN TIMER OVERHEAD - RENDERED ALWAYS IF TASK EXISTS */}
             {task && !task.completed && !task.failed && <EnemyTimer deadline={task.deadline} />}
 
             <group position={[0, finalScale - 1, 0]} scale={[finalScale, finalScale, finalScale]}>
