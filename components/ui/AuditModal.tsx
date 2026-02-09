@@ -78,7 +78,7 @@ export const AuditModal: React.FC = () => {
                                             <div className="text-[10px] text-stone-500 uppercase tracking-widest">{npc.race} {npc.role}</div>
                                         </div>
                                         <div className="flex gap-1">
-                                            {npc.traits.map(t => <span key={t} className="px-1 bg-stone-800 text-[9px] text-stone-400 border border-stone-700">{t}</span>)}
+                                            {(npc.traits || []).map(t => <span key={t} className="px-1 bg-stone-800 text-[9px] text-stone-400 border border-stone-700">{t}</span>)}
                                         </div>
                                     </div>
 
@@ -90,7 +90,7 @@ export const AuditModal: React.FC = () => {
                                     </div>
                                     
                                     <div className="space-y-1 mt-3 pt-3 border-t border-stone-800/50">
-                                        {npc.memories.slice(-3).map((mem, i) => (
+                                        {(npc.memories || []).slice(-3).map((mem, i) => (
                                             <div key={i} className="text-[10px] text-stone-600 italic flex gap-2">
                                                 <span className="text-stone-700">-</span> {mem}
                                             </div>
