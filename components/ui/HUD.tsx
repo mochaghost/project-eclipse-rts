@@ -266,7 +266,6 @@ const SpellBar: React.FC = () => {
 }
 
 export const HUD: React.FC = () => {
-  // @ts-ignore
   const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, rerollVision, triggerEvent, toggleDiplomacy } = useGame();
   const [cinematic, setCinematic] = useState(false);
   
