@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag, Info } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 import { SPELLS, FACTIONS } from '../../constants';
@@ -154,12 +154,19 @@ const EventTicker: React.FC = () => {
                     if (log.type === 'DEFEAT') color = 'text-red-500';
                     if (log.type === 'VICTORY') color = 'text-green-400';
                     if (log.type === 'MAGIC') color = 'text-purple-400';
-                    if (log.type === 'DAILY_REPORT') color = 'text-indigo-400 font-bold border-l-4 border-indigo-500 pl-2 bg-indigo-950/30';
+                    if (log.type === 'NARRATIVE') color = 'text-orange-400 border-l-4 border-orange-600 pl-2 bg-orange-950/20';
 
                     return (
-                        <div key={log.id} className={`text-xs font-serif bg-black/60 px-2 py-1 border-l-2 border-stone-800 ${color} animate-pulse-slow`}>
+                        <div key={log.id} className={`text-xs font-serif bg-black/60 px-2 py-1 border-l-2 border-stone-800 ${color} animate-pulse-slow relative group`}>
                             <span className="opacity-70 text-[9px] mr-2">[{new Date(log.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}]</span>
                             {log.message}
+                            
+                            {/* CAUSE TOOLTIP - SHOWS WHY IT HAPPENED */}
+                            {log.cause && (
+                                <div className="absolute left-0 -top-6 hidden group-hover:flex bg-black border border-stone-600 text-stone-300 text-[10px] px-2 py-1 items-center gap-1 z-30 whitespace-nowrap">
+                                    <Info size={10} className="text-blue-400" /> Cause: {log.cause}
+                                </div>
+                            )}
                         </div>
                     )
                 })}

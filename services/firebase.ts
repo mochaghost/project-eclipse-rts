@@ -46,14 +46,16 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
             app = initializeApp(activeConfig);
             console.log("[Cloud] Firebase App Instance Created");
         } else {
-            app = getApp(); // Use existing
+            // Use existing app (first one found) instead of named [DEFAULT] lookup
+            app = apps[0]; 
+            console.log("[Cloud] Reusing existing Firebase App instance");
         }
     } catch (e) {
         console.error("[Cloud] CRITICAL: App Init Failed. Your config might be invalid.", e);
         return false;
     }
 
-    // 3. Initialize Services with Fallback Strategy
+    // 3. Initialize Services
     try {
         // Init DB if not ready
         if (app && !db) {
@@ -61,35 +63,24 @@ export const initFirebase = (config: FirebaseConfig = DEFAULT_FIREBASE_CONFIG) =
                 console.warn("[Cloud] Config is missing databaseURL. Cloud Save Disabled.");
                 db = null;
             } else {
-                try {
-                    // Try standard init
-                    db = getDatabase(app, activeConfig.databaseURL);
-                } catch (dbErr) {
-                    console.warn("[Cloud] Standard DB Init failed, attempting fallback to default instance...", dbErr);
-                    // Fallback: This fixes "Service not available" if app instance mismatch occurs in modular builds
-                    db = getDatabase(undefined, activeConfig.databaseURL);
-                }
+                // Directly use the app instance. Removing fragile fallback to global scope.
+                db = getDatabase(app, activeConfig.databaseURL);
                 console.log("[Cloud] Database Service Initialized");
             }
         }
     } catch (e) {
-        console.error("[Cloud] Database Service Failed to Start.", e);
-        db = null; 
+        console.error("[Cloud] Database Service Failed to Start:", e);
+        // Do not set db to null if it was already set, but here it was !db so it remains null/undefined
     }
 
     try {
         if (app && !auth) {
-            try {
-                auth = getAuth(app);
-            } catch (authErr) {
-                console.warn("[Cloud] Standard Auth Init failed, attempting fallback to default instance...", authErr);
-                auth = getAuth();
-            }
+            // Directly use the app instance.
+            auth = getAuth(app);
             console.log("[Cloud] Auth Service Initialized");
         }
     } catch (e) {
-        console.error("[Cloud] Auth Service Failed to Start.", e);
-        auth = null;
+        console.error("[Cloud] Auth Service Failed to Start:", e);
     }
 
     return !!app && (!!db || !!auth);
@@ -132,8 +123,13 @@ export const logout = async () => {
 };
 
 export const subscribeToAuth = (callback: (user: any) => void) => {
-    if (!auth) initFirebase();
-    if (!auth) return () => {};
+    // Ensure init is called at least once
+    if (!app) initFirebase();
+    
+    if (!auth) {
+        // If auth failed to init, we can't subscribe.
+        return () => {};
+    }
     return onAuthStateChanged(auth, callback);
 };
 
@@ -170,11 +166,16 @@ export const subscribeToCloud = (roomId: string, onData: (data: GameState) => vo
     if (!db) return;
 
     if (currentUnsubscribe) {
-        off(ref(db, `timelines/${roomId}`));
+        try {
+            off(ref(db, `timelines/${roomId}`));
+        } catch(e) {
+            console.warn("Failed to unsubscribe previous listener", e);
+        }
     }
 
     const roomRef = ref(db, `timelines/${roomId}`);
     
+    // @ts-ignore
     onValue(roomRef, (snapshot: any) => {
         const data = snapshot.val();
         if (data) {

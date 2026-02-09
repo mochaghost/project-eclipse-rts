@@ -1,8 +1,8 @@
 
 import React, { useMemo, Suspense, useRef, useLayoutEffect, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { MapControls, Stars, Ring, Sparkles, Html, Float, Line } from '@react-three/drei';
-import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
+import { MapControls, Stars, Ring, Sparkles, Html, Float, Line, Cloud, Billboard } from '@react-three/drei';
+import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
 import { useGame } from '../../context/GameContext';
 import { EntityRenderer } from './EntityRenderer';
 import { VisualEffectsRenderer } from './VisualEffects';
@@ -19,7 +19,6 @@ const VegetationSystem = React.memo(() => {
     const grassRef = useRef<THREE.InstancedMesh>(null);
     const rockRef = useRef<THREE.InstancedMesh>(null);
     
-    // REDUCED COUNT FOR STABILITY
     const GRASS_COUNT = 1500; 
     const ROCK_COUNT = 150;
 
@@ -85,7 +84,6 @@ const StaticDecorations = React.memo(({ level }: { level: number }) => {
     
     const decorations = useMemo(() => {
         const items = [];
-        // REDUCED DECORATION COUNT
         for(let i=0; i<50; i++) { 
              const angle = Math.random() * Math.PI * 2;
              const dist = 15 + (Math.random() * 120); 
@@ -127,45 +125,248 @@ const StaticDecorations = React.memo(({ level }: { level: number }) => {
 });
 
 const WeatherSystem = React.memo(({ type }: { type: WeatherType }) => {
-    if (type === 'CLEAR') return <Sparkles count={50} scale={60} size={2} opacity={0.3} color="#fff" />;
-    if (type === 'RAIN') return (
-        <group position={[0, 10, 0]}>
-            <Sparkles count={200} scale={[50, 20, 50]} size={2} speed={5} opacity={0.4} color="#60a5fa" noise={0} />
-            <directionalLight position={[10, 10, 5]} intensity={0.2} color="#60a5fa" />
+    // Subtle realistic particles
+    if (type === 'CLEAR') return (
+        <group>
+            {/* Dust motes */}
+            <Sparkles count={30} scale={40} size={1} opacity={0.2} color="#fff7ed" speed={0.1} />
         </group>
     );
+    
+    if (type === 'RAIN') return (
+        <group position={[0, 15, 0]}>
+            <Sparkles count={400} scale={[40, 20, 40]} size={2} speed={8} opacity={0.3} color="#94a3b8" noise={0} />
+            <Cloud opacity={0.3} speed={0.4} width={20} depth={1.5} segments={20} position={[0, 10, -20]} color="#475569" />
+        </group>
+    );
+    
     if (type === 'ASH_STORM') return (
         <group position={[0, 10, 0]}>
-            <Sparkles count={150} scale={60} size={6} speed={0.5} opacity={0.6} color="#450a0a" noise={1} />
-            <ambientLight intensity={0.5} color="#7f1d1d" />
+            {/* Heavy Ash */}
+            <Sparkles count={300} scale={50} size={4} speed={0.8} opacity={0.7} color="#1c1917" noise={1} />
+            {/* Embers */}
+            <Sparkles count={50} scale={40} size={6} speed={1.2} opacity={0.8} color="#ea580c" noise={2} />
         </group>
     );
-    if (type === 'VOID_MIST') return <Sparkles count={100} scale={40} size={10} speed={0.1} opacity={0.2} color="#a855f7" />;
+    
+    if (type === 'VOID_MIST') return (
+        <group>
+            <Sparkles count={150} scale={40} size={8} speed={0.2} opacity={0.1} color="#a855f7" />
+            <Cloud opacity={0.2} speed={0.1} width={30} depth={5} segments={10} position={[0, 5, 0]} color="#2e1065" />
+        </group>
+    );
+    
     return null;
 });
 
-const GlobalLighting = React.memo(({ isRitual, weather }: { isRitual: boolean, weather: WeatherType }) => {
-    // Memoized to prevent rapid light updates
+// --- REALISTIC ATMOSPHERIC LIGHTING ENGINE ---
+const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: WeatherType }) => {
+    const lightRef = useRef<THREE.DirectionalLight>(null);
+    const sunMeshRef = useRef<THREE.Mesh>(null);
+    
+    // Use refs for values that change every frame to avoid React render cycles
+    const targetValues = useRef({
+        sky: new THREE.Color('#000000'),
+        light: new THREE.Color('#000000'),
+        intensity: 0,
+        pos: new THREE.Vector3(0, 50, 0),
+        fogDensity: 0.01,
+        sunColor: new THREE.Color('#000000'),
+        sunScale: 1
+    });
+
+    const currentValues = useRef({
+        sky: new THREE.Color('#0f172a'),
+        light: new THREE.Color('#fbbf24'),
+        intensity: 1,
+        fogDensity: 0.01,
+        sunColor: new THREE.Color('#fbbf24')
+    });
+
+    // Update Targets based on Time & Weather
+    useFrame((state, delta) => {
+        const now = new Date();
+        const hour = now.getHours() + (now.getMinutes() / 60);
+        
+        // 1. CALCULATE BASE TIME-OF-DAY PALETTE (Realistic Grimdark)
+        let baseSky = '#0f172a';
+        let baseLight = '#fbbf24';
+        let baseIntensity = 1.0;
+        let sunPos = [50, 50, 20];
+        let baseFog = 0.015;
+        let sunColor = '#fbbf24';
+        let sunScale = 1;
+
+        // Night (20:00 - 05:00)
+        if (hour < 5 || hour >= 20) {
+            baseSky = '#020617'; // Deepest Slate
+            baseLight = '#64748b'; // Moon Silver (Cold)
+            baseIntensity = 0.3;
+            sunPos = [20, 60, -20]; // Moon high
+            baseFog = 0.035; // Night fog
+            sunColor = '#e2e8f0'; // Pale moon
+            sunScale = 0.8;
+        }
+        // Dawn (05:00 - 08:00)
+        else if (hour >= 5 && hour < 8) {
+            baseSky = '#451a03'; // Deep Bronze/Brown
+            baseLight = '#fb923c'; // Warm Orange
+            baseIntensity = 0.8;
+            sunPos = [50, 20, 50]; // Low horizon
+            baseFog = 0.025; // Morning mist
+            sunColor = '#ea580c'; // Red sun
+            sunScale = 1.5;
+        }
+        // Morning (08:00 - 11:00)
+        else if (hour >= 8 && hour < 11) {
+            baseSky = '#334155'; // Slate Grey (Transition)
+            baseLight = '#fde68a'; // Pale Yellow
+            baseIntensity = 1.2;
+            sunPos = [30, 40, 30]; 
+            baseFog = 0.015;
+            sunColor = '#fcd34d';
+        }
+        // HIGH NOON (11:00 - 15:00) - THE CRUCIBLE
+        else if (hour >= 11 && hour < 15) {
+            baseSky = '#475569'; // Steel Blue-Grey (Brighter but cold)
+            baseLight = '#fffff0'; // Harsh White/Gold
+            baseIntensity = 2.5; // Blinding intensity
+            sunPos = [10, 80, 10]; // Overhead
+            baseFog = 0.008; // Clear, harsh air
+            sunColor = '#ffffff'; // White hot
+            sunScale = 1.2;
+        }
+        // Afternoon (15:00 - 17:00)
+        else if (hour >= 15 && hour < 17) {
+            baseSky = '#334155'; // Returning to slate
+            baseLight = '#fbbf24'; // Gold returns
+            baseIntensity = 1.5;
+            sunPos = [-10, 50, 10]; 
+            baseFog = 0.012;
+            sunColor = '#fbbf24';
+        }
+        // Dusk (17:00 - 20:00)
+        else if (hour >= 17 && hour < 20) {
+            baseSky = '#271a2e'; // Bruised Purple/Grey
+            baseLight = '#be123c'; // Dying Sun Red
+            baseIntensity = 0.7;
+            sunPos = [-50, 20, 20]; // Setting
+            baseFog = 0.02;
+            sunColor = '#dc2626'; // Blood sun
+            sunScale = 1.8;
+        }
+
+        // 2. APPLY WEATHER MODIFIERS (Physical accuracy approximation)
+        if (weather === 'RAIN') {
+            baseSky = '#1e293b'; // Darker Slate
+            baseLight = '#94a3b8'; // Cold Grey Light
+            baseIntensity *= 0.5; // Sun obscured
+            baseFog = 0.04; // Heavy rain fog
+            sunScale = 0; // Sun hidden
+        }
+        else if (weather === 'ASH_STORM') {
+            baseSky = '#292524'; // Warm Black
+            baseLight = '#ea580c'; // Fire Orange (diffused)
+            baseIntensity *= 0.6;
+            baseFog = 0.055; // Very dense ash
+            sunColor = '#ef4444'; // Red disk through smoke
+            sunScale = 2; // Diffused large sun
+        }
+        else if (weather === 'VOID_MIST') {
+            baseSky = '#2e1065'; // Void Purple
+            baseLight = '#a855f7';
+            baseIntensity *= 0.4;
+            baseFog = 0.08; // Impenetrable
+            sunScale = 0;
+        }
+
+        // 3. RITUAL OVERRIDE
+        if (isRitual) {
+            baseSky = '#2e1065';
+            baseLight = '#d8b4fe';
+            baseIntensity = 0.5;
+            baseFog = 0.06;
+            sunScale = 0;
+        }
+
+        // 4. CLOUD SHADOW SIMULATION (Noise)
+        const cloudNoise = noise(state.clock.elapsedTime * 0.1, 0); // Slow moving clouds
+        const shadowFactor = 0.8 + (cloudNoise * 0.2); // Light varies between 80% and 120%
+        baseIntensity *= shadowFactor;
+
+        // 5. UPDATE TARGETS
+        targetValues.current.sky.set(baseSky);
+        targetValues.current.light.set(baseLight);
+        targetValues.current.intensity = baseIntensity;
+        targetValues.current.pos.set(sunPos[0], sunPos[1], sunPos[2]);
+        targetValues.current.fogDensity = baseFog;
+        targetValues.current.sunColor.set(sunColor);
+        targetValues.current.sunScale = sunScale;
+
+        // 6. LERP CURRENT VALUES (Smooth Transitions)
+        const lerpSpeed = delta * 0.5; // Slow transition for realism
+        currentValues.current.sky.lerp(targetValues.current.sky, lerpSpeed);
+        currentValues.current.light.lerp(targetValues.current.light, lerpSpeed);
+        currentValues.current.intensity = THREE.MathUtils.lerp(currentValues.current.intensity, targetValues.current.intensity, lerpSpeed);
+        currentValues.current.fogDensity = THREE.MathUtils.lerp(currentValues.current.fogDensity, targetValues.current.fogDensity, lerpSpeed);
+        currentValues.current.sunColor.lerp(targetValues.current.sunColor, lerpSpeed);
+
+        // 7. APPLY TO SCENE
+        state.scene.background = currentValues.current.sky;
+        if (state.scene.fog) {
+            // @ts-ignore
+            state.scene.fog.color.copy(currentValues.current.sky);
+            // @ts-ignore
+            state.scene.fog.density = currentValues.current.fogDensity;
+        }
+        if (lightRef.current) {
+            lightRef.current.color.copy(currentValues.current.light);
+            lightRef.current.intensity = currentValues.current.intensity;
+            lightRef.current.position.lerp(targetValues.current.pos, lerpSpeed);
+        }
+        
+        // 8. UPDATE VISIBLE SUN MESH
+        if (sunMeshRef.current && lightRef.current) {
+            // Position the sun mesh far away in the direction of the light
+            const direction = lightRef.current.position.clone().normalize();
+            sunMeshRef.current.position.copy(direction.multiplyScalar(400)); // 400 units away (skybox distance)
+            sunMeshRef.current.lookAt(0,0,0);
+            
+            // @ts-ignore
+            sunMeshRef.current.material.color.copy(currentValues.current.sunColor);
+            
+            // Lerp scale
+            sunMeshRef.current.scale.lerp(new THREE.Vector3(targetValues.current.sunScale, targetValues.current.sunScale, targetValues.current.sunScale).multiplyScalar(20), lerpSpeed);
+        }
+    });
+
     return (
         <>
-            <color attach="background" args={isRitual ? ['#2e1065'] : ['#0f172a']} />
-            <fogExp2 attach="fog" args={[isRitual ? '#2e1065' : '#0f172a', weather === 'VOID_MIST' ? 0.05 : 0.015]} />
+            <fogExp2 attach="fog" args={['#000', 0.01]} /> {/* Initial placeholder, updated by useFrame */}
             <directionalLight 
+                ref={lightRef}
                 position={[50, 50, 20]} 
-                intensity={isRitual ? 0.5 : 1.2} 
                 castShadow 
-                shadow-mapSize={[1024, 1024]} 
-                color={isRitual ? '#a855f7' : '#fbbf24'} 
+                shadow-mapSize={[2048, 2048]} // Higher res shadows for harsh sun
                 shadow-bias={-0.0005} 
             />
-            <ambientLight intensity={0.4} color={isRitual ? '#a855f7' : '#93c5fd'} />
+            {/* Ambient light simulates sky scattering (GI approximation) */}
+            <ambientLight intensity={0.2} color="#475569" /> 
+            
+            {/* Ground Plane receives shadows */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
                 <planeGeometry args={[500, 500]} />
                 <meshStandardMaterial color="#1c1917" roughness={1} metalness={0} />
             </mesh>
+
+            {/* THE SUN/MOON OBJECT */}
+            <mesh ref={sunMeshRef}>
+                <sphereGeometry args={[1, 32, 32]} />
+                <meshBasicMaterial color="#fbbf24" toneMapped={false} />
+            </mesh>
         </>
     );
-});
+};
 
 const PortalRift: React.FC<{ position: Vector3 }> = ({ position }) => {
     const r1 = useRef<THREE.Mesh>(null);
@@ -190,7 +391,6 @@ const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[],
     const links = useMemo(() => {
         const lines: any[] = [];
 
-        // 1. Minion to Commander Links (Subtasks)
         const minions = enemies.filter(e => e.subtaskId);
         minions.forEach(minion => {
             const commander = enemies.find(e => e.taskId === minion.taskId && !e.subtaskId);
@@ -199,12 +399,11 @@ const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[],
                     start: new THREE.Vector3(commander.position.x, 2, commander.position.z),
                     end: new THREE.Vector3(minion.position.x, 1, minion.position.z),
                     key: `minion-${minion.id}`,
-                    color: '#4c1d95' // Purple
+                    color: '#4c1d95' 
                 });
             }
         });
 
-        // 2. Commander to Overlord Links (Task Hierarchy)
         const commanders = enemies.filter(e => !e.subtaskId);
         commanders.forEach(childCmdr => {
             const task = tasks.find(t => t.id === childCmdr.taskId);
@@ -212,10 +411,10 @@ const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[],
                 const parentCmdr = enemies.find(e => e.taskId === task.parentId && !e.subtaskId);
                 if (parentCmdr) {
                     lines.push({
-                        start: new THREE.Vector3(parentCmdr.position.x, 4, parentCmdr.position.z), // Higher up
+                        start: new THREE.Vector3(parentCmdr.position.x, 4, parentCmdr.position.z), 
                         end: new THREE.Vector3(childCmdr.position.x, 2, childCmdr.position.z),
                         key: `overlord-${childCmdr.id}`,
-                        color: '#b91c1c' // Red for Hierarchy
+                        color: '#b91c1c' 
                     });
                 }
             }
@@ -245,7 +444,6 @@ const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[],
 const LoaderFallback = () => <Html center><div className="text-yellow-600 font-serif text-sm animate-pulse">LOADING WORLD...</div></Html>;
 
 // --- ISOLATED GAME WORLD COMPONENT ---
-// This component only re-renders when GAMEPLAY data changes, not UI state.
 const GameWorld = React.memo(({ 
     state, 
     selectEnemy, 
@@ -264,7 +462,6 @@ const GameWorld = React.memo(({
     // CINEMATIC CAMERA CONTROLLER
     useFrame((_, delta) => {
         if (isBattle) {
-            // Smoothly move camera closer to the action center (0, 5, 10) look at (0,0,0)
             const targetPos = new THREE.Vector3(0, 8, 12);
             camera.position.lerp(targetPos, delta * 0.5);
             camera.lookAt(0, 0, 0);
@@ -273,7 +470,7 @@ const GameWorld = React.memo(({
 
     return (
         <>
-            <GlobalLighting isRitual={isRitual} weather={state.weather || 'CLEAR'} />
+            <RealTimeLighting isRitual={isRitual} weather={state.weather || 'CLEAR'} />
             <WeatherSystem type={state.weather || 'CLEAR'} />
             
             <VegetationSystem />
@@ -299,15 +496,14 @@ const GameWorld = React.memo(({
                 equipment={state.heroEquipment} 
             />
 
-            {state.minions?.map(minion => (
+            {(state.minions || []).map(minion => (
                 <EntityRenderer key={minion.id} type={EntityType.MINION} position={[minion.position.x, minion.position.y, minion.position.z]} />
             ))}
 
-            {state.enemies?.map(enemy => {
-                const task = state.tasks.find(t => t.id === enemy.taskId);
+            {(state.enemies || []).map(enemy => {
+                const task = (state.tasks || []).find(t => t.id === enemy.taskId);
                 let startTime = task ? task.startTime : 0;
                 
-                // Handle Subtask Time
                 if (enemy.subtaskId && task && task.subtasks) { 
                     const sub = task.subtasks.find(s => s.id === enemy.subtaskId);
                     if (sub && sub.startTime) startTime = sub.startTime;
@@ -320,7 +516,7 @@ const GameWorld = React.memo(({
                         key={enemy.id}
                         type={EntityType.ENEMY}
                         variant={enemy.priority}
-                        position={[enemy.position.x, enemy.position.y, enemy.position.z]} // Initial pos is passed, but renderer calculates actual pos based on task
+                        position={[enemy.position.x, enemy.position.y, enemy.position.z]} 
                         name={enemy.name}
                         onClick={() => selectEnemy(enemy.id)}
                         isSelected={state.selectedEnemyId === enemy.id}
@@ -328,14 +524,14 @@ const GameWorld = React.memo(({
                         archetype={enemy.race === 'HUMAN' || enemy.race === 'DWARF' ? 'KNIGHT' : 'MONSTER'}
                         race={enemy.race}
                         failed={task?.failed}
-                        task={task} // PASS THE TASK FOR TIME CALCS
+                        task={task} 
                     />
                 );
             })}
             
-            <HierarchyLines enemies={state.enemies} tasks={state.tasks} />
+            <HierarchyLines enemies={state.enemies || []} tasks={state.tasks || []} />
 
-            {state.population?.map((npc, i) => {
+            {(state.population || []).map((npc, i) => {
                 const angle = (i * 137.5) * (Math.PI / 180);
                 const r = 6 + (i % 5); 
                 return (
@@ -355,19 +551,18 @@ const GameWorld = React.memo(({
             <VisualEffectsRenderer />
             <VazarothEffects />
             
-            {/* Disable user controls during Cinematic */}
             <MapControls makeDefault maxPolarAngle={Math.PI / 2.2} enabled={!isBattle} />
 
             {isHighQuality && (
                 <EffectComposer enableNormalPass={false}>
-                    <Bloom luminanceThreshold={1.2} mipmapBlur intensity={0.8} radius={0.4} />
+                    <Bloom luminanceThreshold={1.5} mipmapBlur intensity={0.6} radius={0.4} />
                     <Vignette eskil={false} offset={0.1} darkness={0.5} />
+                    <Noise opacity={0.05} />
                 </EffectComposer>
             )}
         </>
     )
 }, (prev, next) => {
-    // Only re-render if gameplay-affecting state changes
     return (
         prev.state.enemies === next.state.enemies &&
         prev.state.tasks === next.state.tasks &&

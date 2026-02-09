@@ -80,9 +80,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Auto-subscribe if we have a room
                 if (user.uid) {
                     subscribeToCloud(user.uid, (cloudState) => {
-                        if (cloudState.lastSyncTimestamp && (!stateRef.current.lastSyncTimestamp || cloudState.lastSyncTimestamp > stateRef.current.lastSyncTimestamp)) {
-                            console.log("Cloud state is newer, hydrating...");
-                            setState(prev => ({ ...prev, ...cloudState }));
+                        // SANITIZE CLOUD DATA BEFORE MERGING
+                        if (cloudState && typeof cloudState === 'object') {
+                            const sanitizedCloud = {
+                                ...cloudState,
+                                tasks: Array.isArray(cloudState.tasks) ? cloudState.tasks : [],
+                                enemies: Array.isArray(cloudState.enemies) ? cloudState.enemies : [],
+                                population: Array.isArray(cloudState.population) ? cloudState.population : []
+                            };
+
+                            if (sanitizedCloud.lastSyncTimestamp && (!stateRef.current.lastSyncTimestamp || sanitizedCloud.lastSyncTimestamp > stateRef.current.lastSyncTimestamp)) {
+                                console.log("Cloud state is newer, hydrating...");
+                                setState(prev => ({ ...prev, ...sanitizedCloud }));
+                            }
                         }
                     });
                 }
@@ -103,10 +113,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const now = Date.now();
             
             setState(current => {
+                // FAILSAFE: If state is corrupt, prevent crash
+                if (!current || !Array.isArray(current.tasks) || !Array.isArray(current.enemies)) {
+                    console.error("State corrupted in loop. Restoring default.");
+                    return loadGame();
+                }
+
                 let updated = { ...current };
                 let historyUpdate: HistoryLog[] = [];
                 let alertUpdate: Partial<GameState> = {};
-                let effectsUpdate: VisualEffect[] = [...current.effects];
+                let effectsUpdate: VisualEffect[] = [...(current.effects || [])];
                 let enemiesUpdate = [...current.enemies];
                 let tasksUpdate = [...current.tasks];
 
@@ -166,7 +182,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     updated.mana = Math.min(updated.maxMana, updated.mana + 0.5);
                 }
 
-                // 4. SAGE INTERVENTION (Vision Ritual) - From Snippet
+                // 4. SAGE INTERVENTION (Vision Ritual)
                 if (current.activeMapEvent === 'NONE' && current.activeAlert === AlertType.NONE && !current.isGrimoireOpen && !alertUpdate?.activeMapEvent) {
                      const impendingTask = current.tasks.find(t => t.priority === TaskPriority.HIGH && !t.completed && !t.failed && t.startTime > now && (t.startTime - now) < 15 * 60 * 1000);
                      let triggerVision = false;

@@ -1,7 +1,7 @@
 
 import React, { Suspense } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Sword, Ghost, Scroll, Skull, Flag } from 'lucide-react';
+import { X, Sword, Ghost, Scroll, Skull, Flag, Info } from 'lucide-react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, ContactShadows } from '@react-three/drei';
 import { EnemyMesh } from '../3d/Assets';
@@ -51,6 +51,14 @@ export const EnemyProfile: React.FC = () => {
             </div>
 
             <p className="text-xs text-stone-400 italic border-l-2 border-red-900 pl-2">"{enemy.lore}"</p>
+
+            {/* ORIGIN / CAUSE DISPLAY */}
+            {enemy.origin && (
+                <div className="bg-blue-950/20 border border-blue-900/50 p-2 flex items-center gap-2 text-[10px] text-blue-300">
+                    <Info size={12} className="shrink-0" />
+                    <span><strong>Origin:</strong> {enemy.origin}</span>
+                </div>
+            )}
 
             <div className="bg-black/30 p-2 border border-stone-800 rounded">
                  <div className="text-[10px] text-stone-500 uppercase font-bold mb-1">Objective</div>
