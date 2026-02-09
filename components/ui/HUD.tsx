@@ -13,8 +13,8 @@ const CycleHUD = () => {
     // Calculate attacker based on logic (replicated from Context for UI)
     const sortedFactions = [...state.factions].sort((a, b) => a.reputation - b.reputation);
     const primaryEnemy = sortedFactions[0];
-    const attackerId = primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH';
-    const attackerDef = FACTIONS[attackerId];
+    const attackerId = primaryEnemy && primaryEnemy.reputation < 0 ? primaryEnemy.id : 'VAZAROTH';
+    const attackerDef = FACTIONS[attackerId] || FACTIONS['VAZAROTH']; // Safe fallback
 
     // Stats
     const activeEnemies = state.enemies.filter(e => {
@@ -22,7 +22,7 @@ const CycleHUD = () => {
         return task && !task.completed && !task.failed;
     });
     
-    let threat = 50 + activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0) + (Math.abs(Math.min(0, primaryEnemy.reputation)) * 2);
+    let threat = 50 + activeEnemies.reduce((acc, e) => acc + (e.rank * 10), 0) + (Math.abs(Math.min(0, primaryEnemy?.reputation || 0)) * 2);
     
     // Defense breakdown from cached stats
     const defense = state.defenseStats?.total || 0;

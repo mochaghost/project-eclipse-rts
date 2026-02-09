@@ -31,7 +31,8 @@ export const DiplomacyMap: React.FC = () => {
                     </div>
                     <div className="flex-1 overflow-y-auto p-2">
                         {factionList.map(f => {
-                             const def = FACTIONS[f.id];
+                             // SAFE GUARD: If faction ID changes or is invalid, fallback to avoid crash
+                             const def = FACTIONS[f.id] || { color: '#666', name: 'Unknown', desc: 'Unknown Faction' };
                              const isSelected = selectedFaction === f.id;
                              return (
                                  <div 
