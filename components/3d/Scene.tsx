@@ -136,6 +136,7 @@ const WeatherSystem = React.memo(({ type }: { type: WeatherType }) => {
     if (type === 'RAIN') return (
         <group position={[0, 15, 0]}>
             <Sparkles count={400} scale={[40, 20, 40]} size={2} speed={8} opacity={0.3} color="#94a3b8" noise={0} />
+            {/* @ts-ignore */}
             <Cloud opacity={0.3} speed={0.4} width={20} depth={1.5} segments={20} position={[0, 10, -20]} color="#475569" />
         </group>
     );
@@ -152,6 +153,7 @@ const WeatherSystem = React.memo(({ type }: { type: WeatherType }) => {
     if (type === 'VOID_MIST') return (
         <group>
             <Sparkles count={150} scale={40} size={8} speed={0.2} opacity={0.1} color="#a855f7" />
+            {/* @ts-ignore */}
             <Cloud opacity={0.2} speed={0.1} width={30} depth={5} segments={10} position={[0, 5, 0]} color="#2e1065" />
         </group>
     );
