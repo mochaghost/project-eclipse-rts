@@ -132,7 +132,13 @@ export const loadGame = (): GameState => {
             enemies: Array.isArray(loadedState.enemies) ? loadedState.enemies : [],
             minions: Array.isArray(loadedState.minions) ? loadedState.minions : [],
             history: Array.isArray(loadedState.history) ? loadedState.history : [],
-            population: Array.isArray(loadedState.population) ? loadedState.population : [],
+            // Ensure NPCs have valid arrays to prevent 'undefined.find' crashes in worldSim
+            population: Array.isArray(loadedState.population) ? loadedState.population.map((p: any) => ({
+                ...p,
+                relationships: Array.isArray(p.relationships) ? p.relationships : [],
+                memories: Array.isArray(p.memories) ? p.memories : [],
+                traits: Array.isArray(p.traits) ? p.traits : []
+            })) : [],
             realmStats: loadedState.realmStats || DEFAULT_STATE.realmStats,
             structures: loadedState.structures || DEFAULT_STATE.structures,
             factions: Array.isArray(loadedState.factions) ? loadedState.factions : DEFAULT_STATE.factions,

@@ -278,7 +278,7 @@ const propagateEmotion = (npcs: NPC[], sourceId: string, emotion: 'FEAR' | 'ANGE
         if (n.id === sourceId || n.status !== 'ALIVE') return n;
         
         // Find if they know the source or are nearby (simulated by index proximity in array for now)
-        const isFriend = n.relationships.some(r => r.targetId === sourceId && r.score > 20);
+        const isFriend = (n.relationships || []).some(r => r.targetId === sourceId && r.score > 20);
         // Random chance represents "physical proximity" in abstract simulation
         const isNearby = Math.random() > 0.8; 
 
@@ -439,6 +439,10 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
+        // Sanitize: Ensure arrays exist
+        if (!newNpc.relationships) newNpc.relationships = [];
+        if (!newNpc.memories) newNpc.memories = [];
+        if (!newNpc.traits) newNpc.traits = [];
         if (!newNpc.psych) newNpc.psych = generatePsychProfile(newNpc.race, newNpc.role);
 
         // --- UPKEEP (Food/Tax) ---
@@ -527,6 +531,7 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         if (Math.random() > 0.90 && pop.length > 1) {
             const target = pop[Math.floor(Math.random() * pop.length)];
             if (target.id !== newNpc.id) {
+                // Safe check logic
                 let rel = newNpc.relationships.find(r => r.targetId === target.id);
                 if (!rel) {
                     rel = { targetId: target.id, type: 'FRIEND', score: 0, lastInteraction: Date.now() };
