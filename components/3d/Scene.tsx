@@ -144,10 +144,11 @@ const WeatherSystem = React.memo(({ type }: { type: WeatherType }) => {
     return null;
 });
 
-// --- ENHANCED LIGHTING ENGINE ---
+// --- ENHANCED LIGHTING ENGINE (FIXED FOG) ---
 const RealTimeLighting = ({ isRitual, weather, structures }: { isRitual: boolean, weather: WeatherType, structures: Structures }) => {
     const lightRef = useRef<THREE.DirectionalLight>(null);
     const sunMeshRef = useRef<THREE.Mesh>(null);
+    const fogRef = useRef<THREE.Fog>(null);
     
     // Artificial light level from player upgrades (0, 1, 2, 3...)
     const artificialLightLevel = structures?.lightingLevel || 0;
@@ -156,8 +157,9 @@ const RealTimeLighting = ({ isRitual, weather, structures }: { isRitual: boolean
         sky: new THREE.Color('#0f172a'),
         light: new THREE.Color('#fbbf24'),
         intensity: 1,
-        ambient: 0.2, // Base ambient logic
-        fogDensity: 0.01,
+        ambient: 0.3, 
+        fogNear: 50,
+        fogFar: 100,
         sunColor: new THREE.Color('#fbbf24')
     });
 
@@ -169,41 +171,56 @@ const RealTimeLighting = ({ isRitual, weather, structures }: { isRitual: boolean
         let baseLight = '#fbbf24';
         let baseIntensity = 1.0;
         let sunPos = [50, 50, 20];
-        let baseFog = 0.015;
+        
+        // Linear Fog settings - Start further out to keep game area clear
+        let fogNear = 60; 
+        let fogFar = 120;
+        
         let sunColor = '#fbbf24';
         let sunScale = 1;
-        let baseAmbient = 0.4; // Significantly raised base floor so nothing is ever invisible
+        let baseAmbient = 0.5; // High ambient floor for visibility
 
         // --- TIME OF DAY LOGIC ---
         if (hour < 5 || hour >= 20) { // NIGHT
             baseSky = '#050208'; 
             baseLight = '#64748b'; 
-            // If user has bought lights, night is BRIGHTER near base
             const lightBonus = artificialLightLevel * 0.2; 
-            baseIntensity = 0.3 + lightBonus; 
-            baseAmbient = 0.2 + (artificialLightLevel * 0.1); 
-            
+            baseIntensity = 0.4 + lightBonus; 
+            baseAmbient = 0.3 + (artificialLightLevel * 0.1); 
             sunPos = [20, 60, -20]; 
-            baseFog = 0.025; 
             sunColor = '#e2e8f0'; 
             sunScale = 0.8;
+            // Night fog is closer but still allows viewing enemies
+            fogNear = 50;
+            fogFar = 100;
         }
         else if (hour >= 5 && hour < 8) { // DAWN
-            baseSky = '#451a03'; baseLight = '#fb923c'; baseIntensity = 1.2; sunPos = [50, 20, 50]; baseFog = 0.02; sunColor = '#ea580c'; sunScale = 1.5; baseAmbient = 0.5;
+            baseSky = '#451a03'; baseLight = '#fb923c'; baseIntensity = 1.5; sunPos = [50, 20, 50]; sunColor = '#ea580c'; sunScale = 1.5; baseAmbient = 0.6;
         }
         else if (hour >= 8 && hour < 17) { // DAY
-            baseSky = '#475569'; baseLight = '#fffff0'; baseIntensity = 2.0; sunPos = [10, 80, 10]; baseFog = 0.005; sunColor = '#ffffff'; sunScale = 1.2; baseAmbient = 0.7;
+            baseSky = '#475569'; baseLight = '#fffff0'; baseIntensity = 2.5; sunPos = [10, 80, 10]; sunColor = '#ffffff'; sunScale = 1.2; baseAmbient = 0.7;
+            fogNear = 80;
+            fogFar = 160;
         }
         else if (hour >= 17 && hour < 20) { // DUSK
-            baseSky = '#271a2e'; baseLight = '#be123c'; baseIntensity = 1.0; sunPos = [-50, 20, 20]; baseFog = 0.02; sunColor = '#dc2626'; sunScale = 1.8; baseAmbient = 0.5;
+            baseSky = '#271a2e'; baseLight = '#be123c'; baseIntensity = 1.2; sunPos = [-50, 20, 20]; sunColor = '#dc2626'; sunScale = 1.8; baseAmbient = 0.6;
         }
 
         // Apply Weather
-        if (weather === 'RAIN') { baseSky = '#1e293b'; baseIntensity *= 0.6; baseFog = 0.04; sunScale = 0; }
-        if (weather === 'ASH_STORM') { baseSky = '#292524'; baseIntensity *= 0.6; baseFog = 0.05; sunColor = '#ef4444'; sunScale = 2; }
-        if (weather === 'VOID_MIST') { baseSky = '#2e1065'; baseIntensity *= 0.4; baseFog = 0.08; sunScale = 0; }
+        if (weather === 'RAIN') { 
+            baseSky = '#1e293b'; baseIntensity *= 0.6; sunScale = 0; 
+            fogNear = 40; fogFar = 90; // Rain reduces visibility but not blindly
+        }
+        if (weather === 'ASH_STORM') { 
+            baseSky = '#292524'; baseIntensity *= 0.6; sunColor = '#ef4444'; sunScale = 2; 
+            fogNear = 30; fogFar = 80; // Storm is dense
+        }
+        if (weather === 'VOID_MIST') { 
+            baseSky = '#2e1065'; baseIntensity *= 0.4; sunScale = 0; 
+            fogNear = 20; fogFar = 60; // Void mist is the only true blinder
+        }
 
-        if (isRitual) { baseSky = '#2e1065'; baseLight = '#d8b4fe'; baseIntensity = 0.5; baseFog = 0.06; sunScale = 0; }
+        if (isRitual) { baseSky = '#2e1065'; baseLight = '#d8b4fe'; baseIntensity = 0.5; sunScale = 0; fogNear = 40; fogFar = 80; }
 
         // Lerp Values
         const lerpSpeed = delta * 0.5;
@@ -211,13 +228,20 @@ const RealTimeLighting = ({ isRitual, weather, structures }: { isRitual: boolean
         currentValues.current.light.lerp(new THREE.Color(baseLight), lerpSpeed);
         currentValues.current.intensity = THREE.MathUtils.lerp(currentValues.current.intensity, baseIntensity, lerpSpeed);
         currentValues.current.ambient = THREE.MathUtils.lerp(currentValues.current.ambient, baseAmbient, lerpSpeed);
-        currentValues.current.fogDensity = THREE.MathUtils.lerp(currentValues.current.fogDensity, baseFog, lerpSpeed);
         currentValues.current.sunColor.lerp(new THREE.Color(sunColor), lerpSpeed);
+        currentValues.current.fogNear = THREE.MathUtils.lerp(currentValues.current.fogNear, fogNear, lerpSpeed);
+        currentValues.current.fogFar = THREE.MathUtils.lerp(currentValues.current.fogFar, fogFar, lerpSpeed);
 
         // Apply
         state.scene.background = currentValues.current.sky;
-        // @ts-ignore
-        if (state.scene.fog) { state.scene.fog.color.copy(currentValues.current.sky); state.scene.fog.density = currentValues.current.fogDensity; }
+        
+        // Update Fog
+        if (fogRef.current) {
+            fogRef.current.color.copy(currentValues.current.sky);
+            fogRef.current.near = currentValues.current.fogNear;
+            fogRef.current.far = currentValues.current.fogFar;
+        }
+
         if (lightRef.current) {
             lightRef.current.color.copy(currentValues.current.light);
             lightRef.current.intensity = currentValues.current.intensity;
@@ -233,16 +257,17 @@ const RealTimeLighting = ({ isRitual, weather, structures }: { isRitual: boolean
 
     return (
         <>
-            <fogExp2 attach="fog" args={['#000', 0.01]} />
+            {/* USE LINEAR FOG FOR CONTROLLED VISIBILITY */}
+            <fog ref={fogRef} attach="fog" args={['#000', 50, 100]} />
             
             {/* Main Sun/Moon */}
             <directionalLight ref={lightRef} position={[50, 50, 20]} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0005} />
             
             {/* Hemisphere Light ensures nothing is ever completely black (Ground reflection) */}
-            <hemisphereLight args={['#ffffff', '#222222', 0.4]} />
+            <hemisphereLight args={['#ffffff', '#222222', 0.5]} />
             
             {/* Dynamic Ambient Light based on time of day */}
-            <ambientLight intensity={0.4} color="#a1a1aa" /> 
+            <ambientLight intensity={0.5} color="#a1a1aa" /> 
 
             {/* Visual Sun */}
             <mesh ref={sunMeshRef}>

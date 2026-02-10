@@ -1,4 +1,3 @@
-
 import React, { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -7,7 +6,7 @@ import { HeroAvatar, BaseComplex, EnemyMesh, VillagerAvatar, MinionMesh, ForestS
 
 interface EntityRendererProps {
   type: EntityType;
-  variant?: Era | TaskPriority | NPC['role'] | string; 
+  variant?: Era | TaskPriority | NPC['role'] | string | number;
   position: [number, number, number];
   name?: string;
   isDamaged?: boolean;
@@ -145,7 +144,7 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
   const content = useMemo(() => {
     switch (type) {
       case EntityType.HERO:
-        return <HeroAvatar level={variant === Era.RUIN ? 0 : 3} winStreak={winStreak || 0} equipment={equipment} />;
+        return <HeroAvatar level={typeof variant === 'number' ? variant : 1} equipment={equipment} />;
       case EntityType.BUILDING_BASE:
         return <BaseComplex era={variant as Era} currentHp={stats?.hp || 100} maxHp={stats?.maxHp || 100} structures={structures} />;
       case EntityType.ENEMY:
