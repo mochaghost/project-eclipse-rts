@@ -45,7 +45,7 @@ const DEFAULT_STATE: GameState = {
   visionQueue: [],
   population: [],
   realmStats: { hope: 50, fear: 10, order: 50 },
-  structures: { forgeLevel: 0, wallsLevel: 0, libraryLevel: 0, marketLevel: 0 },
+  structures: { forgeLevel: 0, wallsLevel: 0, libraryLevel: 0, marketLevel: 0, lightingLevel: 0 },
   factions: [
       { id: 'SOL', name: 'Kingdom of Sol', reputation: 0, status: 'NEUTRAL' },
       { id: 'VAZAROTH', name: 'Empire of Vazaroth', reputation: -50, status: 'HOSTILE' },
@@ -140,7 +140,7 @@ export const loadGame = (): GameState => {
                 traits: Array.isArray(p.traits) ? p.traits : []
             })) : [],
             realmStats: loadedState.realmStats || DEFAULT_STATE.realmStats,
-            structures: loadedState.structures || DEFAULT_STATE.structures,
+            structures: { ...DEFAULT_STATE.structures, ...(loadedState.structures || {}) },
             factions: Array.isArray(loadedState.factions) ? loadedState.factions : DEFAULT_STATE.factions,
             heroEquipment: loadedState.heroEquipment || DEFAULT_STATE.heroEquipment,
             nemesisGraveyard: Array.isArray(loadedState.nemesisGraveyard) ? loadedState.nemesisGraveyard : [],

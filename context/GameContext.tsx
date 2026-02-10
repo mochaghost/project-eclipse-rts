@@ -23,15 +23,24 @@ export const SHOP_ITEMS: ShopItem[] = [
     { id: 'POTION_HP', name: "Elixir of Vitality", description: "Restores 50 HP to Hero.", cost: 40, type: 'HEAL_HERO', value: 50, tier: 0 },
     { id: 'POTION_BASE', name: "Mason's Brew", description: "Repairs 30 HP to Citadel Walls.", cost: 60, type: 'HEAL_BASE', value: 30, tier: 0 },
     { id: 'MERCENARY', name: "Void Mercenary", description: "Hires a guard for 1 day.", cost: 100, type: 'MERCENARY', value: 1, tier: 0 },
-    { id: 'FORGE_1', name: "Iron Forge", description: "Unlock basic weapon upgrades.", cost: 200, type: 'UPGRADE_FORGE', value: 1, tier: 1 },
-    { id: 'FORGE_2', name: "Titan Smelter", description: "Unlock advanced weaponry.", cost: 500, type: 'UPGRADE_FORGE', value: 1, tier: 2 },
-    { id: 'FORGE_3', name: "Star Core", description: "Forge god-tier equipment.", cost: 1200, type: 'UPGRADE_FORGE', value: 1, tier: 3 },
+    
+    // STRUCTURES - INFINITE PROGRESSION ENABLED
+    { id: 'FORGE_1', name: "Expand Forge", description: "Increase Forge size and output.", cost: 200, type: 'UPGRADE_FORGE', value: 1, tier: 1 },
+    { id: 'FORGE_2', name: "Titan Smelter", description: "Unlock advanced heavy machinery.", cost: 500, type: 'UPGRADE_FORGE', value: 1, tier: 2 },
+    { id: 'FORGE_3', name: "Star Core Reactor", description: "Harness stellar energy.", cost: 1200, type: 'UPGRADE_FORGE', value: 1, tier: 3 },
+    
     { id: 'WALLS_1', name: "Reinforced Walls", description: "Increase Max Base HP by 50.", cost: 150, type: 'UPGRADE_WALLS', value: 1, tier: 1 },
     { id: 'WALLS_2', name: "Rune Wards", description: "Increase Max Base HP by 150.", cost: 400, type: 'UPGRADE_WALLS', value: 1, tier: 2 },
-    { id: 'WALLS_3', name: "Void Shield", description: "Increase Max Base HP by 500.", cost: 1000, type: 'UPGRADE_WALLS', value: 1, tier: 3 },
-    { id: 'LIB_1', name: "Arcane Library", description: "Gain +10% XP from tasks.", cost: 300, type: 'UPGRADE_LIBRARY', value: 1, tier: 1 },
+    { id: 'WALLS_3', name: "Void Shielding", description: "Increase Max Base HP by 500.", cost: 1000, type: 'UPGRADE_WALLS', value: 1, tier: 3 },
+    
+    { id: 'LIB_1', name: "Expand Library", description: "Gain +10% XP from tasks.", cost: 300, type: 'UPGRADE_LIBRARY', value: 1, tier: 1 },
     { id: 'LIB_2', name: "Oracle Spire", description: "Gain +25% XP from tasks.", cost: 800, type: 'UPGRADE_LIBRARY', value: 1, tier: 2 },
     { id: 'LIB_3', name: "Akashic Record", description: "Gain +50% XP from tasks.", cost: 2000, type: 'UPGRADE_LIBRARY', value: 1, tier: 3 },
+
+    // NEW: LIGHTING SYSTEM
+    { id: 'LIGHT_1', name: "Street Torches", description: "Basic fire illumination.", cost: 100, type: 'UPGRADE_LIGHTS', value: 1, tier: 1 },
+    { id: 'LIGHT_2', name: "Magitech Lamps", description: "Crystal-powered streetlights.", cost: 400, type: 'UPGRADE_LIGHTS', value: 1, tier: 2 },
+    { id: 'LIGHT_3', name: "Abyssal Beacons", description: "Lights that pierce the Void.", cost: 1000, type: 'UPGRADE_LIGHTS', value: 1, tier: 3 },
 ];
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -551,14 +560,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                  next.minions.push({ id: generateId(), type: 'WARRIOR', position: {x: 2, y:0, z:2}, createdAt: Date.now(), targetEnemyId: null });
             }
             if (item.type.startsWith('UPGRADE_')) {
-                // Structure upgrades
-                if (item.type === 'UPGRADE_FORGE') next.structures.forgeLevel = Math.min(3, next.structures.forgeLevel + 1);
+                // Structure upgrades - Infinite Scaling (No Max Level Cap)
+                if (item.type === 'UPGRADE_FORGE') next.structures.forgeLevel += 1;
                 if (item.type === 'UPGRADE_WALLS') {
-                    next.structures.wallsLevel = Math.min(3, next.structures.wallsLevel + 1);
+                    next.structures.wallsLevel += 1;
                     next.maxBaseHp += item.value;
                     next.baseHp += item.value;
                 }
-                if (item.type === 'UPGRADE_LIBRARY') next.structures.libraryLevel = Math.min(3, next.structures.libraryLevel + 1);
+                if (item.type === 'UPGRADE_LIBRARY') next.structures.libraryLevel += 1;
+                if (item.type === 'UPGRADE_LIGHTS') next.structures.lightingLevel = (next.structures.lightingLevel || 0) + 1;
             }
 
             next.history = [{ id: generateId(), type: 'TRADE', timestamp: Date.now(), message: `Purchased ${item.name}`, details: `-${item.cost}g` } as HistoryLog, ...next.history];

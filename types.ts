@@ -149,7 +149,7 @@ export interface ShopItem {
     name: string;
     description: string;
     cost: number;
-    type: 'HEAL_HERO' | 'HEAL_BASE' | 'MERCENARY' | 'UPGRADE_FORGE' | 'UPGRADE_WALLS' | 'UPGRADE_LIBRARY' | 'BUY_TIME';
+    type: 'HEAL_HERO' | 'HEAL_BASE' | 'MERCENARY' | 'UPGRADE_FORGE' | 'UPGRADE_WALLS' | 'UPGRADE_LIBRARY' | 'UPGRADE_LIGHTS' | 'BUY_TIME';
     value: number; 
     tier?: number; // 1, 2, 3
 }
@@ -207,10 +207,11 @@ export interface FactionReputation {
 }
 
 export interface Structures {
-    forgeLevel: number; // Affects Hero Damage. 0-3
-    wallsLevel: number; // Affects Base HP Max. 0-3
-    libraryLevel: number; // Affects XP Gain. 0-3
-    marketLevel: number; // Affects Gold Gain. 0-3
+    forgeLevel: number; // Affects Hero Damage. Infinite
+    wallsLevel: number; // Affects Base HP Max. Infinite
+    libraryLevel: number; // Affects XP Gain. Infinite
+    marketLevel: number; // Affects Gold Gain. Infinite
+    lightingLevel: number; // Affects Aesthetic/Hope. Infinite
 }
 
 export interface Item {
