@@ -164,7 +164,7 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
     const lightRef = useRef<THREE.DirectionalLight>(null);
     const sunMeshRef = useRef<THREE.Mesh>(null);
     
-    // Use refs for values that change every frame to avoid React render cycles
+    // Refs for smooth transitions
     const targetValues = useRef({
         sky: new THREE.Color('#000000'),
         light: new THREE.Color('#000000'),
@@ -183,12 +183,10 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
         sunColor: new THREE.Color('#fbbf24')
     });
 
-    // Update Targets based on Time & Weather
     useFrame((state, delta) => {
         const now = new Date();
         const hour = now.getHours() + (now.getMinutes() / 60);
         
-        // 1. CALCULATE BASE TIME-OF-DAY PALETTE (Realistic Grimdark)
         let baseSky = '#0f172a';
         let baseLight = '#fbbf24';
         let baseIntensity = 1.0;
@@ -197,34 +195,37 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
         let sunColor = '#fbbf24';
         let sunScale = 1;
 
-        // Night (20:00 - 05:00)
+        // --- TIME OF DAY LOGIC (REFACTORED FOR HIGH CONTRAST) ---
+
+        // NIGHT (20:00 - 05:00)
         if (hour < 5 || hour >= 20) {
             baseSky = '#020617'; // Deepest Slate
-            baseLight = '#64748b'; // Moon Silver (Cold)
-            baseIntensity = 0.3;
+            baseLight = '#64748b'; // Moon Silver
+            baseIntensity = 0.3; // Very Dark
             sunPos = [20, 60, -20]; // Moon high
-            baseFog = 0.035; // Night fog
+            baseFog = 0.035; // Dense night fog
             sunColor = '#e2e8f0'; // Pale moon
             sunScale = 0.8;
         }
-        // Dawn (05:00 - 08:00)
+        // DAWN (05:00 - 08:00)
         else if (hour >= 5 && hour < 8) {
             baseSky = '#451a03'; // Deep Bronze/Brown
             baseLight = '#fb923c'; // Warm Orange
             baseIntensity = 0.8;
             sunPos = [50, 20, 50]; // Low horizon
-            baseFog = 0.025; // Morning mist
+            baseFog = 0.025;
             sunColor = '#ea580c'; // Red sun
             sunScale = 1.5;
         }
-        // Morning (08:00 - 11:00)
+        // MORNING (08:00 - 11:00) - FIX: Needs to be much brighter than night
         else if (hour >= 8 && hour < 11) {
             baseSky = '#334155'; // Slate Grey (Transition)
-            baseLight = '#fde68a'; // Pale Yellow
-            baseIntensity = 1.2;
-            sunPos = [30, 40, 30]; 
-            baseFog = 0.015;
-            sunColor = '#fcd34d';
+            baseLight = '#fde68a'; // Pale Yellow (Sunlight)
+            baseIntensity = 1.8; // High Intensity for 10 AM
+            sunPos = [30, 60, 30]; 
+            baseFog = 0.01; // Clearer air
+            sunColor = '#fcd34d'; // Bright Sun
+            sunScale = 1.1;
         }
         // HIGH NOON (11:00 - 15:00) - THE CRUCIBLE
         else if (hour >= 11 && hour < 15) {
@@ -232,51 +233,51 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
             baseLight = '#fffff0'; // Harsh White/Gold
             baseIntensity = 2.5; // Blinding intensity
             sunPos = [10, 80, 10]; // Overhead
-            baseFog = 0.008; // Clear, harsh air
+            baseFog = 0.005; // Very Clear, harsh air
             sunColor = '#ffffff'; // White hot
             sunScale = 1.2;
         }
-        // Afternoon (15:00 - 17:00)
+        // AFTERNOON (15:00 - 17:00)
         else if (hour >= 15 && hour < 17) {
             baseSky = '#334155'; // Returning to slate
             baseLight = '#fbbf24'; // Gold returns
-            baseIntensity = 1.5;
+            baseIntensity = 1.6;
             sunPos = [-10, 50, 10]; 
             baseFog = 0.012;
             sunColor = '#fbbf24';
         }
-        // Dusk (17:00 - 20:00)
+        // DUSK (17:00 - 20:00)
         else if (hour >= 17 && hour < 20) {
             baseSky = '#271a2e'; // Bruised Purple/Grey
             baseLight = '#be123c'; // Dying Sun Red
             baseIntensity = 0.7;
             sunPos = [-50, 20, 20]; // Setting
-            baseFog = 0.02;
+            baseFog = 0.025;
             sunColor = '#dc2626'; // Blood sun
             sunScale = 1.8;
         }
 
-        // 2. APPLY WEATHER MODIFIERS (Physical accuracy approximation)
+        // 2. APPLY WEATHER MODIFIERS
         if (weather === 'RAIN') {
-            baseSky = '#1e293b'; // Darker Slate
-            baseLight = '#94a3b8'; // Cold Grey Light
-            baseIntensity *= 0.5; // Sun obscured
-            baseFog = 0.04; // Heavy rain fog
-            sunScale = 0; // Sun hidden
+            baseSky = '#1e293b'; 
+            baseLight = '#94a3b8'; 
+            baseIntensity *= 0.5; 
+            baseFog = 0.04; 
+            sunScale = 0; 
         }
         else if (weather === 'ASH_STORM') {
-            baseSky = '#292524'; // Warm Black
-            baseLight = '#ea580c'; // Fire Orange (diffused)
+            baseSky = '#292524'; 
+            baseLight = '#ea580c'; 
             baseIntensity *= 0.6;
-            baseFog = 0.055; // Very dense ash
-            sunColor = '#ef4444'; // Red disk through smoke
-            sunScale = 2; // Diffused large sun
+            baseFog = 0.055; 
+            sunColor = '#ef4444'; 
+            sunScale = 2; 
         }
         else if (weather === 'VOID_MIST') {
-            baseSky = '#2e1065'; // Void Purple
+            baseSky = '#2e1065'; 
             baseLight = '#a855f7';
             baseIntensity *= 0.4;
-            baseFog = 0.08; // Impenetrable
+            baseFog = 0.08; 
             sunScale = 0;
         }
 
@@ -289,9 +290,9 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
             sunScale = 0;
         }
 
-        // 4. CLOUD SHADOW SIMULATION (Noise)
-        const cloudNoise = noise(state.clock.elapsedTime * 0.1, 0); // Slow moving clouds
-        const shadowFactor = 0.8 + (cloudNoise * 0.2); // Light varies between 80% and 120%
+        // 4. CLOUD SHADOW SIMULATION
+        const cloudNoise = noise(state.clock.elapsedTime * 0.1, 0); 
+        const shadowFactor = 0.8 + (cloudNoise * 0.2); 
         baseIntensity *= shadowFactor;
 
         // 5. UPDATE TARGETS
@@ -303,8 +304,8 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
         targetValues.current.sunColor.set(sunColor);
         targetValues.current.sunScale = sunScale;
 
-        // 6. LERP CURRENT VALUES (Smooth Transitions)
-        const lerpSpeed = delta * 0.5; // Slow transition for realism
+        // 6. LERP CURRENT VALUES
+        const lerpSpeed = delta * 0.5; 
         currentValues.current.sky.lerp(targetValues.current.sky, lerpSpeed);
         currentValues.current.light.lerp(targetValues.current.light, lerpSpeed);
         currentValues.current.intensity = THREE.MathUtils.lerp(currentValues.current.intensity, targetValues.current.intensity, lerpSpeed);
@@ -327,39 +328,34 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
         
         // 8. UPDATE VISIBLE SUN MESH
         if (sunMeshRef.current && lightRef.current) {
-            // Position the sun mesh far away in the direction of the light
             const direction = lightRef.current.position.clone().normalize();
-            sunMeshRef.current.position.copy(direction.multiplyScalar(400)); // 400 units away (skybox distance)
+            sunMeshRef.current.position.copy(direction.multiplyScalar(400)); 
             sunMeshRef.current.lookAt(0,0,0);
-            
             // @ts-ignore
             sunMeshRef.current.material.color.copy(currentValues.current.sunColor);
-            
-            // Lerp scale
             sunMeshRef.current.scale.lerp(new THREE.Vector3(targetValues.current.sunScale, targetValues.current.sunScale, targetValues.current.sunScale).multiplyScalar(20), lerpSpeed);
         }
     });
 
     return (
         <>
-            <fogExp2 attach="fog" args={['#000', 0.01]} /> {/* Initial placeholder, updated by useFrame */}
+            <fogExp2 attach="fog" args={['#000', 0.01]} />
             <directionalLight 
                 ref={lightRef}
                 position={[50, 50, 20]} 
                 castShadow 
-                shadow-mapSize={[2048, 2048]} // Higher res shadows for harsh sun
+                shadow-mapSize={[2048, 2048]} 
                 shadow-bias={-0.0005} 
             />
-            {/* Ambient light simulates sky scattering (GI approximation) */}
+            {/* Ambient light simulates sky scattering */}
             <ambientLight intensity={0.2} color="#475569" /> 
             
-            {/* Ground Plane receives shadows */}
+            {/* Ground Plane */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
                 <planeGeometry args={[500, 500]} />
                 <meshStandardMaterial color="#1c1917" roughness={1} metalness={0} />
             </mesh>
 
-            {/* THE SUN/MOON OBJECT */}
             <mesh ref={sunMeshRef}>
                 <sphereGeometry args={[1, 32, 32]} />
                 <meshBasicMaterial color="#fbbf24" toneMapped={false} />
