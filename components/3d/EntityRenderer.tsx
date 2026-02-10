@@ -25,6 +25,7 @@ interface EntityRendererProps {
   structures?: Structures; 
   equipment?: HeroEquipment;
   task?: Task; // New Prop for passing task data to enemies
+  isFuture?: boolean; // Prop to indicate future timeline status
 }
 
 // Moves entities randomly (Villagers, Animals)
@@ -101,7 +102,10 @@ const ApproachingEnemyWrapper = ({ children, initialPos, task }: { children?: Re
         
         let targetRadius = SPAWN_RADIUS;
 
-        if (task.failed) {
+        if (now < startTime) {
+            // Future Task: Stay at Spawn Radius (Spatial representation of Future Time)
+            targetRadius = SPAWN_RADIUS;
+        } else if (task.failed) {
             // If failed, they are bashing the walls
             targetRadius = WALL_RADIUS - 1; 
         } else if (task.completed) {
@@ -137,7 +141,7 @@ const ApproachingEnemyWrapper = ({ children, initialPos, task }: { children?: Re
     return <group ref={group} position={initialPos}>{children}</group>;
 }
 
-export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task }) => {
+export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture }) => {
   const content = useMemo(() => {
     switch (type) {
       case EntityType.HERO:
@@ -147,8 +151,8 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
       case EntityType.ENEMY:
         let visualArchetype = archetype || 'MONSTER';
         if (race === 'HUMAN' && archetype === 'KNIGHT') visualArchetype = 'KNIGHT';
-        // Pass task down to EnemyMesh for the Label
-        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={onClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} failed={failed} task={task} />;
+        // Pass task down to EnemyMesh for the Label, pass isFuture for styling
+        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={onClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} failed={failed} task={task} isFuture={isFuture} />;
       case EntityType.MINION:
           return <MinionMesh />;
       case EntityType.VILLAGER:
@@ -160,7 +164,7 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
       default:
         return null;
     }
-  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task]);
+  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture]);
 
   if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null;
 

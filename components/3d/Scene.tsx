@@ -364,25 +364,6 @@ const RealTimeLighting = ({ isRitual, weather }: { isRitual: boolean, weather: W
     );
 };
 
-const PortalRift: React.FC<{ position: Vector3 }> = ({ position }) => {
-    const r1 = useRef<THREE.Mesh>(null);
-    useFrame((state, delta) => { if(r1.current) r1.current.rotation.z += delta; });
-    return (
-        <group position={[position.x, 2, position.z]}>
-            <Float speed={4} rotationIntensity={0.2} floatIntensity={0.5}>
-                <mesh ref={r1} rotation={[0,0,0]}>
-                    <ringGeometry args={[1.5, 1.8, 32]} />
-                    <meshBasicMaterial color="#a855f7" transparent opacity={0.8} side={THREE.DoubleSide} />
-                </mesh>
-                <mesh><circleGeometry args={[0.8, 16]} /><meshBasicMaterial color="#000" /></mesh>
-            </Float>
-            <Html position={[0, -2.5, 0]} center distanceFactor={15}>
-                <div className="text-[9px] text-purple-300 font-serif bg-black/80 px-2 border border-purple-900">MANIFESTING</div>
-            </Html>
-        </group>
-    )
-}
-
 const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[], tasks: Task[] }) => {
     const links = useMemo(() => {
         const lines: any[] = [];
@@ -505,7 +486,8 @@ const GameWorld = React.memo(({
                     if (sub && sub.startTime) startTime = sub.startTime;
                 }
 
-                if (now < startTime) return <PortalRift key={enemy.id} position={enemy.position} />;
+                // Removed PortalRift replacement. Render Enemy always, passing isFuture status.
+                const isFuture = now < startTime;
 
                 return (
                     <EntityRenderer
@@ -521,6 +503,7 @@ const GameWorld = React.memo(({
                         race={enemy.race}
                         failed={task?.failed}
                         task={task} 
+                        isFuture={isFuture}
                     />
                 );
             })}
