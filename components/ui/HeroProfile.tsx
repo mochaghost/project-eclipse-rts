@@ -1,12 +1,13 @@
 
 import React, { Suspense, useState } from 'react';
-import { User, Shield, Sword, Crown, X, Scroll, Backpack, Check } from 'lucide-react';
+import { User, Shield, Sword, Crown, X, Scroll, Backpack, Check, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, ContactShadows } from '@react-three/drei';
 import { HeroAvatar } from '../3d/Assets';
 import { useGame } from '../../context/GameContext';
 import { getEquipmentLore } from '../../utils/generators';
 import { HeroEquipment } from '../../types';
+import { EQUIPMENT_LORE } from '../../constants';
 
 interface HeroProfileProps {
   isOpen: boolean;
@@ -26,6 +27,14 @@ const HeroScene = ({ level, equipment }: { level: number, equipment: HeroEquipme
     </>
 );
 
+// Helper to calculate Item Tier based on Lore Index (since index roughly equals power level in our constant)
+const getItemTier = (name: string, type: 'WEAPON' | 'ARMOR') => {
+    const list = type === 'WEAPON' ? EQUIPMENT_LORE.WEAPONS : EQUIPMENT_LORE.ARMOR;
+    // We check if the name *contains* the base name, because loot has prefixes like "Cursed"
+    const index = list.findIndex(i => name.includes(i.name));
+    return index !== -1 ? index + 1 : 1; // 1-based Tier
+};
+
 export const HeroProfile: React.FC<HeroProfileProps> = ({ isOpen, onClose, level }) => {
   const { state, equipItem } = useGame();
   const [tab, setTab] = useState<'STATS' | 'INVENTORY'>('STATS');
@@ -36,6 +45,10 @@ export const HeroProfile: React.FC<HeroProfileProps> = ({ isOpen, onClose, level
   const weaponLore = getEquipmentLore(equip.weapon);
   const armorLore = getEquipmentLore(equip.armor);
   const inventory = state.inventory || [];
+
+  // Calculate current equipped tiers
+  const currentWeaponTier = getItemTier(equip.weapon, 'WEAPON');
+  const currentArmorTier = getItemTier(equip.armor, 'ARMOR');
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 pointer-events-auto">
@@ -75,37 +88,33 @@ export const HeroProfile: React.FC<HeroProfileProps> = ({ isOpen, onClose, level
                                     <span className="text-stone-500 text-xs uppercase tracking-widest">Strength</span>
                                     <Sword size={14} className="text-yellow-600" />
                                 </div>
-                                <div className="text-2xl font-bold text-yellow-500">{5 + level * 5}</div>
+                                <div className="text-2xl font-bold text-yellow-500">{5 + level * 5 + (currentWeaponTier * 2)}</div>
                             </div>
                             <div className="bg-[#0c0a09] p-4 border border-stone-800">
                                 <div className="flex justify-between mb-2">
                                     <span className="text-stone-500 text-xs uppercase tracking-widest">Defense</span>
                                     <Shield size={14} className="text-blue-600" />
                                 </div>
-                                <div className="text-2xl font-bold text-blue-500">{5 + level * 5}</div>
+                                <div className="text-2xl font-bold text-blue-500">{5 + level * 5 + (currentArmorTier * 2)}</div>
                             </div>
                         </div>
 
                         <div>
-                            <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-2 border-b border-stone-800 pb-1">Equipped Weapon</h3>
+                            <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-2 border-b border-stone-800 pb-1 flex justify-between">
+                                <span>Equipped Weapon</span>
+                                <span className="text-yellow-600">Tier {currentWeaponTier}</span>
+                            </h3>
                             <div className="text-xl font-serif text-white mb-1">{equip.weapon}</div>
                             <p className="text-stone-400 italic text-sm font-serif border-l-2 border-yellow-900 pl-3">"{weaponLore}"</p>
                         </div>
 
                         <div>
-                            <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-2 border-b border-stone-800 pb-1">Equipped Armor</h3>
+                            <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-2 border-b border-stone-800 pb-1 flex justify-between">
+                                <span>Equipped Armor</span>
+                                <span className="text-blue-600">Tier {currentArmorTier}</span>
+                            </h3>
                             <div className="text-xl font-serif text-white mb-1">{equip.armor}</div>
                             <p className="text-stone-400 italic text-sm font-serif border-l-2 border-stone-600 pl-3">"{armorLore}"</p>
-                        </div>
-
-                        <div>
-                            <h3 className="text-stone-500 text-xs uppercase font-bold tracking-widest mb-2 border-b border-stone-800 pb-1">Titles Earned</h3>
-                            <div className="flex flex-wrap gap-2">
-                                {level >= 1 && <span className="bg-stone-900 text-stone-500 px-2 py-1 text-xs border border-stone-800">The Exile</span>}
-                                {level >= 10 && <span className="bg-stone-900 text-stone-400 px-2 py-1 text-xs border border-stone-800">Mercenary</span>}
-                                {level >= 40 && <span className="bg-yellow-900/20 text-yellow-600 px-2 py-1 text-xs border border-yellow-900">Warlord</span>}
-                                {level >= 60 && <span className="bg-purple-900/20 text-purple-400 px-2 py-1 text-xs border border-purple-900">King</span>}
-                            </div>
                         </div>
                     </div>
                 )}
@@ -117,6 +126,24 @@ export const HeroProfile: React.FC<HeroProfileProps> = ({ isOpen, onClose, level
                         ) : (
                             inventory.map(item => {
                                 const isEquipped = equip.weapon === item.name || equip.armor === item.name || equip.relic === item.name;
+                                
+                                // Comparison Logic
+                                let comparison = null;
+                                let itemTier = 0;
+                                
+                                if (item.type === 'WEAPON') {
+                                    itemTier = getItemTier(item.name, 'WEAPON');
+                                    if (itemTier > currentWeaponTier) comparison = <span className="text-green-500 flex items-center gap-1"><ArrowUp size={12}/> Tier {itemTier}</span>;
+                                    else if (itemTier < currentWeaponTier) comparison = <span className="text-red-500 flex items-center gap-1"><ArrowDown size={12}/> Tier {itemTier}</span>;
+                                    else comparison = <span className="text-stone-500 flex items-center gap-1"><Minus size={12}/> Equal</span>;
+                                }
+                                if (item.type === 'ARMOR') {
+                                    itemTier = getItemTier(item.name, 'ARMOR');
+                                    if (itemTier > currentArmorTier) comparison = <span className="text-green-500 flex items-center gap-1"><ArrowUp size={12}/> Tier {itemTier}</span>;
+                                    else if (itemTier < currentArmorTier) comparison = <span className="text-red-500 flex items-center gap-1"><ArrowDown size={12}/> Tier {itemTier}</span>;
+                                    else comparison = <span className="text-stone-500 flex items-center gap-1"><Minus size={12}/> Equal</span>;
+                                }
+
                                 return (
                                     <div key={item.id} className={`p-4 border flex justify-between items-center ${isEquipped ? 'border-green-900 bg-green-950/10' : 'border-stone-800 bg-[#151210] hover:border-stone-600'}`}>
                                         <div className="flex items-center gap-4">
@@ -124,7 +151,10 @@ export const HeroProfile: React.FC<HeroProfileProps> = ({ isOpen, onClose, level
                                                 {item.type[0]}
                                             </div>
                                             <div>
-                                                <div className={`font-serif font-bold ${isEquipped ? 'text-green-400' : 'text-stone-300'}`}>{item.name}</div>
+                                                <div className={`font-serif font-bold flex items-center gap-2 ${isEquipped ? 'text-green-400' : 'text-stone-300'}`}>
+                                                    {item.name}
+                                                    {!isEquipped && comparison && <div className="text-[10px] font-mono opacity-80">{comparison}</div>}
+                                                </div>
                                                 <div className="text-xs text-stone-500 italic truncate max-w-xs">{item.lore}</div>
                                             </div>
                                         </div>
