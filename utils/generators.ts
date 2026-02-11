@@ -347,14 +347,14 @@ const extractVisionContent = (rawText: string): VisionContent[] => {
         }
     }
 
-    // 2. PINTEREST STANDARD - STRICT REGEX
-    // Now requires 'pinterest.com' to precede the '/pin/' to avoid false positives in random text
-    // Matches: pinterest.com/pin/123, ar.pinterest.com/pin/123, www.pinterest.co.uk/pin/123
-    const pinMatches = rawText.matchAll(/pinterest(?:\.[a-z.]+)?\.com\/pin\/(\d+)/g);
+    // 2. PINTEREST STANDARD - SMART DOMAIN CAPTURE
+    // Captures the full domain (e.g. ar.pinterest.com) to preserve regional sessions
+    // Matches: https://ar.pinterest.com/pin/123, pinterest.com/pin/123
+    const pinMatches = rawText.matchAll(/(?:https?:\/\/)?((?:[a-z0-9-]+\.)?pinterest(?:\.[a-z.]+)?\.com)\/pin\/(\d+)/gi);
     for (const match of pinMatches) {
-        const id = match[1];
-        // Normalize to www.pinterest.com to allow browser to handle local redirects
-        const cleanUrl = `https://www.pinterest.com/pin/${id}/`; 
+        const domain = match[1]; // e.g. "ar.pinterest.com"
+        const id = match[2];
+        const cleanUrl = `https://${domain}/pin/${id}/`; 
         if (!seen.has(cleanUrl)) {
             seen.add(cleanUrl);
             results.push({
@@ -367,7 +367,6 @@ const extractVisionContent = (rawText: string): VisionContent[] => {
     }
 
     // 3. PINTEREST SHORTLINKS (pin.it)
-    // Matches: pin.it/CODE
     const pinShortMatches = rawText.matchAll(/pin\.it\/([a-zA-Z0-9]+)/g);
     for (const match of pinShortMatches) {
         const id = match[1];

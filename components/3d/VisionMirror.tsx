@@ -143,7 +143,9 @@ export const VisionMirror: React.FC = () => {
         if (isPin) { 
             cardColor = "text-red-300"; cardBorder = "border-red-500/30"; cardBg = "bg-red-900/10"; 
             PlatformIcon = (props: any) => <div className={`text-red-500 font-bold text-4xl font-serif ${props.className || ''}`}>P</div>;
-            actionText = isShortLink ? "Visit Pin" : "View Board";
+            // UPDATE: Check for '/pin/' to decide label
+            const isStandardPin = content.embedUrl.includes('/pin/');
+            actionText = isShortLink ? "Visit Pin" : isStandardPin ? "View Pin" : "View Board";
         }
         if (isInsta) { 
             cardColor = "text-pink-300"; cardBorder = "border-pink-500/30"; cardBg = "bg-pink-900/10"; 
