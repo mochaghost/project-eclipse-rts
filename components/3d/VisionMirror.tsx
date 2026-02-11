@@ -18,6 +18,7 @@ export const VisionMirror: React.FC = () => {
             } else if (state.activeVisionVideo.startsWith("{")) {
                 content = JSON.parse(state.activeVisionVideo);
             } else {
+                // Fallback for legacy string URLs
                 content = { type: 'VIDEO', embedUrl: state.activeVisionVideo, originalUrl: state.activeVisionVideo, platform: 'YOUTUBE' };
             }
         }
@@ -131,7 +132,7 @@ export const VisionMirror: React.FC = () => {
         // SOCIAL LINKS (Instagram, Pinterest Social, etc)
         const isInsta = content.platform === 'INSTAGRAM';
         const isPin = content.platform === 'PINTEREST';
-        const isTikTok = content.platform === 'TIKTOK';
+        const isShortLink = content.embedUrl.includes('pin.it'); // Explicit check
         
         let cardColor = "text-purple-300";
         let cardBorder = "border-purple-500/30";
@@ -142,26 +143,13 @@ export const VisionMirror: React.FC = () => {
         if (isPin) { 
             cardColor = "text-red-300"; cardBorder = "border-red-500/30"; cardBg = "bg-red-900/10"; 
             PlatformIcon = (props: any) => <div className={`text-red-500 font-bold text-4xl font-serif ${props.className || ''}`}>P</div>;
-            actionText = "View Board";
+            actionText = isShortLink ? "Visit Pin" : "View Board";
         }
         if (isInsta) { 
             cardColor = "text-pink-300"; cardBorder = "border-pink-500/30"; cardBg = "bg-pink-900/10"; 
             PlatformIcon = Instagram;
             actionText = "View Reel";
         }
-        if (isTikTok) { 
-            cardColor = "text-cyan-300"; cardBorder = "border-cyan-500/30"; cardBg = "bg-cyan-900/10"; 
-            PlatformIcon = (props: any) => <div className={`text-cyan-400 font-bold text-xl font-mono ${props.className || ''}`}>TikTok</div>;
-            actionText = "Watch TikTok";
-        }
-
-        // VALIDATION: Ensure URL is absolute for browser safety
-        let safeUrl = content.originalUrl;
-        if (safeUrl && !safeUrl.startsWith('http')) {
-            safeUrl = `https://${safeUrl}`;
-        }
-        
-        const isValidUrl = safeUrl && safeUrl.length > 10 && safeUrl.includes('.');
 
         return (
             <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] relative p-6">
@@ -175,23 +163,17 @@ export const VisionMirror: React.FC = () => {
                     {content.platform} SIGNAL
                 </h3>
                 <p className="text-stone-500 text-xs text-center mb-8 max-w-[80%] leading-relaxed z-10">
-                    The Void has intercepted a social fragment. <br/>
-                    Open the portal to view the original source.
+                    The Void has intercepted a fragment from another world. <br/>
+                    Open the portal to view the source.
                 </p>
 
                 <div className="flex flex-col gap-3 w-full max-w-[200px] z-50">
-                    {isValidUrl ? (
-                        <button 
-                            onClick={() => handleOpenPopup(safeUrl!)}
-                            className="group relative px-6 py-3 bg-stone-900/80 text-white font-serif font-bold tracking-widest uppercase border border-stone-600 hover:bg-stone-800 transition-all shadow-lg flex items-center justify-center gap-2 pointer-events-auto cursor-pointer hover:scale-105 hover:border-yellow-600"
-                        >
-                                {actionText} <ExternalLink size={14}/>
-                        </button>
-                    ) : (
-                        <div className="px-6 py-3 bg-red-950/50 text-red-400 font-bold border border-red-900 flex items-center justify-center gap-2 cursor-not-allowed">
-                            <AlertTriangle size={14} /> BROKEN LINK
-                        </div>
-                    )}
+                    <button 
+                        onClick={() => handleOpenPopup(content!.embedUrl)}
+                        className="group relative px-6 py-3 bg-stone-900/80 text-white font-serif font-bold tracking-widest uppercase border border-stone-600 hover:bg-stone-800 transition-all shadow-lg flex items-center justify-center gap-2 pointer-events-auto cursor-pointer hover:scale-105 hover:border-yellow-600"
+                    >
+                            {actionText} <ExternalLink size={14}/>
+                    </button>
 
                     <button 
                         onClick={handleReroll}
@@ -202,7 +184,7 @@ export const VisionMirror: React.FC = () => {
                 </div>
                 
                 <div className="absolute bottom-16 text-[10px] text-stone-700 font-mono break-all max-w-[90%] text-center z-10 opacity-50 truncate">
-                    {isValidUrl ? safeUrl : 'INVALID_URL_DATA'}
+                    {content.embedUrl}
                 </div>
             </div>
         );

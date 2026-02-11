@@ -305,188 +305,138 @@ export interface VisionContent {
 }
 
 const VOID_LIBRARY_DEFAULTS = [
-    "https://www.instagram.com/reel/DF3dhFat9Xe/",
+    { type: 'SOCIAL', embedUrl: "https://www.instagram.com/reel/DF3dhFat9Xe/", originalUrl: "https://www.instagram.com/reel/DF3dhFat9Xe/", platform: 'INSTAGRAM' } as VisionContent
 ];
-
-// Reconstructs clean URLs from input or detected IDs
-export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
-    if (!rawInput) return null;
-    let cleanUrl = rawInput.trim();
-    
-    // Safety check for basic URL structure if it's not a pre-cleaned ID
-    if (cleanUrl.startsWith('http') || cleanUrl.includes('.')) {
-        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-            cleanUrl = `https://${cleanUrl}`;
-        }
-    }
-
-    try {
-        const urlObj = new URL(cleanUrl);
-        
-        // --- INSTAGRAM CLEANUP ---
-        if (urlObj.hostname.includes('instagram.com')) {
-            // Remove tracking params but KEEP the pathname (e.g. /reel/xyz)
-            urlObj.search = ''; 
-            const finalUrl = urlObj.toString();
-            return { type: 'SOCIAL', embedUrl: finalUrl, originalUrl: finalUrl, platform: 'INSTAGRAM' };
-        }
-
-        // --- PINTEREST CLEANUP (Regional Redirection Fix) ---
-        if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) {
-            // Force global domain to avoid regional redirect issues (ar.pinterest -> www.pinterest)
-            if (urlObj.hostname.endsWith('pinterest.com')) {
-                urlObj.hostname = 'www.pinterest.com';
-            }
-            // Strip tracking
-            urlObj.search = '';
-            
-            const finalUrl = urlObj.toString();
-            return { type: 'SOCIAL', embedUrl: finalUrl, originalUrl: finalUrl, platform: 'PINTEREST' };
-        }
-
-        // --- TIKTOK CLEANUP ---
-        if (urlObj.hostname.includes('tiktok.com')) {
-            urlObj.search = '';
-            const finalUrl = urlObj.toString();
-            return { type: 'SOCIAL', embedUrl: finalUrl, originalUrl: finalUrl, platform: 'TIKTOK' };
-        }
-
-        // --- YOUTUBE CLEANUP (Video Embeds) ---
-        if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-             let embedUrl = cleanUrl;
-             // Basic conversion to embed format if it's a standard watch link
-             if (urlObj.pathname === '/watch' && urlObj.searchParams.has('v')) {
-                 embedUrl = `https://www.youtube.com/embed/${urlObj.searchParams.get('v')}`;
-             } else if (urlObj.hostname === 'youtu.be') {
-                 embedUrl = `https://www.youtube.com/embed${urlObj.pathname}`;
-             }
-             return { type: 'VIDEO', embedUrl: embedUrl, originalUrl: cleanUrl, platform: 'YOUTUBE' };
-        }
-        
-        // --- IMAGE CHECK ---
-        if (cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('i.pinimg.com')) {
-             return { type: 'IMAGE', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
-        }
-        
-        // Fallback
-        return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
-
-    } catch(e) {
-        // If it failed to parse as URL, it might be a raw ID passed from the ID Extractor below
-        // This is unlikely given the flow, but good for safety
-        return null;
-    }
-};
 
 const fetchGoogleSheetCsv = async (url: string): Promise<string> => {
     try {
         let fetchUrl = url;
-        // Correctly handle "published to web" links
-        if (url.includes('/pubhtml')) {
-            fetchUrl = url.replace(/\/pubhtml.*$/, '/pub?output=csv');
-        } else if (url.includes('/edit')) {
-            fetchUrl = url.replace(/\/edit.*$/, '/export?format=csv');
-        } else if (url.includes('/export') && !url.includes('format=csv')) {
-             fetchUrl = url + (url.includes('?') ? '&' : '?') + 'format=csv';
-        }
+        if (url.includes('/pubhtml')) fetchUrl = url.replace(/\/pubhtml.*$/, '/pub?output=csv');
+        else if (url.includes('/edit')) fetchUrl = url.replace(/\/edit.*$/, '/export?format=csv');
+        else if (url.includes('/export') && !url.includes('format=csv')) fetchUrl = url + '&format=csv';
 
         const res = await fetch(fetchUrl);
-        if (!res.ok) {
-            console.warn("Sheet fetch failed status:", res.status);
-            return "";
-        }
+        if (!res.ok) return "";
         return await res.text();
     } catch (e) {
-        console.warn("Failed to fetch/parse sheet:", url, e);
+        console.warn("Sheet fetch failed:", e);
         return "";
     }
 }
 
-// Universal input processor using REGEX EXTRACTION for messy CSVs
-// This ignores ALL wrapping text (HTML, JSON, etc) and finds the IDs directly
-const processSourceInput = async (input: string): Promise<string[]> => {
-    if (!input || !input.trim()) return [];
+// THE MINING ENGINE: Extracts valuable IDs from messy raw text
+const extractVisionContent = (rawText: string): VisionContent[] => {
+    if (!rawText) return [];
     
-    // 1. Determine if input is a URL to fetch (Sheet) or Raw Text
-    let rawContent = input;
-    if (input.includes('docs.google.com/spreadsheets') || (input.startsWith('http') && !input.includes('\n'))) {
-        // It's a sheet URL, fetch it
-        rawContent = await fetchGoogleSheetCsv(input);
-    } 
-    // If it's a raw Sheet ID
-    else if (input.length > 20 && !input.includes('/') && !input.includes('.') && !input.includes(' ')) {
-        const sheetUrl = `https://docs.google.com/spreadsheets/d/${input}/export?format=csv`;
-        rawContent = await fetchGoogleSheetCsv(sheetUrl);
-    }
+    const results: VisionContent[] = [];
+    const seen = new Set<string>();
 
-    // 2. ID EXTRACTION ENGINE (The fix for messy CSVs)
-    let collectedUrls: string[] = [];
-
-    // Instagram IDs: /reel/CODE or /p/CODE
-    // Matches alphanumeric+underscore+dash codes typically 11 chars
-    // This regex looks for 'reel/' or 'p/' followed by the code, ignoring domain prefix
-    const instaMatches = rawContent.matchAll(/(?:reel|p)\/([a-zA-Z0-9_-]+)/g);
+    // 1. INSTAGRAM (Reels & Posts)
+    // Matches: /reel/CODE, /p/CODE, with or without domain
+    // Works on: Raw URLs, HTML blocks, attributes
+    const instaMatches = rawText.matchAll(/(?:instagram\.com\/|href=".*?)(?:reel|p)\/([a-zA-Z0-9_-]+)/g);
     for (const match of instaMatches) {
-        if (match[1]) collectedUrls.push(`https://www.instagram.com/reel/${match[1]}/`);
+        const id = match[1];
+        const cleanUrl = `https://www.instagram.com/p/${id}/`; // Normalized URL
+        if (!seen.has(cleanUrl)) {
+            seen.add(cleanUrl);
+            results.push({
+                type: 'SOCIAL',
+                embedUrl: cleanUrl,
+                originalUrl: cleanUrl,
+                platform: 'INSTAGRAM'
+            });
+        }
     }
 
-    // Pinterest IDs: /pin/NUMBERS
-    // This is the robust fix for 'ar.pinterest.com'. We just extract the numeric ID.
-    const pinMatches = rawContent.matchAll(/\/pin\/(\d+)/g);
+    // 2. PINTEREST STANDARD
+    // Matches: /pin/NUMBERS/
+    const pinMatches = rawText.matchAll(/\/pin\/(\d+)/g);
     for (const match of pinMatches) {
-        if (match[1]) collectedUrls.push(`https://www.pinterest.com/pin/${match[1]}/`);
+        const id = match[1];
+        const cleanUrl = `https://www.pinterest.com/pin/${id}/`; // Normalized URL (Forces Global domain)
+        if (!seen.has(cleanUrl)) {
+            seen.add(cleanUrl);
+            results.push({
+                type: 'SOCIAL',
+                embedUrl: cleanUrl,
+                originalUrl: cleanUrl,
+                platform: 'PINTEREST'
+            });
+        }
     }
 
-    // TikTok IDs (video/NUMBERS)
-    const tiktokMatches = rawContent.matchAll(/\/video\/(\d+)/g);
-    for (const match of tiktokMatches) {
-        if (match[1]) collectedUrls.push(`https://www.tiktok.com/@user/video/${match[1]}`); // Generic user path works for embedding
+    // 3. PINTEREST SHORTLINKS (pin.it)
+    // Needs to be treated as an external link because we can't unshorten client-side without CORS
+    const pinShortMatches = rawText.matchAll(/pin\.it\/([a-zA-Z0-9]+)/g);
+    for (const match of pinShortMatches) {
+        const id = match[1];
+        const cleanUrl = `https://pin.it/${id}`;
+        if (!seen.has(cleanUrl)) {
+            seen.add(cleanUrl);
+            results.push({
+                type: 'SOCIAL',
+                embedUrl: cleanUrl, // Will be opened in new tab
+                originalUrl: cleanUrl,
+                platform: 'PINTEREST'
+            });
+        }
     }
 
-    // YouTube IDs (v=CODE or be/CODE)
-    const ytMatches = rawContent.matchAll(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g);
-    for (const match of ytMatches) {
-        if (match[1]) collectedUrls.push(`https://www.youtube.com/embed/${match[1]}`);
-    }
-
-    // Generic Image Links (Direct http links ending in extensions)
-    // Only if we haven't found social media links, to avoid false positives in HTML attributes
-    const imageMatches = rawContent.match(/https?:\/\/[^\s"']+\.(?:jpg|jpeg|png|gif|webp)/gi);
-    if (imageMatches) {
-        collectedUrls = collectedUrls.concat(imageMatches);
-    }
-
-    return collectedUrls;
-}
-
-// UPDATED TO ACCEPT 3 SOURCES
-export const fetchMotivationVideos = async (sheet1?: string, sheet2?: string, directUrl?: string): Promise<VisionContent[]> => {
-    // Process "Source 1"
-    const s1Urls = await processSourceInput(sheet1 || '');
-    
-    // Process "Source 2"
-    const s2Urls = await processSourceInput(sheet2 || '');
-
-    // Process "Direct" - Treat direct input as raw text to extract IDs from too
-    const directUrls = await processSourceInput(directUrl || '');
-    
-    // Combine ALL lists
-    const allUrls = [...s1Urls, ...s2Urls, ...directUrls];
-    
-    // Deduplicate
-    const uniqueUrls = [...new Set(allUrls)];
-    
-    // Convert to internal format (Clean-up pass)
-    let results: VisionContent[] = uniqueUrls
-        .map(url => convertToEmbedUrl(url))
-        .filter(item => item !== null) as VisionContent[];
-
-    // Fallback if absolutely nothing found
-    if (results.length === 0) {
-        return VOID_LIBRARY_DEFAULTS.map(url => convertToEmbedUrl(url)).filter(item => item !== null) as VisionContent[];
+    // 4. DIRECT IMAGES (Pinterest CDN or others)
+    const imgMatches = rawText.matchAll(/https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/gi);
+    for (const match of imgMatches) {
+        const url = match[0];
+        if (!seen.has(url)) {
+            seen.add(url);
+            results.push({
+                type: 'IMAGE',
+                embedUrl: url,
+                originalUrl: url,
+                platform: 'OTHER'
+            });
+        }
     }
 
     return results;
+};
+
+const processSourceInput = async (input: string): Promise<string> => {
+    if (!input || !input.trim()) return "";
+    
+    // Check if it's a Google Sheet URL
+    if (input.includes('docs.google.com/spreadsheets')) {
+        return await fetchGoogleSheetCsv(input);
+    } 
+    // Check if it's a Raw Sheet ID
+    else if (input.length > 20 && !input.includes('/') && !input.includes('.') && !input.includes(' ')) {
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/${input}/export?format=csv`;
+        return await fetchGoogleSheetCsv(sheetUrl);
+    }
+    
+    // Otherwise, treat as raw text/html
+    return input;
+}
+
+// MAIN FETCH FUNCTION
+export const fetchMotivationVideos = async (sheet1?: string, sheet2?: string, directUrl?: string): Promise<VisionContent[]> => {
+    // Fetch all raw data first
+    const raw1 = await processSourceInput(sheet1 || '');
+    const raw2 = await processSourceInput(sheet2 || '');
+    const rawDirect = directUrl || ''; // Direct input is already text
+
+    // Combine into one giant soup
+    const combinedRaw = `${raw1} \n ${raw2} \n ${rawDirect}`;
+
+    // Mine the soup for diamonds (IDs)
+    const extractedContent = extractVisionContent(combinedRaw);
+
+    // Fallback
+    if (extractedContent.length === 0) {
+        return VOID_LIBRARY_DEFAULTS;
+    }
+
+    return extractedContent;
 };
 
 export const generateWorldRumor = (): { message: string, details: string } => {
