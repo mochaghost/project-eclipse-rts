@@ -250,8 +250,9 @@ export interface FirebaseConfig {
 export interface GameSettings {
     masterVolume: number; // 0.0 to 1.0
     graphicsQuality: 'LOW' | 'HIGH';
-    googleSheetId?: string; // Custom sheet for Vision Mirror
-    directVisionUrl?: string; // New field for single direct link
+    googleSheetId?: string; // Primary Sheet Source
+    googleSheetId2?: string; // Secondary Sheet Source (NEW)
+    directVisionUrl?: string; // Direct text links
     uiScale?: number; // 0.8 to 1.2
     safeAreaPadding?: number; // 0 to 50px
 }

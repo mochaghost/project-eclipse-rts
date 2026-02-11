@@ -312,9 +312,9 @@ export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
     if (!rawInput) return null;
     let cleanUrl = rawInput.trim();
     
-    // Normalize Pinterest URLs (ar.pinterest -> www.pinterest) to avoid redirection issues
+    // Normalize Pinterest URLs to avoid regional redirection issues (ar.pinterest, mx.pinterest -> www.pinterest)
     if (cleanUrl.includes('pinterest.com')) {
-        cleanUrl = cleanUrl.replace(/:\/\/[a-z]{2,3}\.pinterest\.com/, '://www.pinterest.com');
+        cleanUrl = cleanUrl.replace(/https?:\/\/[a-z]{2,3}\.pinterest\.com/, 'https://www.pinterest.com');
     }
 
     if (rawInput.includes('<blockquote') && rawInput.includes('instagram-media')) {
@@ -383,7 +383,8 @@ const fetchGoogleSheetCsv = async (url: string): Promise<string[]> => {
         const text = await res.text();
         
         // Regex to find http(s) links, stopping at quotes, spaces, or commas
-        const matches = text.match(/https?:\/\/[^"'\s,<>]+/g);
+        // Improved regex to better handle raw CSV data
+        const matches = text.match(/https?:\/\/[^"'\s,<>\\]+/g);
         if (matches) {
             // Remove potential trailing punctuation often caught by regex in CSVs
             return matches.map(m => m.replace(/[),;]+$/, ''));
@@ -396,6 +397,7 @@ const fetchGoogleSheetCsv = async (url: string): Promise<string[]> => {
 }
 
 // Universal input processor for both Top (Sheet ID/List) and Bottom (Direct URL/List) boxes
+// This handles mixed content: Sheet URLs, Sheet IDs, Direct URLs, Comma Separated lists.
 const processSourceInput = async (input: string): Promise<string[]> => {
     if (!input || !input.trim()) return [];
     
@@ -409,11 +411,11 @@ const processSourceInput = async (input: string): Promise<string[]> => {
             const sheetUrls = await fetchGoogleSheetCsv(entry);
             collectedUrls = collectedUrls.concat(sheetUrls);
         }
-        // Case 2: Generic URL
+        // Case 2: Generic URL (Social or Image)
         else if (entry.startsWith('http://') || entry.startsWith('https://')) {
             collectedUrls.push(entry);
         }
-        // Case 3: Raw Google Sheet ID (long alphanumeric, no dots/slashes)
+        // Case 3: Raw Google Sheet ID (long alphanumeric, no dots/slashes) - Fallback
         else if (entry.length > 20 && !entry.includes('/') && !entry.includes('.')) {
             const sheetUrl = `https://docs.google.com/spreadsheets/d/${entry}/export?format=csv`;
             const sheetUrls = await fetchGoogleSheetCsv(sheetUrl);
@@ -423,15 +425,19 @@ const processSourceInput = async (input: string): Promise<string[]> => {
     return collectedUrls;
 }
 
-export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
-    // Process "Top" Input (labeled Sheet ID, but supports lists)
-    const topUrls = await processSourceInput(customSheetId || '');
+// UPDATED TO ACCEPT 3 SOURCES
+export const fetchMotivationVideos = async (sheet1?: string, sheet2?: string, directUrl?: string): Promise<VisionContent[]> => {
+    // Process "Source 1"
+    const s1Urls = await processSourceInput(sheet1 || '');
     
-    // Process "Bottom" Input (labeled Direct URL, but supports Sheets & lists)
-    const bottomUrls = await processSourceInput(directUrl || '');
+    // Process "Source 2"
+    const s2Urls = await processSourceInput(sheet2 || '');
+
+    // Process "Direct"
+    const directUrls = await processSourceInput(directUrl || '');
     
-    // Combine both lists
-    const allUrls = [...topUrls, ...bottomUrls];
+    // Combine ALL lists
+    const allUrls = [...s1Urls, ...s2Urls, ...directUrls];
     
     // Deduplicate
     const uniqueUrls = [...new Set(allUrls)];

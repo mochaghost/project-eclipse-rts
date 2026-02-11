@@ -610,7 +610,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // --- VISION MIRROR ---
     const rerollVision = async () => {
         const settings = state.settings || {} as GameSettings; // Cast to avoid TS error on empty object
-        const videos = await fetchMotivationVideos(settings.googleSheetId, settings.directVisionUrl);
+        // UPDATE: Pass both sheet IDs to the generator
+        const videos = await fetchMotivationVideos(settings.googleSheetId, settings.googleSheetId2, settings.directVisionUrl);
         
         setState(prev => {
             // Filter out already seen videos

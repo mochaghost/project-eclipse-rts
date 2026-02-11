@@ -204,18 +204,30 @@ export const SettingsModal: React.FC = () => {
                                     {/* Google Sheets / Automator Guide */}
                                     <div>
                                         <label className="flex items-center gap-2 text-[10px] uppercase text-stone-500 font-bold mb-1">
-                                            <FileSpreadsheet size={12} /> Google Sheet ID (Automator Source)
+                                            <FileSpreadsheet size={12} /> Google Sheet Source A (Primary)
                                         </label>
                                         <input 
                                             type="text" 
                                             value={settings.googleSheetId || ''} 
                                             onChange={(e) => updateSettings({ googleSheetId: e.target.value })}
-                                            className="w-full bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500"
-                                            placeholder="e.g. 1Hhfl7Cq28FvcyNrH..."
+                                            className="w-full bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500 mb-2"
+                                            placeholder="Paste Sheet ID or URL..."
                                         />
+                                        
+                                        <label className="flex items-center gap-2 text-[10px] uppercase text-stone-500 font-bold mb-1 mt-3">
+                                            <FileSpreadsheet size={12} /> Google Sheet Source B (Secondary)
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            value={settings.googleSheetId2 || ''} 
+                                            onChange={(e) => updateSettings({ googleSheetId2: e.target.value })}
+                                            className="w-full bg-black border border-stone-700 p-2 text-stone-300 text-xs font-mono outline-none focus:border-purple-500"
+                                            placeholder="Paste another Sheet ID or URL..."
+                                        />
+
                                         <details className="mt-2 text-[10px] text-stone-500 bg-black/30 p-2 rounded cursor-pointer group" open>
                                             <summary className="font-bold flex items-center gap-1 hover:text-stone-300 select-none">
-                                                <Info size={10} /> Personal Account Method (100% Free)
+                                                <Info size={10} /> How to connect (100% Free)
                                             </summary>
                                             <div className="mt-2 pl-2 border-l border-stone-700 space-y-2 text-stone-400 leading-relaxed font-mono">
                                                 <p>1. Make your Pinterest Board <strong>Public</strong>.</p>
@@ -230,14 +242,14 @@ export const SettingsModal: React.FC = () => {
                                     
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <span className="bg-[#15101a] px-2 text-[9px] text-stone-600 font-bold">OR</span>
+                                            <span className="bg-[#15101a] px-2 text-[9px] text-stone-600 font-bold">AND</span>
                                         </div>
                                         <hr className="border-stone-800" />
                                     </div>
 
                                     <div>
                                         <label className="flex items-center gap-2 text-[10px] uppercase text-stone-500 font-bold mb-1">
-                                            <LinkIcon size={12} /> Direct Focus Links (Overrides Sheet)
+                                            <LinkIcon size={12} /> Direct Focus Links (Manual List)
                                         </label>
                                         <textarea
                                             value={settings.directVisionUrl || ''} 
@@ -246,7 +258,7 @@ export const SettingsModal: React.FC = () => {
                                             placeholder="Paste URL lists, HTML Embed codes, or mixed text here..."
                                         />
                                         <p className="text-[9px] text-stone-600 mt-1">
-                                            Accepts raw text blocks, comma-separated lists, and HTML embed codes.
+                                            Accepts raw text blocks, comma-separated lists, and HTML embed codes. All sources are combined.
                                         </p>
                                     </div>
                                 </div>

@@ -137,12 +137,12 @@ export const VisionMirror: React.FC = () => {
         let cardColor = "text-purple-300";
         let cardBorder = "border-purple-500/30";
         let cardBg = "bg-purple-900/10";
-        let PlatformIcon: React.ElementType = Globe;
+        let PlatformIcon: any = Globe;
         let actionText = "Open Portal";
         
         if (isPin) { 
             cardColor = "text-red-300"; cardBorder = "border-red-500/30"; cardBg = "bg-red-900/10"; 
-            PlatformIcon = () => <div className="text-red-500 font-bold text-4xl font-serif">P</div>;
+            PlatformIcon = (props: any) => <div className={`text-red-500 font-bold text-4xl font-serif ${props.className || ''}`}>P</div>;
             actionText = "View Board";
         }
         if (isInsta) { 
@@ -152,7 +152,7 @@ export const VisionMirror: React.FC = () => {
         }
         if (isTikTok) { 
             cardColor = "text-cyan-300"; cardBorder = "border-cyan-500/30"; cardBg = "bg-cyan-900/10"; 
-            PlatformIcon = () => <div className="text-cyan-400 font-bold text-xl font-mono">TikTok</div>;
+            PlatformIcon = (props: any) => <div className={`text-cyan-400 font-bold text-xl font-mono ${props.className || ''}`}>TikTok</div>;
             actionText = "Watch TikTok";
         }
 
