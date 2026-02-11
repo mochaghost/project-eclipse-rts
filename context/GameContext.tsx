@@ -611,18 +611,39 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const rerollVision = async () => {
         const settings = state.settings || {} as GameSettings; // Cast to avoid TS error on empty object
         const videos = await fetchMotivationVideos(settings.googleSheetId, settings.directVisionUrl);
-        const video = videos[Math.floor(Math.random() * videos.length)];
         
         setState(prev => {
+            // Filter out already seen videos
+            const seen = new Set(prev.seenVisionUrls || []);
+            let unseenVideos = videos.filter(v => !seen.has(v.originalUrl));
+            
+            // If we've seen them all, reset logic (loop playlist)
+            let didReset = false;
+            if (unseenVideos.length === 0) {
+                unseenVideos = videos;
+                didReset = true;
+            }
+
+            const video = unseenVideos[Math.floor(Math.random() * unseenVideos.length)];
+            
             let embedUrl = "NO_SIGNAL";
+            let newSeenList = [...(prev.seenVisionUrls || [])];
+
             if (video) {
                 // Store serialized object for VisionMirror to parse
                 embedUrl = JSON.stringify(video);
+                
+                if (didReset) {
+                    newSeenList = [video.originalUrl]; // Reset list, start with this one
+                } else {
+                    newSeenList.push(video.originalUrl);
+                }
             }
             
             return {
                 ...prev,
-                activeVisionVideo: embedUrl
+                activeVisionVideo: embedUrl,
+                seenVisionUrls: newSeenList
             };
         });
     };

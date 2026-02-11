@@ -141,7 +141,7 @@ export interface HistoryLog {
     type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE' | 'DAILY_REPORT' | 'NARRATIVE';
     message: string;
     details?: string;
-    cause?: string; // NEW: Why did this happen?
+    cause?: string; // NEW: The causality link (e.g. "Triggered by Low Order")
 }
 
 export interface ShopItem {
@@ -278,16 +278,21 @@ export interface BattleReport {
     conqueredFaction?: string;
 }
 
-// NEW: Daily Narrative System
+// NEW: Daily Narrative System - The 3 Acts
 export interface DailyNarrative {
     dayId: string; // YYYY-MM-DD
-    title: string; // "The Day of the Red Sun"
-    theme: 'FEAR' | 'HOPE' | 'ORDER' | 'CHAOS';
+    title: string; // Dynamic Title
+    theme: 'FEAR' | 'HOPE' | 'ORDER' | 'CHAOS' | 'GREED' | 'MAGIC' | 'WAR';
     stage: 'INCIDENT' | 'RISING' | 'CLIMAX' | 'RESOLUTION'; 
-    logs: string[]; // What happened so far today
+    acts: {
+        act1?: string; // Summary of the Incident (Morning)
+        act2?: string; // Summary of the Rising Action (Midday)
+        act3?: string; // Summary of the Climax (Evening)
+    };
+    logs: string[]; // Raw event logs used to build the narrative
     intensity: number; // 0-100, determines difficulty of Climax
     resolved: boolean;
-    cause: string; // "Triggered by low Hope"
+    cause: string; // The root cause string
 }
 
 export interface GameState {
@@ -331,6 +336,7 @@ export interface GameState {
   activeMapEvent: MapEventType;
   activeVisionVideo: string | null; 
   visionQueue: string[]; 
+  seenVisionUrls: string[]; // NEW: Tracks history of seen videos to prevent repeats
   
   // Advanced Simulation
   population: NPC[];

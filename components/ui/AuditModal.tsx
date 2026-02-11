@@ -1,16 +1,17 @@
 
 import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Activity, Skull, Heart, Shield, Scroll, Users, Globe, Flag, Hammer } from 'lucide-react';
+import { X, Activity, Skull, Heart, Shield, Scroll, Users, Globe, Flag, Hammer, BookOpen, Clock, Info } from 'lucide-react';
 import { FACTIONS } from '../../constants';
 
 export const AuditModal: React.FC = () => {
     const { state, toggleAudit } = useGame();
-    const [tab, setTab] = useState<'LOG' | 'POPULATION' | 'GEOPOLITICS'>('LOG');
+    const [tab, setTab] = useState<'LOG' | 'POPULATION' | 'GEOPOLITICS' | 'STORY'>('LOG');
 
     if (!state.isAuditOpen) return null;
 
     const stats = state.realmStats || { hope: 50, fear: 10, order: 50 };
+    const narrative = state.dailyNarrative;
 
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 pointer-events-auto">
@@ -20,6 +21,7 @@ export const AuditModal: React.FC = () => {
                          <h2 className="text-2xl text-stone-200 font-serif font-bold flex items-center gap-2"><Activity /> CHRONICLES</h2>
                          <div className="flex gap-2">
                              <button onClick={() => setTab('LOG')} className={`px-4 py-1 text-xs border ${tab === 'LOG' ? 'border-yellow-600 text-yellow-500' : 'border-stone-700 text-stone-500'}`}>EVENTS</button>
+                             <button onClick={() => setTab('STORY')} className={`px-4 py-1 text-xs border ${tab === 'STORY' ? 'border-yellow-600 text-yellow-500' : 'border-stone-700 text-stone-500'}`}>NARRATIVE</button>
                              <button onClick={() => setTab('POPULATION')} className={`px-4 py-1 text-xs border ${tab === 'POPULATION' ? 'border-yellow-600 text-yellow-500' : 'border-stone-700 text-stone-500'}`}>CENSUS</button>
                              <button onClick={() => setTab('GEOPOLITICS')} className={`px-4 py-1 text-xs border ${tab === 'GEOPOLITICS' ? 'border-yellow-600 text-yellow-500' : 'border-stone-700 text-stone-500'}`}>GEOPOLITICS</button>
                          </div>
@@ -63,8 +65,71 @@ export const AuditModal: React.FC = () => {
                                         <span className="text-[10px] text-stone-600 font-mono">{new Date(log.timestamp).toLocaleString()}</span>
                                     </div>
                                     <p className="text-stone-500 text-xs mt-1 italic font-serif">"{log.details}"</p>
+                                    {log.cause && (
+                                        <div className="mt-1 flex items-center gap-1 text-[9px] text-stone-600 uppercase tracking-widest">
+                                            <Info size={10} /> Origin: {log.cause}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {tab === 'STORY' && (
+                        <div className="flex flex-col h-full">
+                            <div className="text-center mb-8">
+                                <h3 className="text-2xl font-serif text-stone-200 font-bold tracking-[0.2em] uppercase">{narrative?.title || "The Unwritten Day"}</h3>
+                                <div className="flex justify-center gap-4 mt-2 text-xs font-mono text-stone-500">
+                                    <span>Theme: <span className="text-yellow-600">{narrative?.theme || "PENDING"}</span></span>
+                                    <span>Stage: <span className="text-blue-400">{narrative?.stage || "WAITING"}</span></span>
+                                    <span>Intensity: <span className="text-red-500">{narrative?.intensity || 0}%</span></span>
+                                </div>
+                                <div className="mt-4 text-xs text-stone-600 italic">"Events are forged in the fires of consequence."</div>
+                            </div>
+
+                            {/* 3 ACT TIMELINE */}
+                            <div className="relative flex-1 px-12">
+                                <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-stone-800 -translate-x-1/2"></div>
+                                
+                                <div className="relative z-10 flex flex-col gap-12">
+                                    {/* ACT 1 */}
+                                    <div className="flex items-center gap-8 group">
+                                        <div className="flex-1 text-right">
+                                            <h4 className="text-yellow-600 font-bold font-serif text-lg">ACT I: THE INCIDENT</h4>
+                                            <p className="text-stone-400 text-sm mt-1">{narrative?.acts.act1 || "The day begins in silence. Awaiting the first spark of action."}</p>
+                                            {narrative?.acts.act1 && <div className="text-[10px] text-stone-600 mt-1 uppercase tracking-widest">Origin: {narrative.cause}</div>}
+                                        </div>
+                                        <div className={`w-8 h-8 rounded-full border-4 flex items-center justify-center shrink-0 bg-[#0c0a09] ${narrative?.acts.act1 ? 'border-yellow-600 text-yellow-600' : 'border-stone-800 text-stone-800'}`}>
+                                            <BookOpen size={14} />
+                                        </div>
+                                        <div className="flex-1"></div>
+                                    </div>
+
+                                    {/* ACT 2 */}
+                                    <div className="flex items-center gap-8 group">
+                                        <div className="flex-1"></div>
+                                        <div className={`w-8 h-8 rounded-full border-4 flex items-center justify-center shrink-0 bg-[#0c0a09] ${narrative?.acts.act2 ? 'border-orange-600 text-orange-600' : 'border-stone-800 text-stone-800'}`}>
+                                            <Activity size={14} />
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <h4 className={`${narrative?.acts.act2 ? 'text-orange-600' : 'text-stone-700'} font-bold font-serif text-lg`}>ACT II: RISING TENSION</h4>
+                                            <p className="text-stone-400 text-sm mt-1">{narrative?.acts.act2 || "The conflict has not yet escalated. Continue your duties."}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* ACT 3 */}
+                                    <div className="flex items-center gap-8 group">
+                                        <div className="flex-1 text-right">
+                                            <h4 className={`${narrative?.acts.act3 ? 'text-red-600' : 'text-stone-700'} font-bold font-serif text-lg`}>ACT III: THE CLIMAX</h4>
+                                            <p className="text-stone-400 text-sm mt-1">{narrative?.acts.act3 || "The final confrontation approaches at nightfall."}</p>
+                                        </div>
+                                        <div className={`w-8 h-8 rounded-full border-4 flex items-center justify-center shrink-0 bg-[#0c0a09] ${narrative?.acts.act3 ? 'border-red-600 text-red-600' : 'border-stone-800 text-stone-800'}`}>
+                                            <Skull size={14} />
+                                        </div>
+                                        <div className="flex-1"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
 

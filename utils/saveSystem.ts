@@ -4,7 +4,7 @@ import { generateId } from './generators';
 import { FACTIONS } from '../constants';
 
 const SAVE_KEY = 'PROJECT_ECLIPSE_SAVE_V1';
-const CURRENT_VERSION = 12; // Increment version to force deep sanitization
+const CURRENT_VERSION = 13; // Increment version to force deep sanitization
 
 interface SaveFile {
     version: number;
@@ -43,6 +43,7 @@ const DEFAULT_STATE: GameState = {
   activeMapEvent: 'NONE',
   activeVisionVideo: null,
   visionQueue: [],
+  seenVisionUrls: [], // NEW
   population: [],
   realmStats: { hope: 50, fear: 10, order: 50 },
   structures: { forgeLevel: 0, wallsLevel: 0, libraryLevel: 0, marketLevel: 0, lightingLevel: 0 },
@@ -147,6 +148,7 @@ export const loadGame = (): GameState => {
             settings: loadedState.settings || DEFAULT_STATE.settings,
             inventory: Array.isArray(loadedState.inventory) ? loadedState.inventory : [],
             visionQueue: Array.isArray(loadedState.visionQueue) ? loadedState.visionQueue : [],
+            seenVisionUrls: Array.isArray(loadedState.seenVisionUrls) ? loadedState.seenVisionUrls : [],
             templates: Array.isArray(loadedState.templates) ? loadedState.templates : []
         };
 

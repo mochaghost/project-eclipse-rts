@@ -50,7 +50,6 @@ export const createNPC = (role: NPC['role'] = 'Peasant'): NPC => {
     };
 };
 
-// ... (Keep existing stat updates) ...
 export const updateRealmStats = (current: RealmStats, event: 'VICTORY' | 'DEFEAT' | 'NEGLECT' | 'TRADE'): RealmStats => {
     const next = { ...current };
     switch (event) {
@@ -62,7 +61,7 @@ export const updateRealmStats = (current: RealmStats, event: 'VICTORY' | 'DEFEAT
     return next;
 };
 
-// --- NEW: AUTONOMOUS FACTION AI ---
+// --- AUTONOMOUS FACTION AI ---
 const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: FactionReputation[], log?: HistoryLog } => {
     let log: HistoryLog | undefined;
     const updatedFactions = factions.map(f => {
@@ -70,7 +69,6 @@ const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: 
         if (Math.random() > 0.995) {
             const roll = Math.random();
             if (roll < 0.3) {
-                // WAR EVENT
                 const target = factions[Math.floor(Math.random() * factions.length)];
                 if (target.id !== f.id && f.status !== 'WAR') {
                     log = {
@@ -83,7 +81,6 @@ const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: 
                     };
                 }
             } else if (roll < 0.6) {
-                // ECONOMIC BOOM
                 log = {
                     id: generateId(),
                     timestamp: Date.now(),
@@ -93,7 +90,6 @@ const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: 
                     cause: "Economic Surplus"
                 };
             } else {
-                // INTERNAL COLLAPSE
                 log = {
                     id: generateId(),
                     timestamp: Date.now(),
@@ -109,6 +105,81 @@ const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: 
     return { updatedFactions, log };
 };
 
+// --- CAUSALITY ENGINE (DWARF FORTRESS STYLE) ---
+const updateDailyNarrative = (current: DailyNarrative | undefined, state: GameState, logs: HistoryLog[]): DailyNarrative => {
+    const todayId = new Date().toISOString().split('T')[0];
+    
+    // Initialize if missing or new day
+    let narrative = current;
+    if (!narrative || narrative.dayId !== todayId) {
+        narrative = {
+            dayId: todayId,
+            title: "The Silent Morning",
+            theme: 'ORDER',
+            stage: 'INCIDENT',
+            acts: {},
+            logs: [],
+            intensity: 0,
+            resolved: false,
+            cause: "A new dawn breaks."
+        };
+    }
+
+    // ACT 1: INCIDENT (The first significant event sets the timeline)
+    if (narrative.stage === 'INCIDENT') {
+        const trigger = logs.find(l => l.type === 'DEFEAT' || l.type === 'VICTORY' || l.type === 'WORLD_EVENT' || (l.type === 'NARRATIVE' && l.cause?.includes('Crime')));
+        
+        if (trigger) {
+            narrative.stage = 'RISING';
+            narrative.acts.act1 = trigger.message;
+            narrative.cause = trigger.cause || "Unknown Origin";
+            
+            // Set Theme based on Causality, not just Type
+            if (trigger.cause?.includes('Greed') || trigger.type === 'TRADE') narrative.theme = 'GREED';
+            else if (trigger.type === 'VICTORY') narrative.theme = 'HOPE';
+            else if (trigger.type === 'DEFEAT') narrative.theme = 'FEAR';
+            else if (trigger.cause?.includes('Magic')) narrative.theme = 'MAGIC';
+            else narrative.theme = 'CHAOS';
+            
+            narrative.title = `The Day of ${trigger.cause || 'Change'}`;
+            narrative.logs.push(`ACT I: It began when ${trigger.message}.`);
+        }
+    }
+
+    // ACT 2: RISING ACTION (Escalation based on Stats)
+    if (narrative.stage === 'RISING') {
+        // Tension calculation based on accumulated state
+        const tension = (100 - state.realmStats.hope) + state.realmStats.fear + (state.enemies.length * 10);
+        
+        if (tension > 150 || state.baseHp < state.maxBaseHp * 0.6) {
+            narrative.stage = 'CLIMAX';
+            narrative.intensity = Math.min(100, tension / 2);
+            
+            let escalationMsg = "Tensions boil over.";
+            if (narrative.theme === 'GREED') escalationMsg = "Markets collapse and riots begin.";
+            if (narrative.theme === 'FEAR') escalationMsg = "Shadows lengthen, hiding monsters.";
+            if (narrative.theme === 'HOPE') escalationMsg = "The people rally for a final push.";
+            
+            narrative.acts.act2 = escalationMsg;
+            narrative.logs.push(`ACT II: ${escalationMsg} The realm prepares for the worst.`);
+        }
+    }
+
+    // ACT 3: CLIMAX (The inevitable conclusion)
+    if (narrative.stage === 'CLIMAX') {
+        const threatLevel = state.enemies.reduce((acc, e) => acc + e.rank, 0);
+        narrative.intensity = threatLevel + (100 - state.realmStats.order);
+        
+        let climaxMsg = "A storm approaches.";
+        if (narrative.theme === 'GREED') climaxMsg = "A Golden Horde marches to collect debts.";
+        if (narrative.theme === 'FEAR') climaxMsg = "Nightmares manifest in the courtyard.";
+        
+        narrative.acts.act3 = `${climaxMsg} Threat Level: ${narrative.intensity}.`;
+    }
+
+    return narrative;
+};
+
 export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' | 'DEFEAT'): any => {
     let pop = [...state.population];
     let logs: HistoryLog[] = [];
@@ -118,38 +189,79 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     // 1. Update Global Stats
     let newStats = updateRealmStats(state.realmStats || { hope: 50, fear: 10, order: 50 }, triggerEvent || 'NEGLECT');
 
-    // 2. Run Faction AI (Autonomous World)
+    // 2. Run Faction AI
     const factionSim = simulateFactionTurn(state.factions || []);
     const newFactions = factionSim.updatedFactions;
     if (factionSim.log) logs.push(factionSim.log);
 
-    // 3. NPC Deep Simulation
+    // 3. NPC Deep Simulation & GOLD NERF (Causality Engine)
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
+        let actionLog: string | null = null;
         
-        // Income Logic
-        if (Math.random() > 0.97) goldChange -= 1; // Upkeep
-        if (newNpc.role === 'Peasant' && Math.random() > 0.92) goldChange += 1; // Tax
+        // --- GOLD BALANCE UPDATE (THE NERF) ---
+        // Passive Income significantly reduced.
+        // Base chance: 0.5% per tick (roughly every 3 minutes per peasant)
+        // Order Modifier: High order enables reliable taxes. Low order enables theft.
+        
+        if (newNpc.role === 'Peasant') {
+            if (newStats.order > 70) {
+                // Efficient Taxes (High Order)
+                if (Math.random() > 0.995) goldChange += 1;
+            } else if (newStats.order < 30) {
+                // Corruption / Theft (Low Order)
+                if (Math.random() > 0.99) {
+                    goldChange -= 1; 
+                    if (Math.random() > 0.9) actionLog = "COMMITS_CRIME"; // Track causal chain
+                }
+            } else {
+                // Stagnation (Mid Order) - Very rare income
+                if (Math.random() > 0.999) goldChange += 1;
+            }
+        } else {
+            // Upkeep for guards/nobles (Cost money)
+            if (Math.random() > 0.999) goldChange -= 1; 
+        }
+
+        // --- CAUSAL EVENTS ---
+        if (actionLog === "COMMITS_CRIME") {
+            logs.push({
+                id: generateId(),
+                timestamp: Date.now(),
+                type: 'NARRATIVE',
+                message: `${newNpc.name} stole supplies`,
+                details: "Low Order enables corruption.",
+                cause: "Civil Unrest"
+            });
+            // Ripple Effect: Fear goes up
+            newStats.fear += 1;
+        }
 
         // Mood Logic
         const sanityDrain = Math.max(0, (newStats.fear - newStats.hope) * 0.05);
         newNpc.sanity = Math.max(0, Math.min(100, newNpc.sanity - sanityDrain));
 
-        // Generate Gossip (Lore)
-        if (Math.random() > 0.999) {
+        // Madness Trigger
+        if (newNpc.sanity < 10 && newNpc.status !== 'MAD') {
+            newNpc.status = 'MAD';
             logs.push({
                 id: generateId(),
                 timestamp: Date.now(),
-                type: 'LORE',
-                message: `Rumor from ${newNpc.name}`,
-                details: `"I heard the shadows moving... something big is coming."`,
-                cause: "Villager Gossip"
+                type: 'NARRATIVE',
+                message: `${newNpc.name} has gone MAD`,
+                details: "The pressure of the void broke their mind.",
+                cause: "Sanity Collapse"
             });
+            // Madness spawns an enemy!
+            spawnedEnemies.push(generateNemesis('MADNESS_SPAWN', TaskPriority.HIGH, [], 0, undefined, 'Broken Mind', 60, newStats));
         }
 
         return newNpc;
     });
+
+    // 4. Update Narrative State (Connecting the dots)
+    const dailyNarrative = updateDailyNarrative(state.dailyNarrative, state, logs);
 
     return { 
         newPopulation: pop, 
@@ -158,6 +270,6 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         newFactions, 
         spawnedEnemies, 
         goldChange, 
-        dailyNarrative: state.dailyNarrative 
+        dailyNarrative 
     };
 };

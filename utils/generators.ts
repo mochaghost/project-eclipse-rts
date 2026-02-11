@@ -306,7 +306,6 @@ export interface VisionContent {
 
 const VOID_LIBRARY_DEFAULTS = [
     "https://www.instagram.com/reel/DF3dhFat9Xe/",
-    // ... kept minimal for brevity, assume full list is here
 ];
 
 export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
@@ -350,29 +349,72 @@ export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
     }
 };
 
-export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
-    if (directUrl && directUrl.trim().length > 0) {
-        const results: VisionContent[] = [];
-        const instaMatches = directUrl.matchAll(/data-instgrm-permalink="([^"]+)"/g);
-        for (const match of instaMatches) {
-            const res = convertToEmbedUrl(match[1]);
-            if (res) results.push(res);
+const fetchGoogleSheetCsv = async (url: string): Promise<string[]> => {
+    try {
+        // Try to force CSV format if it's a pubhtml link
+        let fetchUrl = url;
+        if (url.includes('/pubhtml')) {
+            fetchUrl = url.replace('/pubhtml', '/pub?output=csv');
+        } else if (url.includes('/edit')) {
+            // Not a published link, usually fails without auth, but we try export
+            fetchUrl = url.replace(/\/edit.*$/, '/export?format=csv');
         }
-        const urlRegex = /(https?:\/\/[^\s,;"'<]+)/g;
-        const allUrls = directUrl.matchAll(urlRegex);
-        for (const match of allUrls) {
-            const raw = match[1];
-            if (!results.some(r => r.originalUrl.includes(raw) || raw.includes(r.originalUrl))) {
-                const res = convertToEmbedUrl(raw);
-                if (res) results.push(res);
+
+        const res = await fetch(fetchUrl);
+        if (!res.ok) return [];
+        const text = await res.text();
+        
+        // Extract all URLs from the CSV text
+        const matches = text.match(/https?:\/\/[^\s,"']+/g);
+        return matches || [];
+    } catch (e) {
+        console.warn("Failed to fetch/parse sheet:", url, e);
+        return [];
+    }
+}
+
+export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: string): Promise<VisionContent[]> => {
+    let allUrls: string[] = [];
+
+    // 1. Fetch from Custom Sheet ID (Top Input)
+    if (customSheetId) {
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/${customSheetId}/export?format=csv`;
+        const sheetLinks = await fetchGoogleSheetCsv(sheetUrl);
+        allUrls = [...allUrls, ...sheetLinks];
+    }
+
+    // 2. Fetch from Direct URL Text Box (Bottom Input)
+    if (directUrl && directUrl.trim().length > 0) {
+        const rawLines = directUrl.split(/[\n,;]+/);
+        
+        for (const line of rawLines) {
+            const clean = line.trim();
+            if (!clean) continue;
+
+            // Check if it is a Google Sheet URL
+            if (clean.includes('docs.google.com/spreadsheets')) {
+                const sheetLinks = await fetchGoogleSheetCsv(clean);
+                allUrls = [...allUrls, ...sheetLinks];
+            } else {
+                // Assume it's a direct social link or raw text containing a link
+                const urlMatch = clean.match(/(https?:\/\/[^\s"<>]+)/);
+                if (urlMatch) {
+                    allUrls.push(urlMatch[1]);
+                }
             }
         }
-        if (results.length > 0) {
-            const unique = results.filter((v,i,a)=>a.findIndex(t=>(t.originalUrl === v.originalUrl))===i);
-            return unique;
-        }
     }
-    return VOID_LIBRARY_DEFAULTS.map(url => convertToEmbedUrl(url)).filter(item => item !== null) as VisionContent[];
+
+    // 3. Deduplicate and Convert
+    const uniqueUrls = [...new Set(allUrls)];
+    let results: VisionContent[] = uniqueUrls.map(url => convertToEmbedUrl(url)).filter(item => item !== null) as VisionContent[];
+
+    // 4. Fallback if empty
+    if (results.length === 0) {
+        return VOID_LIBRARY_DEFAULTS.map(url => convertToEmbedUrl(url)).filter(item => item !== null) as VisionContent[];
+    }
+
+    return results;
 };
 
 export const generateWorldRumor = (): { message: string, details: string } => {
