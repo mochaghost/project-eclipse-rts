@@ -308,62 +308,77 @@ const VOID_LIBRARY_DEFAULTS = [
     "https://www.instagram.com/reel/DF3dhFat9Xe/",
 ];
 
+// Reconstructs clean URLs from input or detected IDs
 export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
     if (!rawInput) return null;
     let cleanUrl = rawInput.trim();
     
-    // Normalize Pinterest URLs to avoid regional redirection issues (ar.pinterest, mx.pinterest -> www.pinterest)
-    if (cleanUrl.includes('pinterest.com')) {
-        cleanUrl = cleanUrl.replace(/https?:\/\/[a-z]{2,3}\.pinterest\.com/, 'https://www.pinterest.com');
+    // Safety check for basic URL structure if it's not a pre-cleaned ID
+    if (cleanUrl.startsWith('http') || cleanUrl.includes('.')) {
+        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+            cleanUrl = `https://${cleanUrl}`;
+        }
     }
 
-    if (rawInput.includes('<blockquote') && rawInput.includes('instagram-media')) {
-        const permalinkMatch = rawInput.match(/data-instgrm-permalink="([^"]+)"/);
-        if (permalinkMatch && permalinkMatch[1]) {
-            cleanUrl = permalinkMatch[1];
-        } 
-    } 
-    else if (rawInput.includes('<') || rawInput.includes('>')) {
-        const httpMatch = rawInput.match(/(https?:\/\/[^\s"<>]+)/);
-        if (httpMatch && httpMatch[1]) {
-            cleanUrl = httpMatch[1];
-        }
-    }
-    cleanUrl = cleanUrl.replace(/&amp;/g, '&');
-    
     try {
         const urlObj = new URL(cleanUrl);
-        if (urlObj.hostname.includes('instagram.com') || urlObj.hostname.includes('facebook.com')) {
+        
+        // --- INSTAGRAM CLEANUP ---
+        if (urlObj.hostname.includes('instagram.com')) {
+            // Remove tracking params but KEEP the pathname (e.g. /reel/xyz)
             urlObj.search = ''; 
-            cleanUrl = urlObj.toString();
+            const finalUrl = urlObj.toString();
+            return { type: 'SOCIAL', embedUrl: finalUrl, originalUrl: finalUrl, platform: 'INSTAGRAM' };
+        }
+
+        // --- PINTEREST CLEANUP (Regional Redirection Fix) ---
+        if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) {
+            // Force global domain to avoid regional redirect issues (ar.pinterest -> www.pinterest)
+            if (urlObj.hostname.endsWith('pinterest.com')) {
+                urlObj.hostname = 'www.pinterest.com';
+            }
+            // Strip tracking
+            urlObj.search = '';
+            
+            const finalUrl = urlObj.toString();
+            return { type: 'SOCIAL', embedUrl: finalUrl, originalUrl: finalUrl, platform: 'PINTEREST' };
+        }
+
+        // --- TIKTOK CLEANUP ---
+        if (urlObj.hostname.includes('tiktok.com')) {
+            urlObj.search = '';
+            const finalUrl = urlObj.toString();
+            return { type: 'SOCIAL', embedUrl: finalUrl, originalUrl: finalUrl, platform: 'TIKTOK' };
+        }
+
+        // --- YOUTUBE CLEANUP (Video Embeds) ---
+        if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+             let embedUrl = cleanUrl;
+             // Basic conversion to embed format if it's a standard watch link
+             if (urlObj.pathname === '/watch' && urlObj.searchParams.has('v')) {
+                 embedUrl = `https://www.youtube.com/embed/${urlObj.searchParams.get('v')}`;
+             } else if (urlObj.hostname === 'youtu.be') {
+                 embedUrl = `https://www.youtube.com/embed${urlObj.pathname}`;
+             }
+             return { type: 'VIDEO', embedUrl: embedUrl, originalUrl: cleanUrl, platform: 'YOUTUBE' };
         }
         
-        // Image Direct Links
+        // --- IMAGE CHECK ---
         if (cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)($|\?)/) || urlObj.hostname.includes('i.pinimg.com')) {
              return { type: 'IMAGE', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
         }
         
-        // Platform Detection
-        if (urlObj.hostname.includes('instagram.com')) {
-            return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'INSTAGRAM' };
-        }
-        if (urlObj.hostname.includes('pinterest') || urlObj.hostname.includes('pin.it')) {
-            return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'PINTEREST' };
-        }
-        if (urlObj.hostname.includes('tiktok')) {
-            return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'TIKTOK' };
-        }
-        if (urlObj.hostname.includes('youtube') || urlObj.hostname.includes('youtu.be')) {
-             return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'YOUTUBE' };
-        }
-        
+        // Fallback
         return { type: 'SOCIAL', embedUrl: cleanUrl, originalUrl: cleanUrl, platform: 'OTHER' };
+
     } catch(e) {
+        // If it failed to parse as URL, it might be a raw ID passed from the ID Extractor below
+        // This is unlikely given the flow, but good for safety
         return null;
     }
 };
 
-const fetchGoogleSheetCsv = async (url: string): Promise<string[]> => {
+const fetchGoogleSheetCsv = async (url: string): Promise<string> => {
     try {
         let fetchUrl = url;
         // Correctly handle "published to web" links
@@ -378,50 +393,66 @@ const fetchGoogleSheetCsv = async (url: string): Promise<string[]> => {
         const res = await fetch(fetchUrl);
         if (!res.ok) {
             console.warn("Sheet fetch failed status:", res.status);
-            return [];
+            return "";
         }
-        const text = await res.text();
-        
-        // Regex to find http(s) links, stopping at quotes, spaces, or commas
-        // Improved regex to better handle raw CSV data
-        const matches = text.match(/https?:\/\/[^"'\s,<>\\]+/g);
-        if (matches) {
-            // Remove potential trailing punctuation often caught by regex in CSVs
-            return matches.map(m => m.replace(/[),;]+$/, ''));
-        }
-        return [];
+        return await res.text();
     } catch (e) {
         console.warn("Failed to fetch/parse sheet:", url, e);
-        return [];
+        return "";
     }
 }
 
-// Universal input processor for both Top (Sheet ID/List) and Bottom (Direct URL/List) boxes
-// This handles mixed content: Sheet URLs, Sheet IDs, Direct URLs, Comma Separated lists.
+// Universal input processor using REGEX EXTRACTION for messy CSVs
 const processSourceInput = async (input: string): Promise<string[]> => {
     if (!input || !input.trim()) return [];
     
-    // Split by comma, newline, or semicolon to support multiple items
-    const entries = input.split(/[\n,;]+/).map(s => s.trim()).filter(s => s.length > 0);
+    // 1. Determine if input is a URL to fetch (Sheet) or Raw Text
+    let rawContent = input;
+    if (input.includes('docs.google.com/spreadsheets') || (input.startsWith('http') && !input.includes('\n'))) {
+        // It's a sheet URL, fetch it
+        rawContent = await fetchGoogleSheetCsv(input);
+    } 
+    // If it's a raw Sheet ID
+    else if (input.length > 20 && !input.includes('/') && !input.includes('.') && !input.includes(' ')) {
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/${input}/export?format=csv`;
+        rawContent = await fetchGoogleSheetCsv(sheetUrl);
+    }
+
+    // 2. ID EXTRACTION ENGINE (The fix for messy CSVs)
     let collectedUrls: string[] = [];
 
-    for (const entry of entries) {
-        // Case 1: Google Sheet URL
-        if (entry.includes('docs.google.com/spreadsheets')) {
-            const sheetUrls = await fetchGoogleSheetCsv(entry);
-            collectedUrls = collectedUrls.concat(sheetUrls);
-        }
-        // Case 2: Generic URL (Social or Image)
-        else if (entry.startsWith('http://') || entry.startsWith('https://')) {
-            collectedUrls.push(entry);
-        }
-        // Case 3: Raw Google Sheet ID (long alphanumeric, no dots/slashes) - Fallback
-        else if (entry.length > 20 && !entry.includes('/') && !entry.includes('.')) {
-            const sheetUrl = `https://docs.google.com/spreadsheets/d/${entry}/export?format=csv`;
-            const sheetUrls = await fetchGoogleSheetCsv(sheetUrl);
-            collectedUrls = collectedUrls.concat(sheetUrls);
-        }
+    // Instagram IDs: /reel/CODE or /p/CODE
+    // Matches alphanumeric+underscore+dash codes typically 11 chars
+    const instaMatches = rawContent.matchAll(/instagram\.com\/(?:reel|p)\/([a-zA-Z0-9_-]+)/g);
+    for (const match of instaMatches) {
+        if (match[1]) collectedUrls.push(`https://www.instagram.com/reel/${match[1]}/`);
     }
+
+    // Pinterest IDs: /pin/NUMBERS
+    // Also matches regional domains implicitly by ignoring the domain part
+    const pinMatches = rawContent.matchAll(/pinterest(?:\.[a-z]{2,3})?\.com\/pin\/(\d+)/g);
+    for (const match of pinMatches) {
+        if (match[1]) collectedUrls.push(`https://www.pinterest.com/pin/${match[1]}/`);
+    }
+
+    // TikTok IDs (video/NUMBERS)
+    const tiktokMatches = rawContent.matchAll(/tiktok\.com\/.*\/video\/(\d+)/g);
+    for (const match of tiktokMatches) {
+        if (match[1]) collectedUrls.push(`https://www.tiktok.com/@user/video/${match[1]}`); // Generic user path works for embedding
+    }
+
+    // YouTube IDs (v=CODE or be/CODE)
+    const ytMatches = rawContent.matchAll(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g);
+    for (const match of ytMatches) {
+        if (match[1]) collectedUrls.push(`https://www.youtube.com/embed/${match[1]}`);
+    }
+
+    // Generic Image Links (Direct http links ending in extensions)
+    const imageMatches = rawContent.match(/https?:\/\/[^\s"']+\.(?:jpg|jpeg|png|gif|webp)/gi);
+    if (imageMatches) {
+        collectedUrls = collectedUrls.concat(imageMatches);
+    }
+
     return collectedUrls;
 }
 
@@ -433,7 +464,7 @@ export const fetchMotivationVideos = async (sheet1?: string, sheet2?: string, di
     // Process "Source 2"
     const s2Urls = await processSourceInput(sheet2 || '');
 
-    // Process "Direct"
+    // Process "Direct" - Treat direct input as raw text to extract IDs from too
     const directUrls = await processSourceInput(directUrl || '');
     
     // Combine ALL lists
@@ -442,7 +473,7 @@ export const fetchMotivationVideos = async (sheet1?: string, sheet2?: string, di
     // Deduplicate
     const uniqueUrls = [...new Set(allUrls)];
     
-    // Convert to internal format
+    // Convert to internal format (Clean-up pass)
     let results: VisionContent[] = uniqueUrls
         .map(url => convertToEmbedUrl(url))
         .filter(item => item !== null) as VisionContent[];
