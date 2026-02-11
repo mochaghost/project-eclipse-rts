@@ -2,9 +2,31 @@
 import { ThreeElements } from '@react-three/fiber';
 
 // Extend JSX.IntrinsicElements to include Three.js elements
+// Explicitly declaring common elements to ensure TypeScript picks them up
 declare global {
   namespace JSX {
-    interface IntrinsicElements extends ThreeElements {
+    interface IntrinsicElements {
+      group: any;
+      mesh: any;
+      pointLight: any;
+      dodecahedronGeometry: any;
+      meshStandardMaterial: any;
+      cylinderGeometry: any;
+      boxGeometry: any;
+      sphereGeometry: any;
+      coneGeometry: any;
+      planeGeometry: any;
+      torusGeometry: any;
+      octahedronGeometry: any;
+      instancedMesh: any;
+      fog: any;
+      directionalLight: any;
+      hemisphereLight: any;
+      ambientLight: any;
+      meshBasicMaterial: any;
+      fogExp2: any;
+      spotLight: any;
+      primitive: any;
       [elemName: string]: any;
     }
   }

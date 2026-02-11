@@ -403,6 +403,7 @@ const fetchGoogleSheetCsv = async (url: string): Promise<string> => {
 }
 
 // Universal input processor using REGEX EXTRACTION for messy CSVs
+// This ignores ALL wrapping text (HTML, JSON, etc) and finds the IDs directly
 const processSourceInput = async (input: string): Promise<string[]> => {
     if (!input || !input.trim()) return [];
     
@@ -423,20 +424,21 @@ const processSourceInput = async (input: string): Promise<string[]> => {
 
     // Instagram IDs: /reel/CODE or /p/CODE
     // Matches alphanumeric+underscore+dash codes typically 11 chars
-    const instaMatches = rawContent.matchAll(/instagram\.com\/(?:reel|p)\/([a-zA-Z0-9_-]+)/g);
+    // This regex looks for 'reel/' or 'p/' followed by the code, ignoring domain prefix
+    const instaMatches = rawContent.matchAll(/(?:reel|p)\/([a-zA-Z0-9_-]+)/g);
     for (const match of instaMatches) {
         if (match[1]) collectedUrls.push(`https://www.instagram.com/reel/${match[1]}/`);
     }
 
     // Pinterest IDs: /pin/NUMBERS
-    // Also matches regional domains implicitly by ignoring the domain part
-    const pinMatches = rawContent.matchAll(/pinterest(?:\.[a-z]{2,3})?\.com\/pin\/(\d+)/g);
+    // This is the robust fix for 'ar.pinterest.com'. We just extract the numeric ID.
+    const pinMatches = rawContent.matchAll(/\/pin\/(\d+)/g);
     for (const match of pinMatches) {
         if (match[1]) collectedUrls.push(`https://www.pinterest.com/pin/${match[1]}/`);
     }
 
     // TikTok IDs (video/NUMBERS)
-    const tiktokMatches = rawContent.matchAll(/tiktok\.com\/.*\/video\/(\d+)/g);
+    const tiktokMatches = rawContent.matchAll(/\/video\/(\d+)/g);
     for (const match of tiktokMatches) {
         if (match[1]) collectedUrls.push(`https://www.tiktok.com/@user/video/${match[1]}`); // Generic user path works for embedding
     }
@@ -448,6 +450,7 @@ const processSourceInput = async (input: string): Promise<string[]> => {
     }
 
     // Generic Image Links (Direct http links ending in extensions)
+    // Only if we haven't found social media links, to avoid false positives in HTML attributes
     const imageMatches = rawContent.match(/https?:\/\/[^\s"']+\.(?:jpg|jpeg|png|gif|webp)/gi);
     if (imageMatches) {
         collectedUrls = collectedUrls.concat(imageMatches);

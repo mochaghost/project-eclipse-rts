@@ -43,7 +43,7 @@ export const VisionMirror: React.FC = () => {
         
         try {
             // Validate first
-            new URL(url); // Will throw if invalid syntax
+            new URL(url); 
             
             const popup = window.open(
                 url, 
@@ -56,7 +56,6 @@ export const VisionMirror: React.FC = () => {
             }
         } catch (e) {
             console.error("Failed to open portal:", e);
-            // Fallback to blank if it was a URL issue but try basic fallback
             if (url && url.startsWith('http')) {
                 try { window.open(url, '_blank'); } catch(err) {}
             }
