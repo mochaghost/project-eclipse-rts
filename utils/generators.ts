@@ -332,8 +332,6 @@ const extractVisionContent = (rawText: string): VisionContent[] => {
     const seen = new Set<string>();
 
     // 1. INSTAGRAM (Reels & Posts)
-    // Matches: /reel/CODE, /p/CODE, with or without domain
-    // Works on: Raw URLs, HTML blocks, attributes
     const instaMatches = rawText.matchAll(/(?:instagram\.com\/|href=".*?)(?:reel|p)\/([a-zA-Z0-9_-]+)/g);
     for (const match of instaMatches) {
         const id = match[1];
@@ -349,12 +347,14 @@ const extractVisionContent = (rawText: string): VisionContent[] => {
         }
     }
 
-    // 2. PINTEREST STANDARD
-    // Matches: /pin/NUMBERS/
-    const pinMatches = rawText.matchAll(/\/pin\/(\d+)/g);
+    // 2. PINTEREST STANDARD - STRICT REGEX
+    // Now requires 'pinterest.com' to precede the '/pin/' to avoid false positives in random text
+    // Matches: pinterest.com/pin/123, ar.pinterest.com/pin/123, www.pinterest.co.uk/pin/123
+    const pinMatches = rawText.matchAll(/pinterest(?:\.[a-z.]+)?\.com\/pin\/(\d+)/g);
     for (const match of pinMatches) {
         const id = match[1];
-        const cleanUrl = `https://www.pinterest.com/pin/${id}/`; // Normalized URL (Forces Global domain)
+        // Normalize to www.pinterest.com to allow browser to handle local redirects
+        const cleanUrl = `https://www.pinterest.com/pin/${id}/`; 
         if (!seen.has(cleanUrl)) {
             seen.add(cleanUrl);
             results.push({
@@ -367,7 +367,7 @@ const extractVisionContent = (rawText: string): VisionContent[] => {
     }
 
     // 3. PINTEREST SHORTLINKS (pin.it)
-    // Needs to be treated as an external link because we can't unshorten client-side without CORS
+    // Matches: pin.it/CODE
     const pinShortMatches = rawText.matchAll(/pin\.it\/([a-zA-Z0-9]+)/g);
     for (const match of pinShortMatches) {
         const id = match[1];
@@ -376,7 +376,7 @@ const extractVisionContent = (rawText: string): VisionContent[] => {
             seen.add(cleanUrl);
             results.push({
                 type: 'SOCIAL',
-                embedUrl: cleanUrl, // Will be opened in new tab
+                embedUrl: cleanUrl,
                 originalUrl: cleanUrl,
                 platform: 'PINTEREST'
             });
