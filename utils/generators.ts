@@ -311,6 +311,12 @@ const VOID_LIBRARY_DEFAULTS = [
 export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
     if (!rawInput) return null;
     let cleanUrl = rawInput.trim();
+    
+    // Normalize Pinterest URLs to avoid regional redirection issues (ar.pinterest, mx.pinterest -> www.pinterest)
+    if (cleanUrl.includes('pinterest.com')) {
+        cleanUrl = cleanUrl.replace(/https?:\/\/[a-z]{2,3}\.pinterest\.com/, 'https://www.pinterest.com');
+    }
+
     if (rawInput.includes('<blockquote') && rawInput.includes('instagram-media')) {
         const permalinkMatch = rawInput.match(/data-instgrm-permalink="([^"]+)"/);
         if (permalinkMatch && permalinkMatch[1]) {
@@ -351,20 +357,24 @@ export const convertToEmbedUrl = (rawInput: string): VisionContent | null => {
 
 const fetchGoogleSheetCsv = async (url: string): Promise<string[]> => {
     try {
-        // Try to force CSV format if it's a pubhtml link
         let fetchUrl = url;
+        // Fix for "2PACX" published to web links
         if (url.includes('/pubhtml')) {
-            fetchUrl = url.replace('/pubhtml', '/pub?output=csv');
+            // Replace /pubhtml with /pub?output=csv, removing any trailing parts or queries first
+            fetchUrl = url.split('/pubhtml')[0] + '/pub?output=csv';
         } else if (url.includes('/edit')) {
-            // Not a published link, usually fails without auth, but we try export
             fetchUrl = url.replace(/\/edit.*$/, '/export?format=csv');
         }
 
         const res = await fetch(fetchUrl);
-        if (!res.ok) return [];
+        if (!res.ok) {
+            console.warn("Sheet fetch failed status:", res.status);
+            return [];
+        }
         const text = await res.text();
         
-        // Extract all URLs from the CSV text
+        // Robust regex to extract URLs from CSV text, handling quotes or comma separation
+        // This regex looks for http/s sequences that don't contain whitespace, quotes, or commas
         const matches = text.match(/https?:\/\/[^\s,"']+/g);
         return matches || [];
     } catch (e) {
@@ -377,14 +387,19 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
     let allUrls: string[] = [];
 
     // 1. Fetch from Custom Sheet ID (Top Input)
-    if (customSheetId) {
-        const sheetUrl = `https://docs.google.com/spreadsheets/d/${customSheetId}/export?format=csv`;
+    if (customSheetId && customSheetId.trim()) {
+        // Assume it's an ID unless it looks like a URL
+        let sheetUrl = `https://docs.google.com/spreadsheets/d/${customSheetId}/export?format=csv`;
+        if (customSheetId.startsWith('http')) {
+             sheetUrl = customSheetId; // Allow pasting full URL in ID box too
+        }
         const sheetLinks = await fetchGoogleSheetCsv(sheetUrl);
         allUrls = [...allUrls, ...sheetLinks];
     }
 
-    // 2. Fetch from Direct URL Text Box (Bottom Input)
+    // 2. Fetch from Direct URL Text Box (Bottom Input) - Support Comma Separated
     if (directUrl && directUrl.trim().length > 0) {
+        // Split by comma, newline, or semicolon
         const rawLines = directUrl.split(/[\n,;]+/);
         
         for (const line of rawLines) {
@@ -407,7 +422,11 @@ export const fetchMotivationVideos = async (customSheetId?: string, directUrl?: 
 
     // 3. Deduplicate and Convert
     const uniqueUrls = [...new Set(allUrls)];
-    let results: VisionContent[] = uniqueUrls.map(url => convertToEmbedUrl(url)).filter(item => item !== null) as VisionContent[];
+    
+    // Convert and filter valid
+    let results: VisionContent[] = uniqueUrls
+        .map(url => convertToEmbedUrl(url))
+        .filter(item => item !== null) as VisionContent[];
 
     // 4. Fallback if empty
     if (results.length === 0) {
