@@ -4,7 +4,9 @@ import { ThreeElements } from '@react-three/fiber';
 // Extend JSX.IntrinsicElements to include Three.js elements
 declare global {
   namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
+    interface IntrinsicElements extends ThreeElements {
+      [elemName: string]: any;
+    }
   }
 }
 
