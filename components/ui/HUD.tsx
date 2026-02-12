@@ -199,20 +199,52 @@ const RealmStatusWidget: React.FC = () => {
 };
 
 const RealTimeClock: React.FC = () => {
-    const { isChronosOpen, toggleChronos } = useGame();
-    const [time, setTime] = useState(new Date());
+    const { state, isChronosOpen, toggleChronos } = useGame();
+    const [displayTime, setDisplayTime] = useState("");
+    const [subText, setSubText] = useState("Local Time");
+    const [isUrgent, setIsUrgent] = useState(false);
 
     useEffect(() => {
-        const timer = setInterval(() => setTime(new Date()), 1000);
+        const timer = setInterval(() => {
+            const now = Date.now();
+            const todayStr = new Date().toDateString();
+
+            if (isChronosOpen) {
+                // Find nearest task specifically for TODAY
+                const nearestTask = state.tasks
+                    .filter(t => !t.completed && !t.failed && t.deadline > now && new Date(t.deadline).toDateString() === todayStr)
+                    .sort((a,b) => a.deadline - b.deadline)[0];
+
+                if (nearestTask) {
+                    const diff = nearestTask.deadline - now;
+                    const h = Math.floor(diff / 3600000);
+                    const m = Math.floor((diff % 3600000) / 60000);
+                    const s = Math.floor((diff % 60000) / 1000);
+                    
+                    setDisplayTime(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+                    setSubText(nearestTask.title.substring(0, 20) + (nearestTask.title.length > 20 ? '...' : ''));
+                    setIsUrgent(true);
+                } else {
+                    setDisplayTime("00:00:00");
+                    setSubText("NO FATE TODAY");
+                    setIsUrgent(false);
+                }
+            } else {
+                // Standard Clock
+                setDisplayTime(new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}));
+                setSubText("Local Time");
+                setIsUrgent(false);
+            }
+        }, 1000);
         return () => clearInterval(timer);
-    }, []);
+    }, [isChronosOpen, state.tasks]);
 
     return (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto z-[60] flex flex-col items-center">
-            <div className="bg-[#0c0a09]/90 border border-stone-700 px-3 py-1 md:px-4 md:py-2 flex items-center gap-3 rounded-sm shadow-lg">
-                <Clock size={14} className="text-stone-400" />
-                <span className="text-sm md:text-xl font-mono font-bold text-stone-200 tracking-widest">
-                    {time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}
+            <div className={`bg-[#0c0a09]/90 border px-3 py-1 md:px-4 md:py-2 flex items-center gap-3 rounded-sm shadow-lg transition-colors duration-500 ${isUrgent ? 'border-yellow-600 shadow-[0_0_15px_rgba(234,179,8,0.3)]' : 'border-stone-700'}`}>
+                <Clock size={14} className={isUrgent ? "text-yellow-500 animate-pulse" : "text-stone-400"} />
+                <span className={`text-sm md:text-xl font-mono font-bold tracking-widest ${isUrgent ? 'text-yellow-400' : 'text-stone-200'}`}>
+                    {displayTime}
                 </span>
                 
                 {/* CHRONOS TOGGLE */}
@@ -220,16 +252,17 @@ const RealTimeClock: React.FC = () => {
                 <button 
                     onClick={(e) => {
                         e.stopPropagation();
-                        console.log("Toggle Chronos Clicked");
                         toggleChronos();
                     }}
-                    className={`hover:text-yellow-500 transition-colors cursor-pointer ${isChronosOpen ? 'text-yellow-500 animate-pulse' : 'text-stone-500'}`}
-                    title="Invoke Chronos Projection"
+                    className={`hover:text-yellow-500 transition-colors cursor-pointer ${isChronosOpen ? 'text-yellow-500' : 'text-stone-500'}`}
+                    title="Toggle Chronos Projection (Today's Deadline)"
                 >
                     <Hourglass size={16} />
                 </button>
             </div>
-            <div className="hidden md:block text-[10px] text-stone-500 uppercase tracking-[0.3em] mt-1 bg-black/50 px-2">Local Time</div>
+            <div className={`hidden md:block text-[10px] uppercase tracking-[0.3em] mt-1 bg-black/50 px-2 ${isUrgent ? 'text-yellow-600 font-bold animate-pulse' : 'text-stone-500'}`}>
+                {subText}
+            </div>
         </div>
     )
 }

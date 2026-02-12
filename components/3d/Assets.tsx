@@ -60,11 +60,19 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
         if (!isOpen) return;
         const interval = setInterval(() => {
             const now = Date.now();
-            const activeTasks = tasks.filter(t => !t.completed && !t.failed && t.deadline > now);
+            const todayStr = new Date().toDateString();
+            
+            // STRICT FILTER: Only tasks expiring TODAY
+            const activeTasks = tasks.filter(t => 
+                !t.completed && 
+                !t.failed && 
+                t.deadline > now && 
+                new Date(t.deadline).toDateString() === todayStr
+            );
             
             if (activeTasks.length === 0) {
-                setTimeLeft("TIMELESS");
-                setTaskTitle("No active threats");
+                setTimeLeft("NO FATE TODAY");
+                setTaskTitle("Rest, Exile");
                 return;
             }
 
@@ -125,7 +133,7 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
             <Billboard>
                 <Html transform center position={[0, 0, 0]} scale={1}>
                     <div className="flex flex-col items-center justify-center pointer-events-none">
-                        <div className="text-[80px] font-mono font-black text-[#fbbf24] tracking-widest drop-shadow-[0_0_15px_rgba(251,191,36,0.8)] leading-none">
+                        <div className="text-[80px] font-mono font-black text-[#fbbf24] tracking-widest drop-shadow-[0_0_15px_rgba(251,191,36,0.8)] leading-none whitespace-nowrap">
                             {timeLeft}
                         </div>
                         <div className="text-xl font-serif text-white uppercase tracking-[0.5em] mt-2 bg-black/50 px-4 py-1 border-t border-b border-yellow-600/50 whitespace-nowrap">
