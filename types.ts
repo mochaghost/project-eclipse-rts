@@ -1,6 +1,4 @@
 
-import { ThreeElements } from '@react-three/fiber';
-
 // Extend JSX.IntrinsicElements to include Three.js elements
 // Explicitly declaring common elements to ensure TypeScript picks them up
 declare global {
@@ -422,7 +420,7 @@ export interface GameContextType {
   moveTask: (taskId: string, newStartTime: number) => void;
   deleteTask: (taskId: string) => void; 
   completeTask: (taskId: string) => void;
-  partialCompleteTask: (taskId: string, percentage: number) => void; // NEW
+  partialCompleteTask: (taskId: string, percentage: number) => void; 
   completeSubtask: (taskId: string, subtaskId: string) => void;
   failTask: (taskId: string) => void;
   selectEnemy: (enemyId: string | null) => void;
@@ -439,6 +437,11 @@ export interface GameContextType {
   toggleAudit: () => void; 
   toggleSettings: () => void;
   toggleDiplomacy: () => void; 
+  
+  // NEW: CHRONOS
+  isChronosOpen: boolean;
+  toggleChronos: () => void;
+
   interactWithFaction: (factionId: FactionKey, action: 'GIFT' | 'TRADE' | 'INSULT' | 'PROPAGANDA') => void;
   buyItem: (itemId: string) => void;
   sellItem: (itemId: string) => void; 
@@ -462,8 +465,6 @@ export interface GameContextType {
   deleteTemplate: (templateId: string) => void;
   requestPermissions: () => Promise<void>;
   takeBaseDamage: (amount: number, reason?: string) => void;
-  
-  // NEW
   resolveNightPhase: () => void;
   closeBattleReport: () => void;
 }

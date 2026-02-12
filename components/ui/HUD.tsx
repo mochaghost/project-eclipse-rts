@@ -69,7 +69,7 @@ const CycleHUD = () => {
             {/* End Day Button */}
             <button 
                 onClick={resolveNightPhase}
-                className="group relative overflow-hidden bg-red-950 border border-red-800 text-red-200 px-6 py-2 font-serif font-bold uppercase text-sm tracking-widest hover:bg-red-900 transition-all shadow-[0_0_15px_rgba(153,27,27,0.3)] hover:shadow-[0_0_25px_rgba(153,27,27,0.6)]"
+                className="group relative overflow-hidden bg-red-950 border border-red-800 text-red-200 px-6 py-2 font-serif font-bold uppercase text-sm tracking-widest hover:bg-red-900 transition-all shadow-[0_0_15px_rgba(153,27,27,0.3)] hover:shadow-[0_0_25px_rgba(153,27,27,0.6)] cursor-pointer"
             >
                 <div className="flex items-center gap-2 relative z-10">
                     <Moon size={16} className="group-hover:rotate-12 transition-transform" />
@@ -199,7 +199,6 @@ const RealmStatusWidget: React.FC = () => {
 };
 
 const RealTimeClock: React.FC = () => {
-    // @ts-ignore
     const { isChronosOpen, toggleChronos } = useGame();
     const [time, setTime] = useState(new Date());
 
@@ -209,7 +208,7 @@ const RealTimeClock: React.FC = () => {
     }, []);
 
     return (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto z-20 flex flex-col items-center">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto z-[60] flex flex-col items-center">
             <div className="bg-[#0c0a09]/90 border border-stone-700 px-3 py-1 md:px-4 md:py-2 flex items-center gap-3 rounded-sm shadow-lg">
                 <Clock size={14} className="text-stone-400" />
                 <span className="text-sm md:text-xl font-mono font-bold text-stone-200 tracking-widest">
@@ -219,8 +218,12 @@ const RealTimeClock: React.FC = () => {
                 {/* CHRONOS TOGGLE */}
                 <div className="h-4 w-px bg-stone-700 mx-1"></div>
                 <button 
-                    onClick={toggleChronos} 
-                    className={`hover:text-yellow-500 transition-colors ${isChronosOpen ? 'text-yellow-500 animate-pulse' : 'text-stone-500'}`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        console.log("Toggle Chronos Clicked");
+                        toggleChronos();
+                    }}
+                    className={`hover:text-yellow-500 transition-colors cursor-pointer ${isChronosOpen ? 'text-yellow-500 animate-pulse' : 'text-stone-500'}`}
                     title="Invoke Chronos Projection"
                 >
                     <Hourglass size={16} />
@@ -262,7 +265,7 @@ const SpellBar: React.FC = () => {
                             onClick={() => castSpell(spell.id)}
                             disabled={disabled}
                             className={`
-                                relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center border transition-all group
+                                relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center border transition-all group cursor-pointer
                                 ${disabled ? 'border-stone-800 text-stone-700 bg-stone-950 cursor-not-allowed' : 'border-blue-800 text-blue-400 bg-blue-950/30 hover:bg-blue-900/50 hover:border-blue-400 hover:scale-105 hover:shadow-[0_0_10px_rgba(59,130,246,0.5)]'}
                             `}
                             title={`${spell.name} (${spell.cost} Mana) - ${spell.desc}`}
@@ -293,12 +296,12 @@ export const HUD: React.FC = () => {
   if (cinematic) {
       return (
           <div className="absolute inset-0 pointer-events-none z-50">
-               <button onClick={() => setCinematic(false)} className="absolute bottom-6 right-6 pointer-events-auto text-stone-500 hover:text-white bg-black/50 p-2 rounded-full border border-stone-700">
+               <button onClick={() => setCinematic(false)} className="absolute bottom-6 right-6 pointer-events-auto text-stone-500 hover:text-white bg-black/50 p-2 rounded-full border border-stone-700 cursor-pointer">
                    <Minimize2 size={24} />
                </button>
                {state.activeMapEvent === 'VISION_RITUAL' && (
                 <div className="absolute top-24 right-6 z-50 pointer-events-auto">
-                    <button onClick={closeVision} className="bg-purple-900 text-white border border-purple-400 px-4 py-2 rounded shadow-lg flex items-center gap-2">
+                    <button onClick={closeVision} className="bg-purple-900 text-white border border-purple-400 px-4 py-2 rounded shadow-lg flex items-center gap-2 cursor-pointer">
                         <Eye size={16} /> Exit Vision
                     </button>
                 </div>
@@ -323,7 +326,7 @@ export const HUD: React.FC = () => {
 
       {state.activeMapEvent === 'VISION_RITUAL' && (
         <div className="absolute top-24 right-6 z-50 pointer-events-auto">
-            <button onClick={closeVision} className="bg-purple-900 text-white border border-purple-400 px-4 py-2 rounded shadow-lg flex items-center gap-2">
+            <button onClick={closeVision} className="bg-purple-900 text-white border border-purple-400 px-4 py-2 rounded shadow-lg flex items-center gap-2 cursor-pointer">
                 <Eye size={16} /> Exit Vision
             </button>
         </div>
@@ -351,15 +354,15 @@ export const HUD: React.FC = () => {
         
         {/* TOOLBAR */}
         <div className="flex gap-1 md:gap-2">
-             <button onClick={handleSummonMirror} className="bg-purple-950/50 border border-purple-800 text-purple-300 p-2 md:p-3 hover:bg-purple-900 hover:text-white" title="Summon Vision Mirror (Focus)"><Eye size={16} /></button>
+             <button onClick={handleSummonMirror} className="bg-purple-950/50 border border-purple-800 text-purple-300 p-2 md:p-3 hover:bg-purple-900 hover:text-white cursor-pointer" title="Summon Vision Mirror (Focus)"><Eye size={16} /></button>
              <div className="w-px bg-stone-800 mx-1"></div>
-             <button onClick={() => setCinematic(true)} className="bg-stone-950 border border-stone-800 text-stone-500 p-2 md:p-3 hover:bg-stone-900 hover:text-white" title="Cinematic Mode"><Maximize2 size={16} /></button>
-             <button onClick={toggleSettings} className={`border p-2 md:p-3 hover:bg-stone-800 ${isConnected ? 'bg-stone-900 border-stone-600 text-stone-400' : 'bg-red-950/30 border-red-900 text-red-500 animate-pulse'}`} title="Settings"><Settings size={16} /></button>
-             <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Audit"><PieChart size={16} /></button>
-             <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Map & Diplomacy"><MapIcon size={16} /></button>
-             <button onClick={toggleMarket} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Market"><ShoppingBag size={16} /></button>
-             <button onClick={toggleProfile} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800" title="Hero"><User size={16} /></button>
-            <button onClick={toggleGrimoire} className="hidden md:flex bg-stone-900 border border-stone-600 text-stone-200 px-3 py-2 md:px-4 md:py-2 font-serif hover:bg-stone-800 uppercase tracking-widest text-xs md:text-sm items-center gap-2">
+             <button onClick={() => setCinematic(true)} className="bg-stone-950 border border-stone-800 text-stone-500 p-2 md:p-3 hover:bg-stone-900 hover:text-white cursor-pointer" title="Cinematic Mode"><Maximize2 size={16} /></button>
+             <button onClick={toggleSettings} className={`border p-2 md:p-3 hover:bg-stone-800 cursor-pointer ${isConnected ? 'bg-stone-900 border-stone-600 text-stone-400' : 'bg-red-950/30 border-red-900 text-red-500 animate-pulse'}`} title="Settings"><Settings size={16} /></button>
+             <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Audit"><PieChart size={16} /></button>
+             <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Map & Diplomacy"><MapIcon size={16} /></button>
+             <button onClick={toggleMarket} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Market"><ShoppingBag size={16} /></button>
+             <button onClick={toggleProfile} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Hero"><User size={16} /></button>
+            <button onClick={toggleGrimoire} className="hidden md:flex bg-stone-900 border border-stone-600 text-stone-200 px-3 py-2 md:px-4 md:py-2 font-serif hover:bg-stone-800 uppercase tracking-widest text-xs md:text-sm items-center gap-2 cursor-pointer">
                 <span className="hidden md:inline">Grimoire</span>
             </button>
         </div>
@@ -392,7 +395,7 @@ export const HUD: React.FC = () => {
       <div className="absolute bottom-28 right-0 z-50 pointer-events-auto md:hidden">
           <button 
             onClick={toggleGrimoire} 
-            className="w-16 h-16 rounded-full bg-yellow-900/90 border-2 border-yellow-500 shadow-2xl flex items-center justify-center text-yellow-100 hover:scale-110 active:scale-95 transition-transform"
+            className="w-16 h-16 rounded-full bg-yellow-900/90 border-2 border-yellow-500 shadow-2xl flex items-center justify-center text-yellow-100 hover:scale-110 active:scale-95 transition-transform cursor-pointer"
           >
               <BookOpen size={28} />
           </button>
