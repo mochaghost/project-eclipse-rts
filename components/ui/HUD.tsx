@@ -209,14 +209,18 @@ const RealTimeClock: React.FC = () => {
             const now = Date.now();
 
             if (isChronosOpen) {
-                // IMPROVED FILTER: Find absolute nearest future task within next 24 hours
-                // This removes strict calendar day dependency which can fail with timezones
+                // FILTER FIX: 
+                // 1. Task must not be completed or failed.
+                // 2. Task DEADLINE must be in the future (t.deadline > now). 
+                //    We do NOT check t.startTime > now, because an active task (started 10 mins ago) 
+                //    is still the most urgent thing to track.
+                // 3. We check if the deadline is within 24 hours to filter out far future tasks.
                 const nearestTask = state.tasks
                     .filter(t => 
                         !t.completed && 
                         !t.failed && 
                         t.deadline > now && 
-                        (t.deadline - now) < (24 * 60 * 60 * 1000) // Within next 24h
+                        (t.deadline - now) < (24 * 60 * 60 * 1000) // Within 24h
                     )
                     .sort((a,b) => a.deadline - b.deadline)[0];
 
@@ -231,7 +235,7 @@ const RealTimeClock: React.FC = () => {
                     setIsCountdown(true);
                 } else {
                     setDisplayTime("--:--:--");
-                    setSubText("NO IMMINENT TASKS");
+                    setSubText("NO IMMINENT THREATS");
                     setIsCountdown(true); 
                 }
             } else {

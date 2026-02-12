@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Html, Float, Sparkles, Trail, useTexture, Instance, Instances, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
@@ -62,9 +61,9 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
             const now = Date.now();
             
             // STRICT FILTER REPLACEMENT: 
-            // Instead of filtering by "Today Date String", we find the NEAREST FUTURE task
-            // that is within the next 24 hours. This covers "Tonight" tasks that might span days,
-            // and fixes timezone/date mismatch issues.
+            // 1. Task must NOT be completed or failed.
+            // 2. Task DEADLINE must be > now (it is still active, even if it started an hour ago).
+            // 3. We filter for tasks ending within the next 24 hours to keep it relevant.
             const activeTasks = tasks.filter(t => 
                 !t.completed && 
                 !t.failed && 
@@ -78,6 +77,7 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
                 return;
             }
 
+            // Sort by nearest deadline (most urgent)
             const nearest = activeTasks.sort((a,b) => a.deadline - b.deadline)[0];
             const diff = nearest.deadline - now;
             
@@ -671,6 +671,7 @@ export const EnemyTimer = ({ deadline, isFuture }: { deadline: number, isFuture?
             if (diff <= 0) { setTimeLeft("00:00:00"); return; }
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
             setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
         }, 1000);
         return () => clearInterval(interval);
