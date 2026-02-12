@@ -60,18 +60,21 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
         if (!isOpen) return;
         const interval = setInterval(() => {
             const now = Date.now();
-            const todayStr = new Date().toDateString();
+            
+            // Logic for Today's End (Strict Local Time)
+            const endOfToday = new Date();
+            endOfToday.setHours(23, 59, 59, 999);
             
             // STRICT FILTER: Only tasks expiring TODAY
             const activeTasks = tasks.filter(t => 
                 !t.completed && 
                 !t.failed && 
                 t.deadline > now && 
-                new Date(t.deadline).toDateString() === todayStr
+                t.deadline <= endOfToday.getTime()
             );
             
             if (activeTasks.length === 0) {
-                setTimeLeft("NO FATE TODAY");
+                setTimeLeft("NO TASKS");
                 setTaskTitle("Rest, Exile");
                 return;
             }
