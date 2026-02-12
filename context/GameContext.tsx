@@ -227,10 +227,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 updated.realmStats = simResult.newStats;
                 updated.dailyNarrative = simResult.dailyNarrative; // SYNC DAILY NARRATIVE
                 
+                // --- GOLD UPDATE: Handle negative upkeep and positive gain ---
                 if (simResult.goldChange && simResult.goldChange !== 0) {
-                    updated.gold += simResult.goldChange;
+                    updated.gold = Math.max(0, updated.gold + simResult.goldChange); // Prevent negative gold
+                    
                     if (simResult.goldChange > 0 && Math.random() > 0.9) {
                         effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:2, z:0}, text: `+${simResult.goldChange}g`, timestamp: now });
+                    } else if (simResult.goldChange < 0 && Math.random() > 0.8) {
+                        // Display upkeep cost occasionally
+                        effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: `${simResult.goldChange}g (Upkeep)`, timestamp: now });
                     }
                 }
 
@@ -389,7 +394,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const baseXp = task.priority * 100;
             const streakBonus = prev.winStreak * 10;
             const xpGain = baseXp + streakBonus;
-            const goldGain = task.priority * 25;
+            const goldGain = task.priority * 25; // Gold only on completion
 
             // Loot Roll
             const loot = generateLoot(prev.playerLevel);
@@ -424,7 +429,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const next = {
                 ...prev,
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
-                enemies: prev.enemies.filter(e => e.taskId !== taskId), // Remove enemy on complete
+                // CRITICAL FIX: Explicitly remove the enemy from the state
+                enemies: prev.enemies.filter(e => e.taskId !== taskId), 
                 xp: newXp,
                 playerLevel: newLevel,
                 gold: prev.gold + goldGain,
@@ -438,6 +444,72 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Visual FX
                 effects: [...prev.effects, { id: generateId(), type: 'TEXT_XP', position: {x:0, y:2, z:0}, text: `+${xpGain} XP`, timestamp: Date.now() }] as VisualEffect[]
             };
+            saveGame(next);
+            return next;
+        });
+    };
+
+    // --- NEW: PARTIAL COMPLETION / SKIRMISH ---
+    const partialCompleteTask = (taskId: string, percentage: number) => {
+        playSfx('COMBAT_HIT'); // Dull hit sound
+        setState(prev => {
+            const task = prev.tasks.find(t => t.id === taskId);
+            if (!task) return prev;
+
+            const enemy = prev.enemies.find(e => e.taskId === taskId && !e.subtaskId);
+
+            // Reward Logic: Partial XP, NO Gold
+            const baseXp = task.priority * 100;
+            const xpGain = Math.floor(baseXp * (percentage / 100));
+            
+            // Reschedule Logic: Move to next day, same time
+            const duration = task.deadline - task.startTime;
+            const nextDayStart = task.startTime + (24 * 60 * 60 * 1000);
+            const nextDayEnd = nextDayStart + duration;
+
+            let historyLog: HistoryLog = {
+                id: generateId(),
+                type: 'VICTORY', // Considered a tactical victory
+                timestamp: Date.now(),
+                message: `Skirmish: ${task.title} (${percentage}%)`,
+                details: `Enemy wounded. Rewards: +${xpGain} XP, 0g. Rescheduled.`,
+                cause: "Tactical Retreat"
+            };
+
+            const next = {
+                ...prev,
+                // Do NOT mark as completed. Update start/deadline to push it to future.
+                tasks: prev.tasks.map(t => t.id === taskId ? { 
+                    ...t, 
+                    startTime: nextDayStart, 
+                    deadline: nextDayEnd,
+                    // Optional: Maybe track partial progress in description?
+                    description: (t.description || "") + `\n[Log]: Drove back enemy at ${percentage}% on ${new Date().toLocaleDateString()}.`
+                } : t),
+                // Enemy remains in array but renderer will hide it because it's now in the future
+                // But let's remove and regenerate to be safe/clean for the new timeline
+                enemies: prev.enemies.filter(e => e.taskId !== taskId), 
+                
+                xp: prev.xp + xpGain,
+                // NO GOLD GAIN
+                history: [historyLog, ...prev.history],
+                sageMessage: "A battle won, but the war continues.",
+                effects: [...prev.effects, { id: generateId(), type: 'TEXT_XP', position: {x:0, y:2, z:0}, text: `+${xpGain} XP (Skirmish)`, timestamp: Date.now() }] as VisualEffect[]
+            };
+            
+            // We need to regenerate the enemy for the new time slot immediately so it appears "tomorrow"
+            const newEnemy = generateNemesis(
+                taskId, 
+                task.priority, 
+                prev.nemesisGraveyard, 
+                prev.winStreak, 
+                undefined, 
+                task.title, 
+                task.estimatedDuration, 
+                prev.realmStats
+            );
+            next.enemies.push(newEnemy);
+
             saveGame(next);
             return next;
         });
@@ -754,7 +826,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (
         <GameContext.Provider value={{
             state,
-            addTask, editTask, moveTask, deleteTask, completeTask, completeSubtask, failTask,
+            addTask, editTask, moveTask, deleteTask, completeTask, partialCompleteTask, completeSubtask, failTask,
             selectEnemy, resolveCrisisHubris, resolveCrisisHumility, resolveAeonBattle, resolveFailedTask,
             triggerRitual, triggerEvent, completeRitual,
             toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, toggleDiplomacy,

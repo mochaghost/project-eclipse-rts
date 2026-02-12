@@ -194,50 +194,23 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     const newFactions = factionSim.updatedFactions;
     if (factionSim.log) logs.push(factionSim.log);
 
-    // 3. NPC Deep Simulation & GOLD NERF (Causality Engine)
+    // 3. GOLD DECAY & UPKEEP (New Grimdark Economy)
+    // Gold no longer increases automatically. It drains.
+    // Upkeep Calc: Base(1) + Forge(2) + Walls(1) + Library(1) + Light(1) + Minions(1 each)
+    if (Math.random() > 0.95) { // Roughly every 20 seconds
+        const s = state.structures;
+        const upkeep = 1 + (s.forgeLevel * 2) + s.wallsLevel + s.libraryLevel + s.lightingLevel + Math.ceil(state.minions.length / 2);
+        
+        // Apply decay
+        goldChange -= upkeep;
+    }
+
+    // 4. NPC Deep Simulation
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
         let actionLog: string | null = null;
         
-        // --- GOLD BALANCE UPDATE (THE NERF) ---
-        // Passive Income significantly reduced.
-        // Base chance: 0.5% per tick (roughly every 3 minutes per peasant)
-        // Order Modifier: High order enables reliable taxes. Low order enables theft.
-        
-        if (newNpc.role === 'Peasant') {
-            if (newStats.order > 70) {
-                // Efficient Taxes (High Order)
-                if (Math.random() > 0.995) goldChange += 1;
-            } else if (newStats.order < 30) {
-                // Corruption / Theft (Low Order)
-                if (Math.random() > 0.99) {
-                    goldChange -= 1; 
-                    if (Math.random() > 0.9) actionLog = "COMMITS_CRIME"; // Track causal chain
-                }
-            } else {
-                // Stagnation (Mid Order) - Very rare income
-                if (Math.random() > 0.999) goldChange += 1;
-            }
-        } else {
-            // Upkeep for guards/nobles (Cost money)
-            if (Math.random() > 0.999) goldChange -= 1; 
-        }
-
-        // --- CAUSAL EVENTS ---
-        if (actionLog === "COMMITS_CRIME") {
-            logs.push({
-                id: generateId(),
-                timestamp: Date.now(),
-                type: 'NARRATIVE',
-                message: `${newNpc.name} stole supplies`,
-                details: "Low Order enables corruption.",
-                cause: "Civil Unrest"
-            });
-            // Ripple Effect: Fear goes up
-            newStats.fear += 1;
-        }
-
         // Mood Logic
         const sanityDrain = Math.max(0, (newStats.fear - newStats.hope) * 0.05);
         newNpc.sanity = Math.max(0, Math.min(100, newNpc.sanity - sanityDrain));
@@ -260,7 +233,7 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         return newNpc;
     });
 
-    // 4. Update Narrative State (Connecting the dots)
+    // 5. Update Narrative State (Connecting the dots)
     const dailyNarrative = updateDailyNarrative(state.dailyNarrative, state, logs);
 
     return { 

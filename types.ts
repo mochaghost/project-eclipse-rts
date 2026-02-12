@@ -422,6 +422,7 @@ export interface GameContextType {
   moveTask: (taskId: string, newStartTime: number) => void;
   deleteTask: (taskId: string) => void; 
   completeTask: (taskId: string) => void;
+  partialCompleteTask: (taskId: string, percentage: number) => void; // NEW
   completeSubtask: (taskId: string, subtaskId: string) => void;
   failTask: (taskId: string) => void;
   selectEnemy: (enemyId: string | null) => void;

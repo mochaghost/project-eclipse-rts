@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { TaskPriority, Task, AlertType, SubtaskDraft, TaskTemplate } from '../../types';
-import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star, Bookmark, Book, RotateCcw, Check, Sparkles, MousePointerClick, Square, Swords } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShieldAlert, Users, Scroll, Plus, Trash2, Eye, EyeOff, Skull, Link as LinkIcon, Pen, Save, Hourglass, Network, BookOpen, GripVertical, AlignLeft, CalendarDays, RefreshCw, Flame, ArrowRightCircle, Map, Telescope, Crown, CheckSquare, Clock, Star, Bookmark, Book, RotateCcw, Check, Sparkles, MousePointerClick, Square, Swords, Percent } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -114,7 +114,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, style, onClick, onDragStart, 
 
 export const Grimoire: React.FC = () => {
   // @ts-ignore
-  const { state, toggleGrimoire, addTask, editTask, moveTask, deleteTask, completeTask, completeSubtask, resolveFailedTask, saveTemplate, deleteTemplate } = useGame();
+  const { state, toggleGrimoire, addTask, editTask, moveTask, deleteTask, completeTask, partialCompleteTask, completeSubtask, resolveFailedTask, saveTemplate, deleteTemplate } = useGame();
   
   // Navigation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -150,6 +150,13 @@ export const Grimoire: React.FC = () => {
 
   const isEditing = !!editingTaskId;
   const isResolving = !!resolvingTaskId;
+  
+  // Check if current edited task is already completed (for disabling buttons)
+  const isEditingCompleted = useMemo(() => {
+      if (!editingTaskId) return false;
+      const t = state.tasks.find((task: Task) => task.id === editingTaskId);
+      return t ? t.completed : false;
+  }, [editingTaskId, state.tasks]);
 
   // Clear save feedback after delay
   useEffect(() => {
@@ -293,6 +300,25 @@ export const Grimoire: React.FC = () => {
           setNotes("");
           setSubtasks([]);
       }
+  };
+
+  const handlePartialComplete = () => {
+      if (!editingTaskId) return;
+      
+      const percentStr = prompt("How much did you complete? (0-99%)", "50");
+      if (!percentStr) return;
+      
+      const percent = parseInt(percentStr);
+      if (isNaN(percent) || percent < 0 || percent >= 100) {
+          alert("Invalid percentage.");
+          return;
+      }
+
+      partialCompleteTask(editingTaskId, percent);
+      setEditingTaskId(null);
+      setTitle("");
+      setNotes("");
+      setSubtasks([]);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -848,8 +874,21 @@ export const Grimoire: React.FC = () => {
                             <button onClick={handleSubmit} className="flex-1 bg-stone-800 text-stone-300 border border-stone-600 py-4 font-serif font-bold tracking-widest uppercase hover:bg-stone-700 transition-colors">
                                 UPDATE
                             </button>
-                            <button onClick={handleCompleteTask} className="flex-[1.5] bg-green-950 text-green-300 border border-green-800 py-4 font-serif font-bold tracking-widest uppercase hover:bg-green-900 transition-colors flex items-center justify-center gap-2">
-                                <Swords size={16} /> VANQUISH
+                            {/* PARTIAL COMPLETION BUTTON */}
+                            <button 
+                                onClick={handlePartialComplete} 
+                                disabled={isEditingCompleted}
+                                className={`flex-[0.5] py-4 font-serif font-bold tracking-widest uppercase transition-colors flex items-center justify-center gap-1 ${isEditingCompleted ? 'bg-stone-900 text-stone-700 border border-stone-800 cursor-not-allowed' : 'bg-blue-950/50 text-blue-300 border border-blue-800 hover:bg-blue-900'}`}
+                                title="Skirmish (Partial Success)"
+                            >
+                                <Percent size={16} />
+                            </button>
+                            <button 
+                                onClick={handleCompleteTask} 
+                                disabled={isEditingCompleted}
+                                className={`flex-[1.5] py-4 font-serif font-bold tracking-widest uppercase transition-colors flex items-center justify-center gap-2 ${isEditingCompleted ? 'bg-stone-900 text-stone-700 border border-stone-800 cursor-not-allowed' : 'bg-green-950 text-green-300 border border-green-800 hover:bg-green-900'}`}
+                            >
+                                <Swords size={16} /> {isEditingCompleted ? 'VANQUISHED' : 'VANQUISH'}
                             </button>
                         </div>
                     ) : (

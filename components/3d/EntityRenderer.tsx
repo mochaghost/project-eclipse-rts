@@ -1,3 +1,4 @@
+
 import React, { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -166,6 +167,11 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
   }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture]);
 
   if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null;
+
+  // VISUAL SYNC SAFEGUARD: Force hide enemy if task is completed
+  if (type === EntityType.ENEMY && task && task.completed) {
+      return null;
+  }
 
   // Use specialized wrapper for Enemies to handle the "Approaching" mechanic
   if (type === EntityType.ENEMY && task) {
