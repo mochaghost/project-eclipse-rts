@@ -48,9 +48,7 @@ const Smoke = ({ position, color = "#57534e", scale=1 }: { position: [number, nu
 );
 
 // --- NEW: CHRONOS PROJECTION (GIANT TIMER) ---
-export const ChronosProjection = () => {
-    // @ts-ignore
-    const { state, isChronosOpen } = useGame();
+export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: Task[] }) => {
     const groupRef = useRef<THREE.Group>(null);
     const ring1Ref = useRef<THREE.Mesh>(null);
     const ring2Ref = useRef<THREE.Mesh>(null);
@@ -59,18 +57,18 @@ export const ChronosProjection = () => {
 
     // Find nearest deadline
     useEffect(() => {
-        if (!isChronosOpen) return;
+        if (!isOpen) return;
         const interval = setInterval(() => {
             const now = Date.now();
-            const tasks = state.tasks.filter(t => !t.completed && !t.failed && t.deadline > now);
+            const activeTasks = tasks.filter(t => !t.completed && !t.failed && t.deadline > now);
             
-            if (tasks.length === 0) {
+            if (activeTasks.length === 0) {
                 setTimeLeft("TIMELESS");
                 setTaskTitle("No active threats");
                 return;
             }
 
-            const nearest = tasks.sort((a,b) => a.deadline - b.deadline)[0];
+            const nearest = activeTasks.sort((a,b) => a.deadline - b.deadline)[0];
             const diff = nearest.deadline - now;
             
             const h = Math.floor(diff / 3600000);
@@ -81,10 +79,10 @@ export const ChronosProjection = () => {
             setTaskTitle(nearest.title);
         }, 1000);
         return () => clearInterval(interval);
-    }, [state.tasks, isChronosOpen]);
+    }, [tasks, isOpen]);
 
     useFrame((state, delta) => {
-        if (!isChronosOpen || !groupRef.current) return;
+        if (!isOpen || !groupRef.current) return;
         
         // Spin Rings
         if (ring1Ref.current) {
@@ -100,7 +98,7 @@ export const ChronosProjection = () => {
         groupRef.current.position.y = 15 + Math.sin(state.clock.elapsedTime) * 0.5;
     });
 
-    if (!isChronosOpen) return null;
+    if (!isOpen) return null;
 
     return (
         <group ref={groupRef} position={[0, 15, 0]}>
@@ -130,7 +128,7 @@ export const ChronosProjection = () => {
                         <div className="text-[80px] font-mono font-black text-[#fbbf24] tracking-widest drop-shadow-[0_0_15px_rgba(251,191,36,0.8)] leading-none">
                             {timeLeft}
                         </div>
-                        <div className="text-xl font-serif text-white uppercase tracking-[0.5em] mt-2 bg-black/50 px-4 py-1 border-t border-b border-yellow-600/50">
+                        <div className="text-xl font-serif text-white uppercase tracking-[0.5em] mt-2 bg-black/50 px-4 py-1 border-t border-b border-yellow-600/50 whitespace-nowrap">
                             {taskTitle}
                         </div>
                         <div className="text-xs text-yellow-600 mt-1 animate-pulse font-serif">CHRONOS PROTOCOL ACTIVE</div>

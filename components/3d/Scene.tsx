@@ -300,7 +300,7 @@ const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[],
 
 const LoaderFallback = () => <Html center><div className="text-yellow-600 font-serif text-sm animate-pulse">LOADING WORLD...</div></Html>;
 
-const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC }: { state: GameState, selectEnemy: any, interactWithNPC: any }) => {
+const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC, isChronosOpen }: { state: GameState, selectEnemy: any, interactWithNPC: any, isChronosOpen: boolean }) => {
     const { camera } = useThree();
     const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
     const isHighQuality = (state.settings?.graphicsQuality || 'HIGH') === 'HIGH';
@@ -323,8 +323,8 @@ const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC }: { state: 
             {isHighQuality && <Stars radius={150} depth={50} count={1000} factor={4} saturation={0} fade speed={0.2} />}
             <VazarothTitan />
             
-            {/* NEW: THE CHRONOS PROJECTION */}
-            <ChronosProjection />
+            {/* NEW: THE CHRONOS PROJECTION - Pass props explicitly */}
+            <ChronosProjection isOpen={isChronosOpen} tasks={state.tasks || []} />
 
             {/* ENTITIES */}
             <EntityRenderer type={EntityType.BUILDING_BASE} variant={state.era} position={[0, 0, 0]} stats={{ hp: state.baseHp, maxHp: state.maxBaseHp }} structures={state.structures} />
@@ -384,12 +384,13 @@ const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC }: { state: 
 });
 
 export const Scene: React.FC = () => {
-  const { state, selectEnemy, interactWithNPC } = useGame();
+  // @ts-ignore
+  const { state, selectEnemy, interactWithNPC, isChronosOpen } = useGame();
   if (!state) return null;
   return (
     <Canvas shadows={false} dpr={[1, 1.5]} gl={{ antialias: false, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: 1.2 }} camera={{ position: [15, 15, 15], fov: 45 }}>
       <Suspense fallback={<LoaderFallback />}>
-          <GameWorld state={state} selectEnemy={selectEnemy} interactWithNPC={interactWithNPC} />
+          <GameWorld state={state} selectEnemy={selectEnemy} interactWithNPC={interactWithNPC} isChronosOpen={isChronosOpen} />
       </Suspense>
     </Canvas>
   );
