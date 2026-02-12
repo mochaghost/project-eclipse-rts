@@ -67,7 +67,7 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
                 !t.completed && 
                 !t.failed && 
                 typeof t.deadline === 'number' &&
-                t.deadline > now // Task must not be expired
+                t.deadline > now
             );
             
             if (validTasks.length === 0) {
@@ -76,20 +76,21 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
                 return;
             }
 
-            // 2. SMART SORT: Prioritize tasks that are CURRENTLY ACTIVE (Started) over future ones
+            // 2. PRIORITIZED SORTING LOGIC
+            // Rank 1: Active Tasks (Started but not finished)
+            // Rank 2: Future Tasks (Not started)
             const nearest = validTasks.sort((a,b) => {
                 const aActive = a.startTime <= now;
                 const bActive = b.startTime <= now;
 
-                // If A is active and B is not, A comes first
+                // Active tasks always come before future tasks
                 if (aActive && !bActive) return -1;
-                // If B is active and A is not, B comes first
                 if (!aActive && bActive) return 1;
                 
-                // If both are active, priority goes to the one ending sooner (Urgency)
+                // If both active, prioritize the one ending sooner (most urgent)
                 if (aActive && bActive) return a.deadline - b.deadline;
 
-                // If neither are active (Future tasks), priority goes to the one STARTING sooner
+                // If both future, prioritize the one starting sooner
                 return a.startTime - b.startTime;
             })[0];
 

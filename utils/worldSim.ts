@@ -197,7 +197,8 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     // 3. GOLD DECAY & UPKEEP (New Grimdark Economy)
     // Gold no longer increases automatically. It drains.
     // Upkeep Calc: Base(1) + Forge(2) + Walls(1) + Library(1) + Light(1) + Minions(1 each)
-    if (Math.random() > 0.95) { // Roughly every 20 seconds
+    // MODIFIED: Drastically reduced probability to 0.2% per second (~every 8 minutes)
+    if (Math.random() > 0.998) { 
         const s = state.structures;
         const upkeep = 1 + (s.forgeLevel * 2) + s.wallsLevel + s.libraryLevel + s.lightingLevel + Math.ceil(state.minions.length / 2);
         

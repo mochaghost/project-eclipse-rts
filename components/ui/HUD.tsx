@@ -218,13 +218,16 @@ const RealTimeClock: React.FC = () => {
                     t.deadline > now
                 );
 
-                // Priority sort: Active Tasks First, then Future Tasks
+                // PRIORITIZED SORTING LOGIC (Must match Assets.tsx)
                 const nearestTask = validTasks.sort((a,b) => {
                     const aActive = a.startTime <= now;
                     const bActive = b.startTime <= now;
+                    // Active beats Future
                     if (aActive && !bActive) return -1;
                     if (!aActive && bActive) return 1;
+                    // Both active: closest deadline
                     if (aActive && bActive) return a.deadline - b.deadline;
+                    // Both future: closest start
                     return a.startTime - b.startTime;
                 })[0];
 
