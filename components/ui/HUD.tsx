@@ -209,20 +209,16 @@ const RealTimeClock: React.FC = () => {
             const now = Date.now();
 
             if (isChronosOpen) {
-                // FILTER FIX: 
-                // 1. Task must not be completed or failed.
-                // 2. Task DEADLINE must be in the future (t.deadline > now). 
-                //    We do NOT check t.startTime > now, because an active task (started 10 mins ago) 
-                //    is still the most urgent thing to track.
-                // 3. We check if the deadline is within 24 hours to filter out far future tasks.
-                const nearestTask = state.tasks
-                    .filter(t => 
-                        !t.completed && 
-                        !t.failed && 
-                        t.deadline > now && 
-                        (t.deadline - now) < (24 * 60 * 60 * 1000) // Within 24h
-                    )
-                    .sort((a,b) => a.deadline - b.deadline)[0];
+                // UNIFIED LOGIC: Match the ChronosProjection logic exactly
+                const activeTasks = state.tasks.filter(t => 
+                    t && 
+                    !t.completed && 
+                    !t.failed && 
+                    typeof t.deadline === 'number' &&
+                    t.deadline > now
+                );
+
+                const nearestTask = activeTasks.sort((a,b) => a.deadline - b.deadline)[0];
 
                 if (nearestTask) {
                     const diff = nearestTask.deadline - now;

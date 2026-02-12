@@ -64,12 +64,12 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
             // STRICT FILTER REPLACEMENT: 
             // 1. Task must NOT be completed or failed.
             // 2. Task DEADLINE must be > now (it is still active, even if it started an hour ago).
-            // 3. We filter for tasks ending within the next 24 hours to keep it relevant.
             const activeTasks = tasks.filter(t => 
+                t && 
                 !t.completed && 
                 !t.failed && 
-                t.deadline > now && 
-                (t.deadline - now) < (24 * 60 * 60 * 1000)
+                typeof t.deadline === 'number' &&
+                t.deadline > now
             );
             
             if (activeTasks.length === 0) {

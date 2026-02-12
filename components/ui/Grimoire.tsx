@@ -76,7 +76,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, style, onClick, onDragStart, 
           draggable 
           onDragStart={onDragStart}
           // Allow drops on the card to bubble up to container
-          onDragOver={(e) => e.preventDefault()}
+          onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
+          onDrop={(e) => { e.preventDefault(); /* Allow bubble to container */ }}
           onClick={onClick}
           className={`absolute rounded border overflow-hidden p-1.5 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.02] transition-transform z-10 ${bgClass} ${borderClass}`}
           style={{ ...style, borderLeftWidth: '4px', borderStyle: task.parentId ? 'dashed' : 'solid' }}
@@ -469,16 +470,18 @@ export const Grimoire: React.FC = () => {
       e.stopPropagation();
   };
 
-  // ROBUST DROP HANDLER: Calculates time based on Y position in the container
+  // ROBUST DROP HANDLER: Calculates time based on Y position in the container AND SCROLL TOP
   const handleContainerDrop = (e: React.DragEvent, targetDate: Date, pixelsPerHour: number) => {
       e.preventDefault();
-      // We don't stop propagation here if we are the top level handler, but it's safe to do so.
       
       const taskId = e.dataTransfer.getData("taskId");
       if(!taskId) return;
 
       const rect = e.currentTarget.getBoundingClientRect();
-      const offsetY = e.clientY - rect.top;
+      const scrollTop = e.currentTarget.scrollTop;
+      
+      // FIX: Add scrollTop to get the correct relative Y position within the SCROLLED content
+      const offsetY = e.clientY - rect.top + scrollTop;
       
       // Calculate hour (clamped 0-23)
       const hour = Math.max(0, Math.min(23, Math.floor(offsetY / pixelsPerHour)));
@@ -529,13 +532,13 @@ export const Grimoire: React.FC = () => {
                   ))}
               </div>
               
-              <div className="flex-1 relative overflow-y-auto custom-scrollbar">
-                  {/* MAIN CONTAINER: Handles Drops Anywhere */}
-                  <div 
-                    className="absolute inset-0 w-full h-[1920px]"
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleContainerDrop(e, date, 80)}
-                  > 
+              <div className="flex-1 relative overflow-y-auto custom-scrollbar" 
+                   // Attach drag listeners to the scrolling container itself
+                   onDragOver={handleDragOver}
+                   onDrop={(e) => handleContainerDrop(e, date, 80)}
+              >
+                  {/* Container Content Height */}
+                  <div className="relative w-full h-[1920px]"> 
                     {HOURS.map(h => (
                         <div key={h} onClick={() => handleSelectSlot(date, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] w-full cursor-pointer group">
                             <div className="hidden group-hover:flex items-center justify-center h-full opacity-50">
