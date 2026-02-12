@@ -61,25 +61,38 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
         const interval = setInterval(() => {
             const now = Date.now();
             
-            // STRICT FILTER REPLACEMENT: 
-            // 1. Task must NOT be completed or failed.
-            // 2. Task DEADLINE must be > now (it is still active, even if it started an hour ago).
-            const activeTasks = tasks.filter(t => 
+            // 1. Filter valid tasks
+            const validTasks = tasks.filter(t => 
                 t && 
                 !t.completed && 
                 !t.failed && 
                 typeof t.deadline === 'number' &&
-                t.deadline > now
+                t.deadline > now // Task must not be expired
             );
             
-            if (activeTasks.length === 0) {
+            if (validTasks.length === 0) {
                 setTimeLeft("NO TASKS");
                 setTaskTitle("Rest, Exile");
                 return;
             }
 
-            // Sort by nearest deadline (most urgent)
-            const nearest = activeTasks.sort((a,b) => a.deadline - b.deadline)[0];
+            // 2. SMART SORT: Prioritize tasks that are CURRENTLY ACTIVE (Started) over future ones
+            const nearest = validTasks.sort((a,b) => {
+                const aActive = a.startTime <= now;
+                const bActive = b.startTime <= now;
+
+                // If A is active and B is not, A comes first
+                if (aActive && !bActive) return -1;
+                // If B is active and A is not, B comes first
+                if (!aActive && bActive) return 1;
+                
+                // If both are active, priority goes to the one ending sooner (Urgency)
+                if (aActive && bActive) return a.deadline - b.deadline;
+
+                // If neither are active (Future tasks), priority goes to the one STARTING sooner
+                return a.startTime - b.startTime;
+            })[0];
+
             const diff = nearest.deadline - now;
             
             const h = Math.floor(diff / 3600000);
@@ -672,7 +685,7 @@ export const EnemyTimer = ({ deadline, isFuture }: { deadline: number, isFuture?
             if (diff <= 0) { setTimeLeft("00:00:00"); return; }
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
-            const s = Math.floor((diff % 60000) / 1000); // FIXED: Defined 's'
+            const s = Math.floor((diff % 60000) / 1000); 
             setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
         }, 1000);
         return () => clearInterval(interval);

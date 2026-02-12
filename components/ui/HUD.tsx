@@ -210,7 +210,7 @@ const RealTimeClock: React.FC = () => {
 
             if (isChronosOpen) {
                 // UNIFIED LOGIC: Match the ChronosProjection logic exactly
-                const activeTasks = state.tasks.filter(t => 
+                const validTasks = state.tasks.filter(t => 
                     t && 
                     !t.completed && 
                     !t.failed && 
@@ -218,7 +218,15 @@ const RealTimeClock: React.FC = () => {
                     t.deadline > now
                 );
 
-                const nearestTask = activeTasks.sort((a,b) => a.deadline - b.deadline)[0];
+                // Priority sort: Active Tasks First, then Future Tasks
+                const nearestTask = validTasks.sort((a,b) => {
+                    const aActive = a.startTime <= now;
+                    const bActive = b.startTime <= now;
+                    if (aActive && !bActive) return -1;
+                    if (!aActive && bActive) return 1;
+                    if (aActive && bActive) return a.deadline - b.deadline;
+                    return a.startTime - b.startTime;
+                })[0];
 
                 if (nearestTask) {
                     const diff = nearestTask.deadline - now;

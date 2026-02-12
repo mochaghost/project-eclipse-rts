@@ -263,14 +263,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 updated.dailyNarrative = simResult.dailyNarrative; // SYNC DAILY NARRATIVE
                 
                 // --- GOLD UPDATE: Handle negative upkeep and positive gain ---
-                if (simResult.goldChange && simResult.goldChange !== 0) {
-                    updated.gold = Math.max(0, updated.gold + simResult.goldChange); // Prevent negative gold
-                    
-                    if (simResult.goldChange > 0 && Math.random() > 0.9) {
+                // Only apply upkeep rarely (approx every 8-10 mins) to make it "almost static"
+                if (simResult.goldChange < 0 && Math.random() > 0.998) {
+                     updated.gold = Math.max(0, updated.gold + simResult.goldChange); 
+                     effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: `${simResult.goldChange}g (Upkeep)`, timestamp: now });
+                }
+                // Allow positive changes (events) slightly more often
+                else if (simResult.goldChange > 0) {
+                    updated.gold += simResult.goldChange;
+                    if (Math.random() > 0.9) {
                         effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:2, z:0}, text: `+${simResult.goldChange}g`, timestamp: now });
-                    } else if (simResult.goldChange < 0 && Math.random() > 0.8) {
-                        // Display upkeep cost occasionally
-                        effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: `${simResult.goldChange}g (Upkeep)`, timestamp: now });
                     }
                 }
 
