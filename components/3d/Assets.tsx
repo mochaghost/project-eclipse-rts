@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Html, Float, Sparkles, Trail, useTexture, Instance, Instances, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
@@ -671,7 +672,7 @@ export const EnemyTimer = ({ deadline, isFuture }: { deadline: number, isFuture?
             if (diff <= 0) { setTimeLeft("00:00:00"); return; }
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
-            const s = Math.floor((diff % 60000) / 1000);
+            const s = Math.floor((diff % 60000) / 1000); // FIXED: DEFINED 's' VARIABLE
             setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
         }, 1000);
         return () => clearInterval(interval);
