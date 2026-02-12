@@ -207,15 +207,18 @@ const RealTimeClock: React.FC = () => {
     useEffect(() => {
         const timer = setInterval(() => {
             const now = Date.now();
-            
-            // Logic for Today's End (Local Time)
-            const endOfToday = new Date();
-            endOfToday.setHours(23, 59, 59, 999);
+            const todayStr = new Date().toDateString();
 
             if (isChronosOpen) {
-                // Find nearest task specifically for TODAY (Deadline > Now AND Deadline <= End of Today)
+                // Find nearest task specifically for TODAY (Checking matching date string)
+                // This ensures deadlines later today are caught, even if they span different hours
                 const nearestTask = state.tasks
-                    .filter(t => !t.completed && !t.failed && t.deadline > now && t.deadline <= endOfToday.getTime())
+                    .filter(t => 
+                        !t.completed && 
+                        !t.failed && 
+                        t.deadline > now && 
+                        new Date(t.deadline).toDateString() === todayStr
+                    )
                     .sort((a,b) => a.deadline - b.deadline)[0];
 
                 if (nearestTask) {
