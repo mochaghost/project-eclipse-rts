@@ -583,4 +583,302 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    const resolveFailedTask = (taskId: string
+    const resolveFailedTask = (taskId: string, action: 'RESCHEDULE' | 'MERGE', newTime?: number) => {
+        setState(prev => {
+            const task = prev.tasks.find(t => t.id === taskId);
+            if (!task) return prev;
+
+            let next = { ...prev };
+            
+            if (action === 'RESCHEDULE') {
+                const duration = task.deadline - task.startTime;
+                const startTime = newTime || Date.now();
+                next.tasks = prev.tasks.map(t => t.id === taskId ? { 
+                    ...t, 
+                    failed: false, 
+                    startTime, 
+                    deadline: startTime + duration,
+                    priority: t.priority < 3 ? t.priority + 1 : 3 as TaskPriority 
+                } : t);
+                playSfx('MAGIC');
+            } else if (action === 'MERGE') {
+                next.tasks = prev.tasks.filter(t => t.id !== taskId);
+                next.enemies = prev.enemies.filter(e => e.taskId !== taskId);
+            }
+            
+            saveGame(next);
+            return next;
+        });
+    };
+
+    // --- UI TOGGLES ---
+    const toggleGrimoire = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isGrimoireOpen: !p.isGrimoireOpen, activeAlert: AlertType.NONE })); };
+    const toggleProfile = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isProfileOpen: !p.isProfileOpen })); };
+    const toggleMarket = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isMarketOpen: !p.isMarketOpen, vazarothMessage: getVazarothLine('MARKET') })); };
+    const toggleAudit = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isAuditOpen: !p.isAuditOpen })); };
+    const toggleSettings = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isSettingsOpen: !p.isSettingsOpen })); };
+    const toggleDiplomacy = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isDiplomacyOpen: !p.isDiplomacyOpen })); };
+    const toggleChronos = () => { playSfx('MAGIC'); setIsChronosOpen(prev => !prev); };
+    
+    // --- CRISIS ---
+    const resolveCrisisHubris = (taskId: string) => {
+        setState(prev => ({ ...prev, activeAlert: AlertType.NONE, alertTaskId: null }));
+    };
+    const resolveCrisisHumility = (taskId: string) => {
+        setState(prev => ({ ...prev, activeAlert: AlertType.AEON_ENCOUNTER }));
+    };
+    const resolveAeonBattle = (taskId: string, newSubtasks: string[], success: boolean) => {
+        if (success) {
+            playSfx('VICTORY');
+            setState(prev => {
+                const task = prev.tasks.find(t => t.id === taskId);
+                if (!task) return prev;
+                // Add subtasks
+                const subs = newSubtasks.map(title => ({ id: generateId(), title, completed: false }));
+                const minions = subs.map(s => generateNemesis(taskId, TaskPriority.LOW, [], 0, s.id, s.title, 30, prev.realmStats));
+                
+                return {
+                    ...prev,
+                    activeAlert: AlertType.NONE,
+                    alertTaskId: null,
+                    tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: [...t.subtasks, ...subs] } : t),
+                    enemies: [...prev.enemies, ...minions],
+                    effects: [...prev.effects, { id: generateId(), type: 'TEXT_XP', text: "CRISIS AVERTED", position: {x:0,y:2,z:0}, timestamp: Date.now() }] as VisualEffect[]
+                };
+            });
+        } else {
+            failTask(taskId);
+            setState(prev => ({ ...prev, activeAlert: AlertType.NONE, alertTaskId: null }));
+        }
+    };
+
+    // --- SHOP ---
+    const buyItem = (itemId: string) => {
+        const item = SHOP_ITEMS.find(i => i.id === itemId);
+        if (!item) return;
+        if (state.gold < item.cost) { playSfx('ERROR'); return; }
+
+        setState(prev => {
+            let next = { ...prev, gold: prev.gold - item.cost };
+            playSfx('COINS');
+            
+            if (item.type === 'HEAL_HERO') next.heroHp = Math.min(next.maxHeroHp, next.heroHp + item.value);
+            if (item.type === 'HEAL_BASE') next.baseHp = Math.min(next.maxBaseHp, next.baseHp + item.value);
+            if (item.type === 'MERCENARY') {
+                 next.minions.push({ id: generateId(), type: 'WARRIOR', position: {x: 2, y:0, z:2}, createdAt: Date.now(), targetEnemyId: null });
+            }
+            if (item.type.startsWith('UPGRADE_')) {
+                // Structure upgrades - Infinite Scaling (No Max Level Cap)
+                if (item.type === 'UPGRADE_FORGE') next.structures.forgeLevel += 1;
+                if (item.type === 'UPGRADE_WALLS') {
+                    next.structures.wallsLevel += 1;
+                    next.maxBaseHp += item.value;
+                    next.baseHp += item.value;
+                }
+                if (item.type === 'UPGRADE_LIBRARY') next.structures.libraryLevel += 1;
+                if (item.type === 'UPGRADE_LIGHTS') next.structures.lightingLevel = (next.structures.lightingLevel || 0) + 1;
+            }
+
+            next.history = [{ id: generateId(), type: 'TRADE', timestamp: Date.now(), message: `Purchased ${item.name}`, details: `-${item.cost}g` } as HistoryLog, ...next.history];
+            saveGame(next);
+            return next;
+        });
+    };
+
+    const sellItem = (itemId: string) => {
+        setState(prev => {
+            const item = prev.inventory.find(i => i.id === itemId);
+            if (!item) return prev;
+            const val = Math.floor(item.value / 2);
+            return {
+                ...prev,
+                inventory: prev.inventory.filter(i => i.id !== itemId),
+                gold: prev.gold + val,
+                history: [{ id: generateId(), type: 'TRADE', timestamp: Date.now(), message: `Sold ${item.name}`, details: `+${val}g` } as HistoryLog, ...prev.history]
+            };
+        });
+        playSfx('COINS');
+    };
+
+    const equipItem = (itemId: string) => {
+        setState(prev => {
+            const item = prev.inventory.find(i => i.id === itemId);
+            if (!item) return prev;
+            
+            let eq = { ...prev.heroEquipment };
+            if (item.type === 'WEAPON') eq.weapon = item.name;
+            if (item.type === 'ARMOR') eq.armor = item.name;
+            if (item.type === 'RELIC') eq.relic = item.name;
+
+            return { ...prev, heroEquipment: eq };
+        });
+        playSfx('UI_CLICK');
+    };
+
+    // --- VISION MIRROR ---
+    const rerollVision = async () => {
+        const settings = state.settings || {} as GameSettings; // Cast to avoid TS error on empty object
+        // UPDATE: Pass both sheet IDs to the generator
+        const videos = await fetchMotivationVideos(settings.googleSheetId, settings.googleSheetId2, settings.directVisionUrl);
+        
+        setState(prev => {
+            // Filter out already seen videos
+            const seen = new Set(prev.seenVisionUrls || []);
+            let unseenVideos = videos.filter(v => !seen.has(v.originalUrl));
+            
+            // If we've seen them all, reset logic (loop playlist)
+            let didReset = false;
+            if (unseenVideos.length === 0) {
+                unseenVideos = videos;
+                didReset = true;
+            }
+
+            const video = unseenVideos[Math.floor(Math.random() * unseenVideos.length)];
+            
+            let embedUrl = "NO_SIGNAL";
+            let newSeenList = [...(prev.seenVisionUrls || [])];
+
+            if (video) {
+                // Store serialized object for VisionMirror to parse
+                embedUrl = JSON.stringify(video);
+                
+                if (didReset) {
+                    newSeenList = [video.originalUrl]; // Reset list, start with this one
+                } else {
+                    newSeenList.push(video.originalUrl);
+                }
+            }
+            
+            return {
+                ...prev,
+                activeVisionVideo: embedUrl,
+                seenVisionUrls: newSeenList
+            };
+        });
+    };
+    
+    const closeVision = () => {
+        setState(prev => ({ ...prev, activeMapEvent: 'NONE', activeVisionVideo: null }));
+    };
+
+    const triggerEvent = (type: MapEventType) => {
+        setState(prev => ({ ...prev, activeMapEvent: type }));
+    };
+
+    // --- OTHER ---
+    const selectEnemy = (id: string | null) => setState(p => ({ ...p, selectedEnemyId: id }));
+    
+    const interactWithFaction = (factionId: FactionKey, action: string) => {
+        setState(prev => {
+            let fs = prev.factions.map(f => {
+                if (f.id === factionId) {
+                    let change = 0;
+                    if (action === 'GIFT') change = 10;
+                    if (action === 'TRADE') change = 5;
+                    if (action === 'INSULT') change = -20;
+                    if (action === 'PROPAGANDA') change = -50; 
+                    return { ...f, reputation: Math.max(-100, Math.min(100, f.reputation + change)) };
+                }
+                return f;
+            });
+            return { ...prev, factions: fs };
+        });
+        playSfx('UI_CLICK');
+    };
+
+    const interactWithNPC = (id: string) => {
+        playSfx('UI_HOVER');
+    };
+
+    const castSpell = (spellId: string) => {
+        const spell = SPELLS.find(s => s.id === spellId);
+        if (!spell) return;
+        if (state.mana < spell.cost) { playSfx('ERROR'); return; }
+        
+        setState(prev => {
+            let next = { ...prev, mana: prev.mana - spell.cost };
+            playSfx('MAGIC');
+            
+            if (spellId === 'SMITE' && prev.selectedEnemyId) {
+                addEffect('EXPLOSION', {x:0,y:0,z:0}); 
+            }
+            if (spellId === 'HEAL') {
+                next.heroHp = Math.min(next.maxHeroHp, next.heroHp + 30);
+                addEffect('TEXT_GOLD', {x:0,y:2,z:0}, "+30 HP");
+            }
+
+            return next;
+        });
+    };
+    
+    // --- TEMPLATES ---
+    const saveTemplate = (t: Omit<TaskTemplate, 'id'>) => {
+        setState(prev => ({
+            ...prev,
+            templates: [...prev.templates, { ...t, id: generateId() }]
+        }));
+        saveGame(state);
+    };
+    
+    const deleteTemplate = (id: string) => {
+        setState(prev => ({
+            ...prev,
+            templates: prev.templates.filter(t => t.id !== id)
+        }));
+        saveGame(state);
+    };
+
+    // --- CLOUD ---
+    const updateSettings = (s: any) => setState(p => ({ ...p, settings: { ...p.settings, ...s } }));
+    const requestPermissions = async () => {
+        if (typeof Notification !== 'undefined') {
+            const res = await Notification.requestPermission();
+            if (res === 'granted') sendNotification("System", "Neural Link Established.");
+        }
+    };
+
+    const triggerRitual = (type: AlertType) => setState(p => ({ ...p, activeAlert: type }));
+    const completeRitual = () => setState(p => ({ ...p, activeAlert: AlertType.NONE }));
+    const clearSave = () => { localStorage.clear(); window.location.reload(); };
+    const exportSave = () => JSON.stringify(state);
+    const importSave = (data: string) => { 
+        try { 
+            const s = JSON.parse(data); 
+            setState(s); 
+            saveGame(s); 
+            return true; 
+        } catch { return false; } 
+    };
+    const connectToCloud = async () => false;
+    const loginWithGoogle = async () => { await firebaseLogin(); };
+    const logout = async () => { await firebaseLogout(); };
+    const disconnectCloud = () => {};
+    const testCloudConnection = () => testConnection(state.syncConfig?.roomId || 'test');
+    const forcePull = () => {};
+    const takeBaseDamage = (n: number) => setState(p => ({ ...p, baseHp: p.baseHp - n }));
+    const resolveNightPhase = () => { triggerEvent('BATTLE_CINEMATIC'); };
+    const closeBattleReport = () => setState(p => ({ ...p, activeAlert: AlertType.NONE, lastBattleReport: undefined }));
+
+    // Exposed State
+    const extendedContext = {
+        state,
+        isChronosOpen, // NEW
+        toggleChronos, // NEW
+        addTask, editTask, moveTask, deleteTask, completeTask, partialCompleteTask, completeSubtask, failTask,
+        selectEnemy, resolveCrisisHubris, resolveCrisisHumility, resolveAeonBattle, resolveFailedTask,
+        triggerRitual, triggerEvent, completeRitual,
+        toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, toggleDiplomacy,
+        interactWithFaction, buyItem, sellItem, equipItem,
+        clearSave, exportSave, importSave,
+        connectToCloud, loginWithGoogle, logout, disconnectCloud,
+        addEffect, closeVision, rerollVision, interactWithNPC, updateSettings, castSpell,
+        testCloudConnection, forcePull, saveTemplate, deleteTemplate, requestPermissions, takeBaseDamage,
+        resolveNightPhase, closeBattleReport
+    };
+
+    return (
+        <GameContext.Provider value={extendedContext as any}>
+            {children}
+        </GameContext.Provider>
+    );
+};
