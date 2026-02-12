@@ -207,17 +207,16 @@ const RealTimeClock: React.FC = () => {
     useEffect(() => {
         const timer = setInterval(() => {
             const now = Date.now();
-            const todayStr = new Date().toDateString();
 
             if (isChronosOpen) {
-                // Find nearest task specifically for TODAY (Checking matching date string)
-                // This ensures deadlines later today are caught, even if they span different hours
+                // IMPROVED FILTER: Find absolute nearest future task within next 24 hours
+                // This removes strict calendar day dependency which can fail with timezones
                 const nearestTask = state.tasks
                     .filter(t => 
                         !t.completed && 
                         !t.failed && 
                         t.deadline > now && 
-                        new Date(t.deadline).toDateString() === todayStr
+                        (t.deadline - now) < (24 * 60 * 60 * 1000) // Within next 24h
                     )
                     .sort((a,b) => a.deadline - b.deadline)[0];
 
@@ -232,8 +231,8 @@ const RealTimeClock: React.FC = () => {
                     setIsCountdown(true);
                 } else {
                     setDisplayTime("--:--:--");
-                    setSubText("NO TASKS TODAY");
-                    setIsCountdown(true); // Still show countdown style, but blank
+                    setSubText("NO IMMINENT TASKS");
+                    setIsCountdown(true); 
                 }
             } else {
                 // Standard Clock
@@ -262,7 +261,7 @@ const RealTimeClock: React.FC = () => {
                         toggleChronos();
                     }}
                     className={`hover:text-yellow-500 transition-colors cursor-pointer ${isChronosOpen ? 'text-yellow-500 animate-pulse' : 'text-stone-500'}`}
-                    title="Toggle Chronos Projection (Countdown for Today)"
+                    title="Toggle Chronos Projection (Next Task Countdown)"
                 >
                     <Hourglass size={16} />
                 </button>

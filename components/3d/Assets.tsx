@@ -60,14 +60,16 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
         if (!isOpen) return;
         const interval = setInterval(() => {
             const now = Date.now();
-            const todayStr = new Date().toDateString();
             
-            // STRICT FILTER: Only tasks expiring TODAY (matching Calendar Day)
+            // STRICT FILTER REPLACEMENT: 
+            // Instead of filtering by "Today Date String", we find the NEAREST FUTURE task
+            // that is within the next 24 hours. This covers "Tonight" tasks that might span days,
+            // and fixes timezone/date mismatch issues.
             const activeTasks = tasks.filter(t => 
                 !t.completed && 
                 !t.failed && 
                 t.deadline > now && 
-                new Date(t.deadline).toDateString() === todayStr
+                (t.deadline - now) < (24 * 60 * 60 * 1000)
             );
             
             if (activeTasks.length === 0) {
@@ -669,7 +671,7 @@ export const EnemyTimer = ({ deadline, isFuture }: { deadline: number, isFuture?
             if (diff <= 0) { setTimeLeft("00:00:00"); return; }
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
-            setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`);
+            setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
         }, 1000);
         return () => clearInterval(interval);
     }, [deadline]);
