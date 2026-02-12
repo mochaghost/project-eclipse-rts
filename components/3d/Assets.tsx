@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Html, Float, Sparkles, Trail, useTexture, Instance, Instances } from '@react-three/drei';
+import { Html, Float, Sparkles, Trail, useTexture, Instance, Instances, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PALETTE } from '../../constants';
 import { TaskPriority, Era, NPC, RaceType, HeroEquipment, Task } from '../../types';
 import { Clock, AlertTriangle, Crown, Shield } from 'lucide-react';
+import { useGame } from '../../context/GameContext';
 
 // --- UTILITY COMPONENTS ---
 
@@ -45,6 +46,100 @@ const Smoke = ({ position, color = "#57534e", scale=1 }: { position: [number, nu
         <Sparkles count={20} scale={[2, 6, 2]} size={15} speed={0.2} opacity={0.4} color={color} noise={1} />
     </group>
 );
+
+// --- NEW: CHRONOS PROJECTION (GIANT TIMER) ---
+export const ChronosProjection = () => {
+    // @ts-ignore
+    const { state, isChronosOpen } = useGame();
+    const groupRef = useRef<THREE.Group>(null);
+    const ring1Ref = useRef<THREE.Mesh>(null);
+    const ring2Ref = useRef<THREE.Mesh>(null);
+    const [timeLeft, setTimeLeft] = useState("00:00:00");
+    const [taskTitle, setTaskTitle] = useState("");
+
+    // Find nearest deadline
+    useEffect(() => {
+        if (!isChronosOpen) return;
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const tasks = state.tasks.filter(t => !t.completed && !t.failed && t.deadline > now);
+            
+            if (tasks.length === 0) {
+                setTimeLeft("TIMELESS");
+                setTaskTitle("No active threats");
+                return;
+            }
+
+            const nearest = tasks.sort((a,b) => a.deadline - b.deadline)[0];
+            const diff = nearest.deadline - now;
+            
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            
+            setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+            setTaskTitle(nearest.title);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [state.tasks, isChronosOpen]);
+
+    useFrame((state, delta) => {
+        if (!isChronosOpen || !groupRef.current) return;
+        
+        // Spin Rings
+        if (ring1Ref.current) {
+            ring1Ref.current.rotation.z += delta * 0.2;
+            ring1Ref.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.5) * 0.2;
+        }
+        if (ring2Ref.current) {
+            ring2Ref.current.rotation.z -= delta * 0.15;
+            ring2Ref.current.rotation.y = Math.cos(state.clock.elapsedTime * 0.3) * 0.2;
+        }
+        
+        // Bobbing
+        groupRef.current.position.y = 15 + Math.sin(state.clock.elapsedTime) * 0.5;
+    });
+
+    if (!isChronosOpen) return null;
+
+    return (
+        <group ref={groupRef} position={[0, 15, 0]}>
+            {/* Holographic Rings */}
+            <mesh ref={ring1Ref} rotation={[Math.PI/2, 0, 0]}>
+                <torusGeometry args={[8, 0.1, 16, 64]} />
+                <meshBasicMaterial color="#fbbf24" transparent opacity={0.6} side={THREE.DoubleSide} />
+            </mesh>
+            <mesh ref={ring2Ref} rotation={[Math.PI/2.2, 0, 0]}>
+                <torusGeometry args={[6, 0.05, 16, 64]} />
+                <meshBasicMaterial color="#fbbf24" transparent opacity={0.4} side={THREE.DoubleSide} />
+            </mesh>
+
+            {/* Central Pillar of Light */}
+            <mesh position={[0, -10, 0]}>
+                <cylinderGeometry args={[0.5, 0, 20, 16, 1, true]} />
+                <meshBasicMaterial color="#fbbf24" transparent opacity={0.1} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+            </mesh>
+
+            {/* Particles */}
+            <Sparkles count={50} scale={12} size={10} speed={0.4} opacity={0.5} color="#fbbf24" />
+
+            {/* The Text Billboard */}
+            <Billboard>
+                <Html transform center position={[0, 0, 0]} scale={1}>
+                    <div className="flex flex-col items-center justify-center pointer-events-none">
+                        <div className="text-[80px] font-mono font-black text-[#fbbf24] tracking-widest drop-shadow-[0_0_15px_rgba(251,191,36,0.8)] leading-none">
+                            {timeLeft}
+                        </div>
+                        <div className="text-xl font-serif text-white uppercase tracking-[0.5em] mt-2 bg-black/50 px-4 py-1 border-t border-b border-yellow-600/50">
+                            {taskTitle}
+                        </div>
+                        <div className="text-xs text-yellow-600 mt-1 animate-pulse font-serif">CHRONOS PROTOCOL ACTIVE</div>
+                    </div>
+                </Html>
+            </Billboard>
+        </group>
+    );
+};
 
 // --- HERO PROGRESSION VISUALS ---
 

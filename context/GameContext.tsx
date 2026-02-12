@@ -62,6 +62,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [state, setState] = useState<GameState>(() => loadGame());
     const [lastTick, setLastTick] = useState<number>(Date.now());
     
+    // Internal state for UI toggle (doesn't need to be saved to disk necessarily, but good for UX)
+    const [isChronosOpen, setIsChronosOpen] = useState(false);
+
     // Cloud Sync Refs
     const stateRef = useRef(state);
     useEffect(() => { stateRef.current = state; }, [state]);
@@ -135,17 +138,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 let enemiesUpdate = [...current.enemies];
                 let tasksUpdate = [...current.tasks];
 
-                // 1. Task Logic (Deadlines)
+                // 1. Task Logic (Deadlines & Progressive Warnings)
                 tasksUpdate = tasksUpdate.map(t => {
-                    if (!t.completed && !t.failed && now > t.deadline) {
-                        // Task Failed
-                        return { ...t, failed: true };
-                    }
-                    // Crisis Alerts (75% time elapsed)
-                    if (!t.completed && !t.failed && !t.crisisTriggered) {
+                    if (!t.completed && !t.failed) {
+                        // Check Failure
+                        if (now > t.deadline) {
+                            return { ...t, failed: true };
+                        }
+
+                        // Progressive Warnings Logic
                         const duration = t.deadline - t.startTime;
                         const elapsed = now - t.startTime;
-                        if (elapsed / duration > 0.75) {
+                        const progress = elapsed / duration;
+                        const currentLevel = t.lastNotificationLevel || 0;
+
+                        // 75% Warning (CRISIS)
+                        if (progress > 0.75 && currentLevel < 3) {
                             if (current.activeAlert === AlertType.NONE) {
                                 playSfx('FAILURE');
                                 alertUpdate = { 
@@ -154,7 +162,33 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                     sageMessage: getSageWisdom('CRISIS')
                                 };
                             }
-                            return { ...t, crisisTriggered: true };
+                            sendNotification("URGENT: 75% Elapsed", `${t.title} is critical.`);
+                            return { ...t, crisisTriggered: true, lastNotificationLevel: 3 };
+                        }
+                        
+                        // 50% Warning
+                        if (progress > 0.50 && currentLevel < 2) {
+                            playSfx('UI_HOVER'); // Subtle sound
+                            effectsUpdate.push({ 
+                                id: generateId(), 
+                                type: 'TEXT_DAMAGE', // Red Text
+                                position: {x:0, y:3, z:0}, 
+                                text: "50% TIME GONE", 
+                                timestamp: now 
+                            });
+                            return { ...t, lastNotificationLevel: 2 };
+                        }
+
+                        // 25% Warning
+                        if (progress > 0.25 && currentLevel < 1) {
+                            effectsUpdate.push({ 
+                                id: generateId(), 
+                                type: 'TEXT_GOLD', // Yellow Text
+                                position: {x:0, y:3, z:0}, 
+                                text: "25% TIME GONE", 
+                                timestamp: now 
+                            });
+                            return { ...t, lastNotificationLevel: 1 };
                         }
                     }
                     return t;
@@ -583,6 +617,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const toggleAudit = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isAuditOpen: !p.isAuditOpen })); };
     const toggleSettings = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isSettingsOpen: !p.isSettingsOpen })); };
     const toggleDiplomacy = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isDiplomacyOpen: !p.isDiplomacyOpen })); };
+    const toggleChronos = () => { playSfx('MAGIC'); setIsChronosOpen(prev => !prev); };
     
     // --- CRISIS ---
     const resolveCrisisHubris = (taskId: string) => {
@@ -823,20 +858,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const resolveNightPhase = () => { triggerEvent('BATTLE_CINEMATIC'); };
     const closeBattleReport = () => setState(p => ({ ...p, activeAlert: AlertType.NONE, lastBattleReport: undefined }));
 
+    // Exposed State
+    const extendedContext = {
+        state,
+        isChronosOpen, // NEW
+        toggleChronos, // NEW
+        addTask, editTask, moveTask, deleteTask, completeTask, partialCompleteTask, completeSubtask, failTask,
+        selectEnemy, resolveCrisisHubris, resolveCrisisHumility, resolveAeonBattle, resolveFailedTask,
+        triggerRitual, triggerEvent, completeRitual,
+        toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, toggleDiplomacy,
+        interactWithFaction, buyItem, sellItem, equipItem,
+        clearSave, exportSave, importSave,
+        connectToCloud, loginWithGoogle, logout, disconnectCloud,
+        addEffect, closeVision, rerollVision, interactWithNPC, updateSettings, castSpell,
+        testCloudConnection, forcePull, saveTemplate, deleteTemplate, requestPermissions, takeBaseDamage,
+        resolveNightPhase, closeBattleReport
+    };
+
     return (
-        <GameContext.Provider value={{
-            state,
-            addTask, editTask, moveTask, deleteTask, completeTask, partialCompleteTask, completeSubtask, failTask,
-            selectEnemy, resolveCrisisHubris, resolveCrisisHumility, resolveAeonBattle, resolveFailedTask,
-            triggerRitual, triggerEvent, completeRitual,
-            toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, toggleDiplomacy,
-            interactWithFaction, buyItem, sellItem, equipItem,
-            clearSave, exportSave, importSave,
-            connectToCloud, loginWithGoogle, logout, disconnectCloud,
-            addEffect, closeVision, rerollVision, interactWithNPC, updateSettings, castSpell,
-            testCloudConnection, forcePull, saveTemplate, deleteTemplate, requestPermissions, takeBaseDamage,
-            resolveNightPhase, closeBattleReport
-        }}>
+        <GameContext.Provider value={extendedContext as any}>
             {children}
         </GameContext.Provider>
     );

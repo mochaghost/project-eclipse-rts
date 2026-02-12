@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag, Info } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag, Info, Hourglass } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
 import { WorldRumorHUD } from './WorldRumorHUD';
 import { SPELLS, FACTIONS } from '../../constants';
@@ -199,6 +199,8 @@ const RealmStatusWidget: React.FC = () => {
 };
 
 const RealTimeClock: React.FC = () => {
+    // @ts-ignore
+    const { isChronosOpen, toggleChronos } = useGame();
     const [time, setTime] = useState(new Date());
 
     useEffect(() => {
@@ -207,12 +209,22 @@ const RealTimeClock: React.FC = () => {
     }, []);
 
     return (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto z-20 flex flex-col items-center">
             <div className="bg-[#0c0a09]/90 border border-stone-700 px-3 py-1 md:px-4 md:py-2 flex items-center gap-3 rounded-sm shadow-lg">
                 <Clock size={14} className="text-stone-400" />
                 <span className="text-sm md:text-xl font-mono font-bold text-stone-200 tracking-widest">
                     {time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}
                 </span>
+                
+                {/* CHRONOS TOGGLE */}
+                <div className="h-4 w-px bg-stone-700 mx-1"></div>
+                <button 
+                    onClick={toggleChronos} 
+                    className={`hover:text-yellow-500 transition-colors ${isChronosOpen ? 'text-yellow-500 animate-pulse' : 'text-stone-500'}`}
+                    title="Invoke Chronos Projection"
+                >
+                    <Hourglass size={16} />
+                </button>
             </div>
             <div className="hidden md:block text-[10px] text-stone-500 uppercase tracking-[0.3em] mt-1 bg-black/50 px-2">Local Time</div>
         </div>

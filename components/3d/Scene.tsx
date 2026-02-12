@@ -8,7 +8,7 @@ import { EntityRenderer } from './EntityRenderer';
 import { VisualEffectsRenderer } from './VisualEffects';
 import { VazarothEffects } from './VazarothEffects'; 
 import { EntityType, Era, AlertType, WeatherType, Vector3, EnemyEntity, NPC, Task, MinionEntity, GameState, Structures } from '../../types';
-import { VazarothTitan, BonePile, VoidCrystal, RuinedColumn, Torch, TwistedTree, GlowingMushroom, GhostWisp } from './Assets'; 
+import { VazarothTitan, BonePile, VoidCrystal, RuinedColumn, Torch, TwistedTree, GlowingMushroom, GhostWisp, ChronosProjection } from './Assets'; 
 import * as THREE from 'three';
 
 // --- MATH HELPERS ---
@@ -322,6 +322,9 @@ const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC }: { state: 
             <StaticDecorations level={state.playerLevel} />
             {isHighQuality && <Stars radius={150} depth={50} count={1000} factor={4} saturation={0} fade speed={0.2} />}
             <VazarothTitan />
+            
+            {/* NEW: THE CHRONOS PROJECTION */}
+            <ChronosProjection />
 
             {/* ENTITIES */}
             <EntityRenderer type={EntityType.BUILDING_BASE} variant={state.era} position={[0, 0, 0]} stats={{ hp: state.baseHp, maxHp: state.maxBaseHp }} structures={state.structures} />
