@@ -75,6 +75,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, style, onClick, onDragStart, 
         <div 
           draggable 
           onDragStart={onDragStart}
+          // Allow drops on the card to bubble up to container
+          onDragOver={(e) => e.preventDefault()}
           onClick={onClick}
           className={`absolute rounded border overflow-hidden p-1.5 text-xs flex flex-col cursor-grab active:cursor-grabbing pointer-events-auto shadow-md hover:scale-[1.02] transition-transform z-10 ${bgClass} ${borderClass}`}
           style={{ ...style, borderLeftWidth: '4px', borderStyle: task.parentId ? 'dashed' : 'solid' }}
@@ -461,25 +463,41 @@ export const Grimoire: React.FC = () => {
       setDraggedTaskId(task.id);
   };
 
+  // Generic drag over to allow dropping
   const handleDragOver = (e: React.DragEvent) => {
       e.preventDefault(); 
       e.stopPropagation();
   };
 
-  const handleDrop = (e: React.DragEvent, targetDate: Date, targetHour?: number) => {
+  // ROBUST DROP HANDLER: Calculates time based on Y position in the container
+  const handleContainerDrop = (e: React.DragEvent, targetDate: Date, pixelsPerHour: number) => {
+      e.preventDefault();
+      // We don't stop propagation here if we are the top level handler, but it's safe to do so.
+      
+      const taskId = e.dataTransfer.getData("taskId");
+      if(!taskId) return;
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const offsetY = e.clientY - rect.top;
+      
+      // Calculate hour (clamped 0-23)
+      const hour = Math.max(0, Math.min(23, Math.floor(offsetY / pixelsPerHour)));
+      
+      const newStart = new Date(targetDate);
+      newStart.setHours(hour, 0, 0, 0); // Snap to start of hour
+      
+      moveTask(taskId, newStart.getTime());
+  };
+
+  // Legacy handler for direct slot drops (optional, but good for specific targeting)
+  const handleSlotDrop = (e: React.DragEvent, targetDate: Date, targetHour: number) => {
       e.preventDefault();
       e.stopPropagation();
       const taskId = e.dataTransfer.getData("taskId");
-      const task = state.tasks.find(t => t.id === taskId);
-      if(!task) return;
+      if(!taskId) return;
 
       const newStart = new Date(targetDate);
-      if (targetHour !== undefined) {
-          newStart.setHours(targetHour, 0, 0, 0);
-      } else {
-          const originalStart = new Date(task.startTime);
-          newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
-      }
+      newStart.setHours(targetHour, 0, 0, 0);
       moveTask(taskId, newStart.getTime());
   };
 
@@ -512,9 +530,14 @@ export const Grimoire: React.FC = () => {
               </div>
               
               <div className="flex-1 relative overflow-y-auto custom-scrollbar">
-                  <div className="absolute inset-0 w-full h-[1920px]"> 
+                  {/* MAIN CONTAINER: Handles Drops Anywhere */}
+                  <div 
+                    className="absolute inset-0 w-full h-[1920px]"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleContainerDrop(e, date, 80)}
+                  > 
                     {HOURS.map(h => (
-                        <div key={h} onClick={() => handleSelectSlot(date, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, date, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] w-full cursor-pointer group">
+                        <div key={h} onClick={() => handleSelectSlot(date, h)} className="h-20 border-b border-[#1c1917] hover:bg-[#151210] w-full cursor-pointer group">
                             <div className="hidden group-hover:flex items-center justify-center h-full opacity-50">
                                 <Plus size={24} className="text-stone-600" />
                             </div>
@@ -574,9 +597,14 @@ export const Grimoire: React.FC = () => {
                   {weekDays.map((d, colIndex) => {
                       const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === d.toDateString());
                       return (
-                          <div key={colIndex} className="flex-1 border-r border-[#1c1917] relative min-w-[80px]">
+                          <div 
+                            key={colIndex} 
+                            className="flex-1 border-r border-[#1c1917] relative min-w-[80px]"
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleContainerDrop(e, d, 64)}
+                          >
                               {HOURS.map(h => (
-                                  <div key={h} onClick={() => handleSelectSlot(d, h)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, d, h)} className="h-16 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>
+                                  <div key={h} onClick={() => handleSelectSlot(d, h)} className="h-16 border-b border-[#1c1917] hover:bg-[#151210] cursor-pointer"></div>
                               ))}
                               {dayTasks.map(t => {
                                   const date = new Date(t.startTime);
@@ -612,7 +640,7 @@ export const Grimoire: React.FC = () => {
                       const dayTasks = state.tasks.filter(t => new Date(t.startTime).toDateString() === date.toDateString());
                       const isToday = date.toDateString() === new Date().toDateString();
                       return (
-                          <div key={i} onClick={() => handleSelectSlot(date)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, date)} className={`border border-[#1c1917] p-1 flex flex-col hover:bg-[#151210] cursor-pointer min-h-[80px] ${isToday ? 'bg-yellow-950/10' : ''}`}>
+                          <div key={i} onClick={() => handleSelectSlot(date)} onDragOver={handleDragOver} onDrop={(e) => handleSlotDrop(e, date, 9)} className={`border border-[#1c1917] p-1 flex flex-col hover:bg-[#151210] cursor-pointer min-h-[80px] ${isToday ? 'bg-yellow-950/10' : ''}`}>
                               <div className={`text-right text-xs font-bold mb-1 ${isToday ? 'text-yellow-500' : 'text-stone-600'}`}>{date.getDate()}</div>
                               <div className="flex-1 flex flex-col gap-1 overflow-hidden">
                                   {dayTasks.map(t => (
