@@ -52,64 +52,22 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
     const groupRef = useRef<THREE.Group>(null);
     const ring1Ref = useRef<THREE.Mesh>(null);
     const ring2Ref = useRef<THREE.Mesh>(null);
-    const [timeLeft, setTimeLeft] = useState("00:00:00");
-    const [taskTitle, setTaskTitle] = useState("");
+    
+    // Stable refs for logic to avoid effect-thrashing
+    const tasksRef = useRef(tasks);
+    
+    const [displayState, setDisplayState] = useState({ time: "00:00:00", title: "" });
+    const lastUpdateRef = useRef(0);
 
-    // Find nearest deadline
+    // Keep tasks ref updated without triggering re-renders of the logic
     useEffect(() => {
-        if (!isOpen) return;
-        const interval = setInterval(() => {
-            const now = Date.now();
-            
-            // 1. Filter valid tasks
-            const validTasks = tasks.filter(t => 
-                t && 
-                !t.completed && 
-                !t.failed && 
-                typeof t.deadline === 'number' &&
-                t.deadline > now
-            );
-            
-            if (validTasks.length === 0) {
-                setTimeLeft("NO TASKS");
-                setTaskTitle("Rest, Exile");
-                return;
-            }
-
-            // 2. PRIORITIZED SORTING LOGIC
-            // Rank 1: Active Tasks (Started but not finished)
-            // Rank 2: Future Tasks (Not started)
-            const nearest = validTasks.sort((a,b) => {
-                const aActive = a.startTime <= now;
-                const bActive = b.startTime <= now;
-
-                // Active tasks always come before future tasks
-                if (aActive && !bActive) return -1;
-                if (!aActive && bActive) return 1;
-                
-                // If both active, prioritize the one ending sooner (most urgent)
-                if (aActive && bActive) return a.deadline - b.deadline;
-
-                // If both future, prioritize the one starting sooner
-                return a.startTime - b.startTime;
-            })[0];
-
-            const diff = nearest.deadline - now;
-            
-            const h = Math.floor(diff / 3600000);
-            const m = Math.floor((diff % 3600000) / 60000);
-            const s = Math.floor((diff % 60000) / 1000);
-            
-            setTimeLeft(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-            setTaskTitle(nearest.title);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [tasks, isOpen]);
+        tasksRef.current = tasks;
+    }, [tasks]);
 
     useFrame((state, delta) => {
         if (!isOpen || !groupRef.current) return;
         
-        // Spin Rings
+        // 1. VISUAL ANIMATION
         if (ring1Ref.current) {
             ring1Ref.current.rotation.z += delta * 0.2;
             ring1Ref.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.5) * 0.2;
@@ -118,9 +76,57 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
             ring2Ref.current.rotation.z -= delta * 0.15;
             ring2Ref.current.rotation.y = Math.cos(state.clock.elapsedTime * 0.3) * 0.2;
         }
-        
-        // Bobbing
         groupRef.current.position.y = 15 + Math.sin(state.clock.elapsedTime) * 0.5;
+
+        // 2. LOGIC UPDATE (Throttled to 5 times per second for performance)
+        lastUpdateRef.current += delta;
+        if (lastUpdateRef.current > 0.2) {
+            lastUpdateRef.current = 0;
+            
+            const now = Date.now();
+            const currentTasks = tasksRef.current;
+
+            // Filter
+            const validTasks = currentTasks.filter(t => 
+                t && !t.completed && !t.failed && 
+                typeof t.deadline === 'number' && 
+                t.deadline > now
+            );
+
+            if (validTasks.length === 0) {
+                setDisplayState({ time: "NO TASKS", title: "Rest, Exile" });
+                return;
+            }
+
+            // Sort: Active First, then Future
+            const nearest = validTasks.sort((a,b) => {
+                const aActive = a.startTime <= now;
+                const bActive = b.startTime <= now;
+                
+                if (aActive && !bActive) return -1; // Active beats Future
+                if (!aActive && bActive) return 1;
+                
+                // Both Active: Closest Deadline wins (Urgency)
+                if (aActive && bActive) return a.deadline - b.deadline;
+                
+                // Both Future: Closest Start wins (Next up)
+                return a.startTime - b.startTime;
+            })[0];
+
+            if (nearest) {
+                const diff = nearest.deadline - now;
+                const h = Math.floor(diff / 3600000);
+                const m = Math.floor((diff % 3600000) / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                
+                const timeStr = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                
+                // Only update state if changed to avoid render churn
+                if (timeStr !== displayState.time || nearest.title !== displayState.title) {
+                    setDisplayState({ time: timeStr, title: nearest.title });
+                }
+            }
+        }
     });
 
     if (!isOpen) return null;
@@ -137,24 +143,23 @@ export const ChronosProjection = ({ isOpen, tasks }: { isOpen: boolean, tasks: T
                 <meshBasicMaterial color="#fbbf24" transparent opacity={0.4} side={THREE.DoubleSide} />
             </mesh>
 
-            {/* Central Pillar of Light */}
+            {/* Central Pillar */}
             <mesh position={[0, -10, 0]}>
                 <cylinderGeometry args={[0.5, 0, 20, 16, 1, true]} />
                 <meshBasicMaterial color="#fbbf24" transparent opacity={0.1} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
             </mesh>
 
-            {/* Particles */}
             <Sparkles count={50} scale={12} size={10} speed={0.4} opacity={0.5} color="#fbbf24" />
 
-            {/* The Text Billboard */}
+            {/* Text Billboard */}
             <Billboard>
                 <Html transform center position={[0, 0, 0]} scale={1}>
                     <div className="flex flex-col items-center justify-center pointer-events-none">
                         <div className="text-[80px] font-mono font-black text-[#fbbf24] tracking-widest drop-shadow-[0_0_15px_rgba(251,191,36,0.8)] leading-none whitespace-nowrap">
-                            {timeLeft}
+                            {displayState.time}
                         </div>
                         <div className="text-xl font-serif text-white uppercase tracking-[0.5em] mt-2 bg-black/50 px-4 py-1 border-t border-b border-yellow-600/50 whitespace-nowrap">
-                            {taskTitle}
+                            {displayState.title}
                         </div>
                         <div className="text-xs text-yellow-600 mt-1 animate-pulse font-serif">CHRONOS PROTOCOL ACTIVE</div>
                     </div>

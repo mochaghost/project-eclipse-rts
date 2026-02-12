@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag, Info, Hourglass } from 'lucide-react';
 import { VazarothHUD } from './VazarothHUD';
@@ -203,31 +203,38 @@ const RealTimeClock: React.FC = () => {
     const [displayTime, setDisplayTime] = useState("");
     const [subText, setSubText] = useState("Local Time");
     const [isCountdown, setIsCountdown] = useState(false);
+    
+    // Stable refs to prevent interval re-creation
+    const tasksRef = useRef(state.tasks);
+    const modeRef = useRef(isChronosOpen);
+
+    // Keep refs updated
+    useEffect(() => {
+        tasksRef.current = state.tasks;
+        modeRef.current = isChronosOpen;
+    }, [state.tasks, isChronosOpen]);
 
     useEffect(() => {
+        // Run interval independently of state updates
         const timer = setInterval(() => {
             const now = Date.now();
+            const isOpen = modeRef.current;
+            const currentTasks = tasksRef.current;
 
-            if (isChronosOpen) {
-                // UNIFIED LOGIC: Match the ChronosProjection logic exactly
-                const validTasks = state.tasks.filter(t => 
-                    t && 
-                    !t.completed && 
-                    !t.failed && 
+            if (isOpen) {
+                const validTasks = currentTasks.filter(t => 
+                    t && !t.completed && !t.failed && 
                     typeof t.deadline === 'number' &&
                     t.deadline > now
                 );
 
-                // PRIORITIZED SORTING LOGIC (Must match Assets.tsx)
+                // PRIORITIZED SORTING: Active (Start <= Now) > Future
                 const nearestTask = validTasks.sort((a,b) => {
                     const aActive = a.startTime <= now;
                     const bActive = b.startTime <= now;
-                    // Active beats Future
                     if (aActive && !bActive) return -1;
                     if (!aActive && bActive) return 1;
-                    // Both active: closest deadline
                     if (aActive && bActive) return a.deadline - b.deadline;
-                    // Both future: closest start
                     return a.startTime - b.startTime;
                 })[0];
 
@@ -246,14 +253,13 @@ const RealTimeClock: React.FC = () => {
                     setIsCountdown(true); 
                 }
             } else {
-                // Standard Clock
                 setDisplayTime(new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}));
                 setSubText("Local Time");
                 setIsCountdown(false);
             }
         }, 1000);
         return () => clearInterval(timer);
-    }, [isChronosOpen, state.tasks]);
+    }, []); // Empty dependency array = runs once on mount, uses refs
 
     return (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto z-[60] flex flex-col items-center">
