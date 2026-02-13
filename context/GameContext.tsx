@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
     GameState, GameContextType, TaskPriority, EntityType, Era, AlertType, 
@@ -157,7 +156,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 let enemiesUpdate = [...current.enemies];
                 let tasksUpdate = [...current.tasks];
 
-                // 1. Task Logic (Deadlines & Progressive Warnings)
+                // 1. Task Logic
                 tasksUpdate = tasksUpdate.map(t => {
                     if (!t.completed && !t.failed) {
                         // Check Failure
@@ -246,27 +245,43 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     updated.mana = Math.min(updated.maxMana, updated.mana + 0.5);
                 }
 
-                // 4. SAGE INTERVENTION (Vision Ritual) - Using Oracle Elara
-                if (current.activeMapEvent === 'NONE' && current.activeAlert === AlertType.NONE && !current.isGrimoireOpen && !alertUpdate?.activeMapEvent) {
-                     const impendingTask = current.tasks.find(t => t.priority === TaskPriority.HIGH && !t.completed && !t.failed && t.startTime > now && (t.startTime - now) < 15 * 60 * 1000);
-                     if (impendingTask && Math.random() > 0.98) {
-                         const pool = DIALOGUE_POOLS.ORACLE_ELARA.VISION;
-                         const text = pool[Math.floor(Math.random() * pool.length)];
+                // 4. SAGE INTERVENTION & CHRONOS WISDOM
+                if (current.activeMapEvent === 'NONE' && current.activeAlert === AlertType.NONE && !current.isGrimoireOpen && !alertUpdate?.activeMapEvent && !current.activeDialogue) {
+                     
+                     // 4a. CHRONOS WISDOM
+                     if (Math.random() > 0.995) { 
+                         const text = DIALOGUE_POOLS.ORACLE_ELARA.TIME_WISDOM[Math.floor(Math.random() * DIALOGUE_POOLS.ORACLE_ELARA.TIME_WISDOM.length)];
                          updated.activeDialogue = {
                              id: generateId(),
                              characterId: 'ORACLE_ELARA',
                              text,
                              mood: 'MYSTERIOUS',
                              timestamp: now,
-                             duration: 6000
+                             duration: 8000 
                          };
-                         // Also trigger vision event sometimes
-                         if (Math.random() > 0.5) {
-                             alertUpdate = {
-                                 ...alertUpdate,
-                                 activeMapEvent: 'VISION_RITUAL',
-                                 sageMessage: "The Mirror calls.",
+                         playSfx('MAGIC');
+                     }
+                     // 4b. Impending Doom Vision
+                     else {
+                         const impendingTask = current.tasks.find(t => t.priority === TaskPriority.HIGH && !t.completed && !t.failed && t.startTime > now && (t.startTime - now) < 15 * 60 * 1000);
+                         if (impendingTask && Math.random() > 0.98) {
+                             const pool = DIALOGUE_POOLS.ORACLE_ELARA.VISION;
+                             const text = pool[Math.floor(Math.random() * pool.length)];
+                             updated.activeDialogue = {
+                                 id: generateId(),
+                                 characterId: 'ORACLE_ELARA',
+                                 text,
+                                 mood: 'MYSTERIOUS',
+                                 timestamp: now,
+                                 duration: 6000
                              };
+                             if (Math.random() > 0.5) {
+                                 alertUpdate = {
+                                     ...alertUpdate,
+                                     activeMapEvent: 'VISION_RITUAL',
+                                     sageMessage: "The Mirror calls.",
+                                 };
+                             }
                          }
                      }
                 }
@@ -276,6 +291,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 updated.population = simResult.newPopulation;
                 updated.realmStats = simResult.newStats;
                 
+                // Narrative Sync (Campaign Characters)
+                if (simResult.activeDialogue) {
+                    updated.activeDialogue = simResult.activeDialogue;
+                    playSfx('UI_HOVER'); // Event trigger sound
+                }
+                
+                // Stat Updates from Sim (including Campaigns)
+                if (simResult.goldChange !== 0) {
+                    updated.gold = Math.max(0, updated.gold + simResult.goldChange);
+                    if (simResult.goldChange < 0 && Math.random() > 0.5) effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: `${simResult.goldChange}g`, timestamp: now });
+                    if (simResult.goldChange > 0) effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:2, z:0}, text: `+${simResult.goldChange}g`, timestamp: now });
+                }
+                if (simResult.manaChange !== 0) updated.mana = Math.max(0, Math.min(updated.maxMana, updated.mana + simResult.manaChange));
+                if (simResult.hpChange !== 0) updated.baseHp = Math.min(updated.maxBaseHp, updated.baseHp + simResult.hpChange);
+
                 // CHECK FOR NARRATIVE STAGE CHANGE TO TRIGGER ORACLE
                 if (simResult.dailyNarrative.stage !== current.dailyNarrative?.stage) {
                     const pool = DIALOGUE_POOLS.ORACLE_ELARA.ACT_CHANGE;
@@ -285,25 +315,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 
                 updated.dailyNarrative = simResult.dailyNarrative; // SYNC DAILY NARRATIVE
-                
-                // --- GOLD UPDATE: Handle negative upkeep and positive gain ---
-                if (simResult.goldChange < 0 && Math.random() > 0.998) {
-                     updated.gold = Math.max(0, updated.gold + simResult.goldChange); 
-                     effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: `${simResult.goldChange}g (Upkeep)`, timestamp: now });
-                     
-                     // Seneschal Complains
-                     if (Math.random() > 0.8) {
-                         const pool = DIALOGUE_POOLS.SENESCHAL_MORVATH.GOLD_LOSS;
-                         const text = pool[Math.floor(Math.random() * pool.length)];
-                         updated.activeDialogue = { id: generateId(), characterId: 'SENESCHAL_MORVATH', text, mood: 'ANGRY', timestamp: now, duration: 5000 };
-                     }
-                }
-                else if (simResult.goldChange > 0) {
-                    updated.gold += simResult.goldChange;
-                    if (Math.random() > 0.9) {
-                        effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:2, z:0}, text: `+${simResult.goldChange}g`, timestamp: now });
-                    }
-                }
 
                 if (simResult.spawnedEnemies && simResult.spawnedEnemies.length > 0) {
                      updated.enemies = [...updated.enemies, ...simResult.spawnedEnemies];

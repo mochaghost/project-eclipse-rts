@@ -1,7 +1,7 @@
 
-import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile, DailyNarrative } from '../types';
+import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile, DailyNarrative, CharacterID, DialoguePacket } from '../types';
 import { generateId, generateNemesis } from './generators';
-import { RACES, TRAITS, FACTIONS } from '../constants';
+import { RACES, TRAITS, FACTIONS, CHARACTERS } from '../constants';
 
 // ... (Keep existing Name/NPC generators) ...
 const NAMES_FIRST = ["Ael", "Bor", "Cael", "Dun", "Ela", "Fen", "Gor", "Hul", "Ion", "Jur", "Kal", "Lom", "Mara", "Nia", "Oren", "Pia", "Quin", "Ren", "Sola", "Tor", "Ul", "Vea", "Wyn", "Xan", "Yor", "Zen", "Kael", "Thar", "Isol"];
@@ -105,6 +105,47 @@ const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: 
     return { updatedFactions, log };
 };
 
+// --- NARRATIVE CHARACTER INTERVENTION ENGINE ---
+// This system makes the Rival/Ally actively change game state, not just talk.
+const generateCharacterEvent = (state: GameState): { log?: HistoryLog, dialogue?: DialoguePacket, goldMod?: number, manaMod?: number, hpMod?: number } => {
+    if (Math.random() > 0.05) return {}; // 5% chance per tick to check, further reduced inside
+
+    const rivalId = state.activeRivalId || 'RIVAL_KROG';
+    const allyId = state.activeAllyId || 'MARSHAL_THORNE';
+    
+    // RIVAL ACTION (If player is weak or just random harassment)
+    if (Math.random() > 0.98) {
+        if (rivalId === 'RIVAL_KROG') {
+            const theft = Math.floor(Math.random() * 20) + 10;
+            return {
+                log: { id: generateId(), timestamp: Date.now(), type: 'DEFEAT', message: "Krog's Raiders stole supplies", details: `-${theft} Gold`, cause: "Rival Action" },
+                dialogue: { id: generateId(), characterId: rivalId, text: "I take what you cannot defend!", mood: 'ANGRY', timestamp: Date.now(), duration: 5000 },
+                goldMod: -theft
+            };
+        } else if (rivalId === 'RIVAL_VASHJ') {
+            const drain = 15;
+            return {
+                log: { id: generateId(), timestamp: Date.now(), type: 'MAGIC', message: "Vashj drains the ley lines", details: `-${drain} Mana`, cause: "Rival Spell" },
+                dialogue: { id: generateId(), characterId: rivalId, text: "Your magic is... clumsy. I shall repurpose it.", mood: 'MYSTERIOUS', timestamp: Date.now(), duration: 5000 },
+                manaMod: -drain
+            };
+        }
+    }
+
+    // ALLY ACTION (If player is struggling or randomly)
+    if (Math.random() > 0.99 && state.baseHp < state.maxBaseHp * 0.5) {
+        if (allyId === 'MARSHAL_THORNE') {
+            return {
+                log: { id: generateId(), timestamp: Date.now(), type: 'VICTORY', message: "Thorne rallies the guard", details: "+20 Base HP", cause: "Ally Support" },
+                dialogue: { id: generateId(), characterId: allyId, text: "Hold the line! I've brought reinforcements!", mood: 'HAPPY', timestamp: Date.now(), duration: 5000 },
+                hpMod: 20
+            };
+        }
+    }
+
+    return {};
+};
+
 // --- CAUSALITY ENGINE (DWARF FORTRESS STYLE) ---
 const updateDailyNarrative = (current: DailyNarrative | undefined, state: GameState, logs: HistoryLog[]): DailyNarrative => {
     const todayId = new Date().toISOString().split('T')[0];
@@ -185,6 +226,9 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     let logs: HistoryLog[] = [];
     let spawnedEnemies: EnemyEntity[] = [];
     let goldChange = 0;
+    let manaChange = 0;
+    let hpChange = 0;
+    let activeDialogue = undefined;
     
     // 1. Update Global Stats
     let newStats = updateRealmStats(state.realmStats || { hope: 50, fear: 10, order: 50 }, triggerEvent || 'NEGLECT');
@@ -194,29 +238,30 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     const newFactions = factionSim.updatedFactions;
     if (factionSim.log) logs.push(factionSim.log);
 
-    // 3. GOLD DECAY & UPKEEP (New Grimdark Economy)
-    // Gold no longer increases automatically. It drains.
-    // Upkeep Calc: Base(1) + Forge(2) + Walls(1) + Library(1) + Light(1) + Minions(1 each)
-    // MODIFIED: Drastically reduced probability to 0.2% per second (~every 8 minutes)
+    // 3. CAMPAIGN CHARACTER EVENTS (ACTIVE INTERVENTION)
+    // This connects the specific Rival/Ally to the game economy
+    const charEvent = generateCharacterEvent(state);
+    if (charEvent.log) logs.push(charEvent.log);
+    if (charEvent.dialogue) activeDialogue = charEvent.dialogue;
+    if (charEvent.goldMod) goldChange += charEvent.goldMod;
+    if (charEvent.manaMod) manaChange += charEvent.manaMod;
+    if (charEvent.hpMod) hpChange += charEvent.hpMod;
+
+    // 4. GOLD DECAY & UPKEEP (Standard)
     if (Math.random() > 0.998) { 
         const s = state.structures;
         const upkeep = 1 + (s.forgeLevel * 2) + s.wallsLevel + s.libraryLevel + s.lightingLevel + Math.ceil(state.minions.length / 2);
-        
-        // Apply decay
         goldChange -= upkeep;
     }
 
-    // 4. NPC Deep Simulation
+    // 5. NPC Deep Simulation
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
-        let actionLog: string | null = null;
         
-        // Mood Logic
         const sanityDrain = Math.max(0, (newStats.fear - newStats.hope) * 0.05);
         newNpc.sanity = Math.max(0, Math.min(100, newNpc.sanity - sanityDrain));
 
-        // Madness Trigger
         if (newNpc.sanity < 10 && newNpc.status !== 'MAD') {
             newNpc.status = 'MAD';
             logs.push({
@@ -227,14 +272,13 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
                 details: "The pressure of the void broke their mind.",
                 cause: "Sanity Collapse"
             });
-            // Madness spawns an enemy!
             spawnedEnemies.push(generateNemesis('MADNESS_SPAWN', TaskPriority.HIGH, [], 0, undefined, 'Broken Mind', 60, newStats));
         }
 
         return newNpc;
     });
 
-    // 5. Update Narrative State (Connecting the dots)
+    // 6. Update Narrative State
     const dailyNarrative = updateDailyNarrative(state.dailyNarrative, state, logs);
 
     return { 
@@ -243,7 +287,10 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         newStats, 
         newFactions, 
         spawnedEnemies, 
-        goldChange, 
+        goldChange,
+        manaChange, // NEW
+        hpChange, // NEW
+        activeDialogue, // NEW
         dailyNarrative 
     };
 };

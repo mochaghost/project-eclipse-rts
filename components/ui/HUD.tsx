@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag, Info, Hourglass, MessageSquare } from 'lucide-react';
 import { CampaignHUD } from './CampaignHUD';
+import { VazarothHUD } from './VazarothHUD'; // RESTORED
 import { WorldRumorHUD } from './WorldRumorHUD';
 import { SPELLS, FACTIONS } from '../../constants';
 
@@ -371,6 +372,7 @@ export const HUD: React.FC = () => {
 
   return (
     <div className={containerClass}>
+      <VazarothHUD />
       <CampaignHUD />
       <WorldRumorHUD />
       <RealmStatusWidget />

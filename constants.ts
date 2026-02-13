@@ -113,12 +113,14 @@ export const DIALOGUE_POOLS = {
         GREETING: [
             "Morning, Commander. The troops are ready.",
             "Blade sharp? Good. We have work to do.",
-            "Don't let them breach the walls today."
+            "Don't let them breach the walls today.",
+            "Plan B is just Plan A with more violence. Adapt."
         ],
         VICTORY: [
             "Another one down! Keep pushing!",
             "Textbook execution, sir.",
-            "The men are cheering your name!"
+            "The men are cheering your name!",
+            "Momentum is our siege engine. Keep striking!"
         ],
         ACT_2: [
             "Enemy movement on the horizon. Stay focused.",
@@ -147,7 +149,8 @@ export const DIALOGUE_POOLS = {
         GOLD_GAIN: [
             "The treasury grows. Excellent management.",
             "A wise investment of effort.",
-            "Resources secured. The walls hold."
+            "Resources secured. The walls hold.",
+            "Profit generated. We can reinvest this."
         ],
         GOLD_LOSS: [
             "We are bleeding coin! Do something!",
@@ -164,6 +167,20 @@ export const DIALOGUE_POOLS = {
         VISION: [
             "I see a path... if you have the will to walk it.",
             "The Mirror reveals what you fear most: your own potential."
+        ],
+        // SPECIFIC CONCEPTS FROM USER TEXT FILE
+        TIME_WISDOM: [
+            "The 3-Hour Rule, Exile. Divide the chaos into micro-campaigns.",
+            "Do not look at the Cronograma with dread. Look at the Output: The Kingdom you are building.",
+            "Time has an economy. Minimize your input, maximize your profit.",
+            "Spending 3 hours on a 15-minute task? That is a bad investment. Cut your losses.",
+            "Visualize the next step. Only the next step. The rest is fog.",
+            "Flow is a river. You must paddle to start, but then the current carries you.",
+            "Do not be a perfectionist. That is a trap of the Void. Deliver the result.",
+            "Plan B is essential. The timeline is fluid; adapt or die.",
+            "If you stay too long in a task, you pay interest in Stress. Finish it.",
+            "The 'Winner Effect'. Victory feeds the soul. Chain your wins.",
+            "Separate the Planning from the Execution. Do not think while you fight."
         ]
     }
 };
