@@ -1,6 +1,7 @@
 
+
+// ... existing imports
 // Extend JSX.IntrinsicElements to include Three.js elements
-// Explicitly declaring common elements to ensure TypeScript picks them up
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -95,21 +96,13 @@ export interface EnemyEntity {
   clan: string; 
   personality: EnemyPersonality;
   rank: number; // 1-10
-  
-  // Lore & Memory
   lore: string; 
   memories: string[]; 
   lineage: string; 
-  
-  // NEW: The Reason for their existence
-  origin: string; // e.g., "Spawned by High Fear", "Avenging Kin", "Attracted by Gold"
-
-  // Combat Stats
+  origin: string; 
   hp: number;
   maxHp: number;
   priority: TaskPriority;
-  
-  // Render Props
   position: Vector3;
   initialPosition: Vector3; 
   taskId: string; 
@@ -158,7 +151,7 @@ export interface Task {
   crisisTriggered: boolean; 
   hubris: boolean; 
   foresightBonus?: number;
-  lastNotificationLevel?: number; // 0=None, 1=25%, 2=50%, 3=75%, 4=90% 
+  lastNotificationLevel?: number; 
 }
 
 export interface HistoryLog {
@@ -167,7 +160,7 @@ export interface HistoryLog {
     type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE' | 'DAILY_REPORT' | 'NARRATIVE';
     message: string;
     details?: string;
-    cause?: string; // NEW: The causality link (e.g. "Triggered by Low Order")
+    cause?: string; 
 }
 
 export interface ShopItem {
@@ -177,28 +170,25 @@ export interface ShopItem {
     cost: number;
     type: 'HEAL_HERO' | 'HEAL_BASE' | 'MERCENARY' | 'UPGRADE_FORGE' | 'UPGRADE_WALLS' | 'UPGRADE_LIBRARY' | 'UPGRADE_LIGHTS' | 'BUY_TIME';
     value: number; 
-    tier?: number; // 1, 2, 3
+    tier?: number; 
 }
 
-// --- DEEP SIMULATION TYPES ---
 export interface NPCRelationship {
     targetId: string;
     type: 'FRIEND' | 'RIVAL' | 'LOVER' | 'ENEMY' | 'VICTIM';
-    score: number; // -100 to 100
-    lastInteraction: number; // timestamp
+    score: number; 
+    lastInteraction: number; 
 }
 
 export interface PsychProfile {
-    openness: number;      // 0-100: Curiosity vs Consistency
-    conscientiousness: number; // 0-100: Duty vs Laziness
-    extroversion: number;  // 0-100: Social vs Solitary
-    agreeableness: number; // 0-100: Compassion vs Aggression
-    neuroticism: number;   // 0-100: Stability vs Anxiety
-    
-    // Hidden stats
-    bravery: number;       // 0-100: Fight vs Flight
-    greed: number;         // 0-100: Crime probability
-    faith: number;         // 0-100: Resistance to Void corruption
+    openness: number;      
+    conscientiousness: number; 
+    extroversion: number;  
+    agreeableness: number; 
+    neuroticism: number;   
+    bravery: number;       
+    greed: number;         
+    faith: number;         
 }
 
 export interface NPC {
@@ -207,37 +197,34 @@ export interface NPC {
     role: 'Peasant' | 'Smith' | 'Guard' | 'Noble' | 'Scholar' | 'Cultist' | 'Beggar' | 'Artificer' | 'Ranger' | 'Militia';
     race: RaceType;
     factionId?: FactionKey; 
-    traits: string[]; // Legacy descriptive tags
-    psych?: PsychProfile; // NEW: The Brain
+    traits: string[]; 
+    psych?: PsychProfile; 
     stats: { strength: number, intellect: number, loyalty: number };
     status: 'ALIVE' | 'DEAD' | 'MARRIED' | 'EXILED' | 'HEROIC' | 'MAD';
     mood: 'HOPEFUL' | 'NEUTRAL' | 'TERRIFIED' | 'REBELLIOUS' | 'MANIC' | 'INSPIRED' | 'VENGEFUL' | 'BROKEN';
-    sanity: number; // 0-100.
-    
-    // Deep Sim States
-    hunger: number; // 0-100
-    fatigue: number; // 0-100
+    sanity: number; 
+    hunger: number; 
+    fatigue: number; 
     currentAction: 'IDLE' | 'WORKING' | 'PRAYING' | 'COWERING' | 'RIOTING' | 'FIGHTING' | 'SLEEPING' | 'EATING' | 'SOCIALIZING' | 'SCHEMING' | 'MOURNING';
-    targetEntityId?: string; // What are they interacting with?
-    
+    targetEntityId?: string; 
     age: number;
     relationships: NPCRelationship[]; 
-    memories: string[]; // Log of events
+    memories: string[]; 
 }
 
 export interface FactionReputation {
     id: FactionKey;
     name: string;
-    reputation: number; // -100 to 100
+    reputation: number; 
     status: 'WAR' | 'HOSTILE' | 'NEUTRAL' | 'FRIENDLY' | 'ALLIED';
 }
 
 export interface Structures {
-    forgeLevel: number; // Affects Hero Damage. Infinite
-    wallsLevel: number; // Affects Base HP Max. Infinite
-    libraryLevel: number; // Affects XP Gain. Infinite
-    marketLevel: number; // Affects Gold Gain. Infinite
-    lightingLevel: number; // Affects Aesthetic/Hope. Infinite
+    forgeLevel: number; 
+    wallsLevel: number; 
+    libraryLevel: number; 
+    marketLevel: number; 
+    lightingLevel: number; 
 }
 
 export interface Item {
@@ -251,7 +238,7 @@ export interface Item {
 }
 
 export interface HeroEquipment {
-    weapon: string; // Legacy String for backward compatibility (display name)
+    weapon: string; 
     armor: string;
     relic: string;
 }
@@ -268,19 +255,19 @@ export interface FirebaseConfig {
 }
 
 export interface GameSettings {
-    masterVolume: number; // 0.0 to 1.0
+    masterVolume: number; 
     graphicsQuality: 'LOW' | 'HIGH';
-    googleSheetId?: string; // Primary Sheet Source
-    googleSheetId2?: string; // Secondary Sheet Source (NEW)
-    directVisionUrl?: string; // Direct text links
-    uiScale?: number; // 0.8 to 1.2
-    safeAreaPadding?: number; // 0 to 50px
+    googleSheetId?: string; 
+    googleSheetId2?: string; 
+    directVisionUrl?: string; 
+    uiScale?: number; 
+    safeAreaPadding?: number; 
 }
 
 export interface RealmStats {
-    hope: number; // 0-100
-    fear: number; // 0-100
-    order: number; // 0-100
+    hope: number; 
+    fear: number; 
+    order: number; 
 }
 
 export interface DefenseStats {
@@ -291,7 +278,6 @@ export interface DefenseStats {
     moraleBonus: number;
 }
 
-// NEW: Store the last battle results
 export interface BattleReport {
     timestamp: number;
     attackerFactionId: FactionKey | 'UNKNOWN';
@@ -305,21 +291,45 @@ export interface BattleReport {
     conqueredFaction?: string;
 }
 
-// NEW: Daily Narrative System - The 3 Acts
+// NEW: NARRATIVE ENGINE TYPES
+export type CharacterID = 'MARSHAL_THORNE' | 'RIVAL_KROG' | 'SENESCHAL_MORVATH' | 'ORACLE_ELARA' | 'RIVAL_VASHJ' | 'RIVAL_EMPEROR';
+
+export interface CampaignCharacter {
+    id: CharacterID;
+    name: string;
+    title: string;
+    race: RaceType;
+    role: 'ALLY' | 'RIVAL' | 'NEUTRAL';
+    color: string;
+    description: string;
+    // Current mood towards player
+    attitude: 'RESPECT' | 'DISDAIN' | 'HATRED' | 'FEAR' | 'NEUTRAL'; 
+}
+
+export interface DialoguePacket {
+    id: string;
+    characterId: CharacterID;
+    text: string;
+    mood: 'ANGRY' | 'HAPPY' | 'NEUTRAL' | 'MYSTERIOUS';
+    timestamp: number;
+    duration: number;
+    context?: string; // e.g. "Task Complete", "Act 1 Start"
+}
+
 export interface DailyNarrative {
-    dayId: string; // YYYY-MM-DD
-    title: string; // Dynamic Title
+    dayId: string; 
+    title: string; 
     theme: 'FEAR' | 'HOPE' | 'ORDER' | 'CHAOS' | 'GREED' | 'MAGIC' | 'WAR';
     stage: 'INCIDENT' | 'RISING' | 'CLIMAX' | 'RESOLUTION'; 
     acts: {
-        act1?: string; // Summary of the Incident (Morning)
-        act2?: string; // Summary of the Rising Action (Midday)
-        act3?: string; // Summary of the Climax (Evening)
+        act1?: string; 
+        act2?: string; 
+        act3?: string; 
     };
-    logs: string[]; // Raw event logs used to build the narrative
-    intensity: number; // 0-100, determines difficulty of Climax
+    logs: string[]; 
+    intensity: number; 
     resolved: boolean;
-    cause: string; // The root cause string
+    cause: string; 
 }
 
 export interface GameState {
@@ -330,8 +340,6 @@ export interface GameState {
   maxHeroHp: number;
   baseHp: number;
   maxBaseHp: number;
-  
-  // Magic System
   mana: number;
   maxMana: number;
   
@@ -341,12 +349,13 @@ export interface GameState {
   effects: VisualEffect[]; 
   era: Era;
   weather: WeatherType; 
+  
+  // Legacy
   sageMessage: string;
   vazarothMessage: string; 
+  
   winStreak: number;
   lossStreak: number;
-  
-  // Modals
   isGrimoireOpen: boolean;
   isProfileOpen: boolean;
   isMarketOpen: boolean; 
@@ -354,8 +363,6 @@ export interface GameState {
   isSettingsOpen: boolean;
   isDiplomacyOpen: boolean; 
   selectedEnemyId: string | null; 
-  
-  // Alerts & Events
   activeAlert: AlertType;
   alertTaskId: string | null; 
   history: HistoryLog[]; 
@@ -363,9 +370,7 @@ export interface GameState {
   activeMapEvent: MapEventType;
   activeVisionVideo: string | null; 
   visionQueue: string[]; 
-  seenVisionUrls: string[]; // NEW: Tracks history of seen videos to prevent repeats
-  
-  // Advanced Simulation
+  seenVisionUrls: string[]; 
   population: NPC[];
   realmStats: RealmStats;
   structures: Structures; 
@@ -373,17 +378,16 @@ export interface GameState {
   heroEquipment: HeroEquipment; 
   inventory: Item[]; 
   templates: TaskTemplate[]; 
-  
-  // Graveyard for Nemesis System
   nemesisGraveyard: { name: string, clan: string, deathTime: number, killer: 'HERO' | 'TIME' }[];
-
-  // CYCLE OF THE ECLIPSE
   worldGenerationDay: number; 
   lastBattleReport?: BattleReport; 
   defenseStats?: DefenseStats;
   
-  // NEW: Narrative Engine
+  // NARRATIVE ENGINE
   dailyNarrative?: DailyNarrative;
+  activeDialogue?: DialoguePacket; 
+  activeRivalId?: CharacterID; // Who is the main antagonist of this era?
+  activeAllyId?: CharacterID; // Who is your main advisor?
 
   syncConfig?: {
       firebase: FirebaseConfig;
@@ -395,7 +399,6 @@ export interface GameState {
   settings: GameSettings;
 }
 
-// Helper type for subtask creation
 export interface SubtaskDraft {
     title: string;
     startTime?: number;
@@ -437,11 +440,8 @@ export interface GameContextType {
   toggleAudit: () => void; 
   toggleSettings: () => void;
   toggleDiplomacy: () => void; 
-  
-  // NEW: CHRONOS
   isChronosOpen: boolean;
   toggleChronos: () => void;
-
   interactWithFaction: (factionId: FactionKey, action: 'GIFT' | 'TRADE' | 'INSULT' | 'PROPAGANDA') => void;
   buyItem: (itemId: string) => void;
   sellItem: (itemId: string) => void; 
@@ -467,4 +467,5 @@ export interface GameContextType {
   takeBaseDamage: (amount: number, reason?: string) => void;
   resolveNightPhase: () => void;
   closeBattleReport: () => void;
+  dismissDialogue: () => void; 
 }

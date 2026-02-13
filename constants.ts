@@ -1,4 +1,5 @@
 
+import { CampaignCharacter, CharacterID } from "./types";
 
 export const PALETTE = {
   VOID: "#050202",
@@ -40,6 +41,138 @@ export const LEVEL_THRESHOLDS = {
   GENERAL: 40,
   KING: 60,
   GOD: 80
+};
+
+// --- NARRATIVE CHARACTERS & DIALOGUE ---
+
+export const CHARACTERS: Record<CharacterID, CampaignCharacter> = {
+    MARSHAL_THORNE: {
+        id: 'MARSHAL_THORNE',
+        name: "Sergeant Thorne",
+        title: "Camp Marshal",
+        race: 'HUMAN',
+        role: 'ALLY',
+        color: '#3b82f6',
+        description: "A battle-scarred soldier who keeps the men in line.",
+        attitude: 'RESPECT'
+    },
+    RIVAL_KROG: {
+        id: 'RIVAL_KROG',
+        name: "Krog the Slaver",
+        title: "Orc Warlord",
+        race: 'ORC',
+        role: 'RIVAL',
+        color: '#ef4444',
+        description: "A brutal overseer who mocks your productivity.",
+        attitude: 'DISDAIN'
+    },
+    SENESCHAL_MORVATH: {
+        id: 'SENESCHAL_MORVATH',
+        name: "Seneschal Morvath",
+        title: "Keeper of Coin",
+        race: 'HUMAN',
+        role: 'ALLY',
+        color: '#fbbf24',
+        description: "Obsessed with gold and citadel maintenance.",
+        attitude: 'NEUTRAL'
+    },
+    ORACLE_ELARA: {
+        id: 'ORACLE_ELARA',
+        name: "Elara the Seer",
+        title: "Void Oracle",
+        race: 'ELF',
+        role: 'NEUTRAL',
+        color: '#a855f7',
+        description: "She sees the timelines of your tasks.",
+        attitude: 'MYSTERIOUS'
+    } as any,
+    RIVAL_VASHJ: {
+        id: 'RIVAL_VASHJ',
+        name: "Lady Vashj",
+        title: "Abyssal Witch",
+        race: 'ELF',
+        role: 'RIVAL',
+        color: '#22d3ee',
+        description: "Drains your will with dark magic.",
+        attitude: 'HATRED'
+    },
+    RIVAL_EMPEROR: {
+        id: 'RIVAL_EMPEROR',
+        name: "Vazaroth",
+        title: "The Eclipse Emperor",
+        race: 'DEMON',
+        role: 'RIVAL',
+        color: '#7f1d1d',
+        description: "The end of all things.",
+        attitude: 'DISDAIN'
+    }
+};
+
+export const DIALOGUE_POOLS = {
+    MARSHAL_THORNE: {
+        GREETING: [
+            "Morning, Commander. The troops are ready.",
+            "Blade sharp? Good. We have work to do.",
+            "Don't let them breach the walls today."
+        ],
+        VICTORY: [
+            "Another one down! Keep pushing!",
+            "Textbook execution, sir.",
+            "The men are cheering your name!"
+        ],
+        ACT_2: [
+            "Enemy movement on the horizon. Stay focused.",
+            "Sun's high. Sweat pays dividends now."
+        ]
+    },
+    RIVAL_KROG: {
+        TAUNT: [
+            "IS THAT ALL YOU GOT, LITTLE HUMAN?",
+            "MY WOLVES WORK HARDER THAN YOU!",
+            "I WILL SMASH YOUR WALLS AND EAT YOUR GOLD!",
+            "YOU CALL THIS A DEFENSE? HA!"
+        ],
+        DEFEAT: [
+            "GRAAAH! YOU GOT LUCKY!",
+            "THIS ISN'T OVER! I WILL RETURN!",
+            "MY CLAN WILL AVENGE ME!"
+        ],
+        PLAYER_FAIL: [
+            "PATHETIC! CRUMBLE BEFORE KROG!",
+            "TOO SLOW! YOUR TIME IS MINE NOW!",
+            "LOOK AT HIM STRUGGLE. DELICIOUS."
+        ]
+    },
+    SENESCHAL_MORVATH: {
+        GOLD_GAIN: [
+            "The treasury grows. Excellent management.",
+            "A wise investment of effort.",
+            "Resources secured. The walls hold."
+        ],
+        GOLD_LOSS: [
+            "We are bleeding coin! Do something!",
+            "Inefficiency is a crime, Commander.",
+            "My ledgers... they are weeping."
+        ]
+    },
+    ORACLE_ELARA: {
+        ACT_CHANGE: [
+            "The shadow lengthens. The Second Act begins.",
+            "Time weaves a cruel tapestry today.",
+            "The climax approaches. Destiny is not yet written."
+        ],
+        VISION: [
+            "I see a path... if you have the will to walk it.",
+            "The Mirror reveals what you fear most: your own potential."
+        ]
+    }
+};
+
+// Legacy alias for compatibility if needed, though we should migrate fully.
+export const ADVISOR_DATA = {
+    MARSHAL: CHARACTERS.MARSHAL_THORNE,
+    SENESCHAL: CHARACTERS.SENESCHAL_MORVATH,
+    ORACLE: CHARACTERS.ORACLE_ELARA
 };
 
 // --- SPELLS ---
@@ -201,7 +334,7 @@ export const TITLES_BY_FACTION: Record<string, string[]> = {
 };
 
 export const ENEMY_CLANS = [
-    { name: "The Red Hand", desc: "Warmongers who feed on conflict." },
+    { name: "The Red Hand", desc: "Warmongers who burn what they cannot rule." },
     { name: "Eaters of Minutes", desc: "Gluttons who devour lost time." },
     { name: "The Silent Choir", desc: "Mages seeking to silence your will." },
     { name: "Ironbound Legion", desc: "Undead soldiers of a forgotten war." },
