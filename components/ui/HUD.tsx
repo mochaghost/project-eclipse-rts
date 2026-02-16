@@ -1,10 +1,11 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag, Info, Hourglass, MessageSquare } from 'lucide-react';
+import { Zap, Shield, Coins, ShoppingBag, Eye, User, PieChart, Settings, Cloud, Map as MapIcon, ScrollText, AlertOctagon, Maximize2, Minimize2, Heart, Snowflake, Sword, Clock, BookOpen, Wifi, WifiOff, Moon, Flag, Info, Hourglass, MessageSquare, Hammer } from 'lucide-react';
 import { CampaignHUD } from './CampaignHUD';
 import { VazarothHUD } from './VazarothHUD'; // RESTORED
 import { WorldRumorHUD } from './WorldRumorHUD';
+import { ForgeModal } from './ForgeModal'; // NEW
 import { SPELLS, FACTIONS } from '../../constants';
 
 // --- NEW COMPONENT: CYCLE HUD ---
@@ -155,6 +156,7 @@ const EventTicker: React.FC = () => {
                     if (log.type === 'DEFEAT') color = 'text-red-500';
                     if (log.type === 'VICTORY') color = 'text-green-400';
                     if (log.type === 'MAGIC') color = 'text-purple-400';
+                    if (log.type === 'CRAFT') color = 'text-orange-400'; // New
                     if (log.type === 'NARRATIVE') color = 'text-orange-400 border-l-4 border-orange-600 pl-2 bg-orange-950/20';
 
                     return (
@@ -338,7 +340,7 @@ const SpellBar: React.FC = () => {
 }
 
 export const HUD: React.FC = () => {
-  const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, rerollVision, triggerEvent, toggleDiplomacy } = useGame();
+  const { state, toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, closeVision, rerollVision, triggerEvent, toggleDiplomacy, toggleForge } = useGame();
   const [cinematic, setCinematic] = useState(false);
   
   const isConnected = state.syncConfig?.isConnected;
@@ -381,6 +383,7 @@ export const HUD: React.FC = () => {
       <EventTicker />
       <SplatterOverlay />
       <SpellBar />
+      <ForgeModal /> 
 
       {state.activeMapEvent === 'VISION_RITUAL' && (
         <div className="absolute top-24 right-6 z-50 pointer-events-auto">
@@ -419,6 +422,7 @@ export const HUD: React.FC = () => {
              <button onClick={toggleAudit} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Audit"><PieChart size={16} /></button>
              <button onClick={toggleDiplomacy} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Map & Diplomacy"><MapIcon size={16} /></button>
              <button onClick={toggleMarket} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Market"><ShoppingBag size={16} /></button>
+             <button onClick={toggleForge} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Forge (Crafting)"><Hammer size={16} /></button>
              <button onClick={toggleProfile} className="bg-stone-900 border border-stone-600 text-stone-200 p-2 md:p-3 hover:bg-stone-800 cursor-pointer" title="Hero"><User size={16} /></button>
             <button onClick={toggleGrimoire} className="hidden md:flex bg-stone-900 border border-stone-600 text-stone-200 px-3 py-2 md:px-4 md:py-2 font-serif hover:bg-stone-800 uppercase tracking-widest text-xs md:text-sm items-center gap-2 cursor-pointer">
                 <span className="hidden md:inline">Grimoire</span>

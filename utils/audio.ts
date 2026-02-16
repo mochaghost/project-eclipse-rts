@@ -66,7 +66,7 @@ export const setVolume = (val: number) => {
     }
 };
 
-export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY' | 'FAILURE' | 'ERROR' | 'MAGIC' | 'COINS') => {
+export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY' | 'FAILURE' | 'ERROR' | 'MAGIC' | 'COINS' | 'EXECUTION' | 'LOOT_COLLECT') => {
     if (!audioCtx || !masterGain) {
         initAudio();
         if (!audioCtx || !masterGain) return;
@@ -104,7 +104,7 @@ export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY'
             break;
 
         case 'COMBAT_HIT':
-            // Deep impact thump (less noise, more bass)
+            // Deep impact thump
             osc.type = 'triangle'; 
             osc.frequency.setValueAtTime(150, now);
             osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.3);
@@ -138,21 +138,52 @@ export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY'
             });
             break;
 
+        case 'EXECUTION':
+            // Aggressive Crunch/Smash
+            // Layer 1: Noise/Crack
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(100, now);
+            osc.frequency.exponentialRampToValueAtTime(10, now + 0.3);
+            gain.gain.setValueAtTime(0.8, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.start(now);
+            osc.stop(now + 0.3);
+            
+            // Layer 2: Heavy Bass
+            const bass = audioCtx.createOscillator();
+            const bassGain = audioCtx.createGain();
+            bass.connect(bassGain);
+            bassGain.connect(masterGain);
+            bass.type = 'triangle';
+            bass.frequency.setValueAtTime(60, now);
+            bass.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
+            bassGain.gain.setValueAtTime(1, now);
+            bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            bass.start(now);
+            bass.stop(now + 0.5);
+            break;
+
+        case 'LOOT_COLLECT':
+            // High Pitched Ding (Coin)
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200 + (Math.random() * 500), now); // Pitch variation
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.start(now);
+            osc.stop(now + 0.3);
+            break;
+
         case 'FAILURE':
-            // Low Drone Fade (Sad but not annoying)
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(150, now);
             osc.frequency.linearRampToValueAtTime(100, now + 1.5);
-            
             gain.gain.setValueAtTime(0.3, now);
             gain.gain.linearRampToValueAtTime(0, now + 1.5);
-            
             osc.start(now);
             osc.stop(now + 1.5);
             break;
             
          case 'ERROR':
-            // Soft Buzzer
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(200, now);
             osc.frequency.linearRampToValueAtTime(150, now + 0.15);
@@ -163,21 +194,17 @@ export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY'
             break;
 
          case 'MAGIC':
-            // Mystical chime/sweep
             osc.type = 'sine';
             osc.frequency.setValueAtTime(300, now);
             osc.frequency.linearRampToValueAtTime(800, now + 0.5);
-            
             gain.gain.setValueAtTime(0, now);
             gain.gain.linearRampToValueAtTime(0.3, now + 0.1);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-            
             osc.start(now);
             osc.stop(now + 1.0);
             break;
 
          case 'COINS':
-            // Metallic clink
             osc.type = 'sine';
             osc.frequency.setValueAtTime(1200, now);
             osc.frequency.exponentialRampToValueAtTime(1600, now + 0.1);
@@ -185,19 +212,6 @@ export const playSfx = (type: 'UI_CLICK' | 'UI_HOVER' | 'COMBAT_HIT' | 'VICTORY'
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
             osc.start(now);
             osc.stop(now + 0.15);
-            
-            // Subtle echo
-            const eOsc = audioCtx.createOscillator();
-            const eGain = audioCtx.createGain();
-            eOsc.connect(eGain);
-            eGain.connect(masterGain);
-            
-            eOsc.type = 'sine';
-            eOsc.frequency.setValueAtTime(1400, now + 0.05);
-            eGain.gain.setValueAtTime(0.1, now + 0.05);
-            eGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-            eOsc.start(now + 0.05);
-            eOsc.stop(now + 0.2);
             break;
     }
 };

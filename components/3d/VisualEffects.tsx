@@ -1,7 +1,7 @@
 
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
+import { Html, Ring } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGame } from '../../context/GameContext';
 import { VisualEffect } from '../../types';
@@ -79,6 +79,24 @@ const Explosion: React.FC<{ position: { x: number, y: number, z: number } }> = (
     )
 }
 
+const Shockwave: React.FC<{ position: { x: number, y: number, z: number } }> = ({ position }) => {
+    const ref = useRef<THREE.Mesh>(null);
+    useFrame((state, delta) => {
+        if (ref.current) {
+            ref.current.scale.multiplyScalar(1.05); // Expand
+            const mat = ref.current.material as THREE.MeshBasicMaterial;
+            if (mat.opacity > 0) mat.opacity -= delta * 0.8; // Fade
+        }
+    });
+
+    return (
+        <mesh ref={ref} position={[position.x, 0.5, position.z]} rotation={[-Math.PI/2, 0, 0]}>
+            <ringGeometry args={[1, 1.5, 32]} />
+            <meshBasicMaterial color="#3b82f6" transparent opacity={0.8} side={THREE.DoubleSide} />
+        </mesh>
+    );
+}
+
 export const VisualEffectsRenderer: React.FC = () => {
     const { state } = useGame();
     
@@ -86,6 +104,7 @@ export const VisualEffectsRenderer: React.FC = () => {
     // This is crucial to prevent the "Bridge" crash in React Fiber on iOS
     const textEffects = state.effects.filter(e => e.type.startsWith('TEXT')).slice(-8);
     const explosions = state.effects.filter(e => e.type === 'EXPLOSION').slice(-4);
+    const shockwaves = state.effects.filter(e => e.type === 'SHOCKWAVE').slice(-2);
 
     return (
         <>
@@ -94,6 +113,9 @@ export const VisualEffectsRenderer: React.FC = () => {
             ))}
             {explosions.map(effect => (
                 <Explosion key={effect.id} position={effect.position} />
+            ))}
+            {shockwaves.map(effect => (
+                <Shockwave key={effect.id} position={effect.position} />
             ))}
         </>
     );

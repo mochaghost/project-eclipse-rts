@@ -3,7 +3,8 @@ import React, { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EntityType, Era, TaskPriority, NPC, RaceType, Structures, HeroEquipment, Task } from '../../types';
-import { HeroAvatar, BaseComplex, EnemyMesh, VillagerAvatar, MinionMesh, ForestStag, WolfConstruct, Crow } from './Assets';
+import { HeroAvatar, BaseComplex, EnemyMesh, VillagerAvatar, MinionMesh, ForestStag, WolfConstruct, Crow, LootOrbMesh } from './Assets';
+import { useGame } from '../../context/GameContext';
 
 interface EntityRendererProps {
   type: EntityType;
@@ -24,8 +25,11 @@ interface EntityRendererProps {
   failed?: boolean;
   structures?: Structures; 
   equipment?: HeroEquipment;
-  task?: Task; // New Prop for passing task data to enemies
-  isFuture?: boolean; // Prop to indicate future timeline status
+  task?: Task; 
+  isFuture?: boolean; 
+  executionReady?: boolean; // New Prop
+  orbId?: string; // For Loot
+  orbType?: 'GOLD' | 'XP'; // For Loot
 }
 
 // Moves entities randomly (Villagers, Animals)
@@ -82,7 +86,7 @@ const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { childr
 }
 
 // Moves Enemies closer to the center based on Deadline
-const ApproachingEnemyWrapper = ({ children, initialPos, task }: { children?: React.ReactNode, initialPos: [number,number,number], task?: Task }) => {
+const ApproachingEnemyWrapper = ({ children, initialPos, task, executionReady }: { children?: React.ReactNode, initialPos: [number,number,number], task?: Task, executionReady?: boolean }) => {
     const group = useRef<THREE.Group>(null);
     
     // Constants for map size
@@ -92,9 +96,14 @@ const ApproachingEnemyWrapper = ({ children, initialPos, task }: { children?: Re
     useFrame((_, delta) => {
         if (!group.current || !task) return;
 
-        // Breathing animation
-        const breath = Math.sin(_.clock.elapsedTime * 2) * 0.05;
-        group.current.scale.y = 1 + breath;
+        // Breathing animation (only if not execution ready, as that has its own animation)
+        if (!executionReady) {
+            const breath = Math.sin(_.clock.elapsedTime * 2) * 0.05;
+            group.current.scale.y = 1 + breath;
+        }
+
+        // If execution ready, stop moving!
+        if (executionReady) return;
 
         const now = Date.now();
         const startTime = task.startTime;
@@ -141,7 +150,33 @@ const ApproachingEnemyWrapper = ({ children, initialPos, task }: { children?: Re
     return <group ref={group} position={initialPos}>{children}</group>;
 }
 
-export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture }) => {
+// Wrapper for Loot Orbs to allow smooth interpolation if Context updates are slow
+const LootWrapper = ({ children, pos }: { children: React.ReactNode, pos: [number, number, number] }) => {
+    const group = useRef<THREE.Group>(null);
+    useFrame((_, delta) => {
+        if(group.current) {
+            // Lerp to the position provided by Context (which is updated at ~30fps)
+            group.current.position.lerp(new THREE.Vector3(...pos), delta * 15);
+        }
+    });
+    return <group ref={group} position={pos}>{children}</group>
+}
+
+export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture, executionReady, orbType }) => {
+  // @ts-ignore
+  const { executeEnemy, selectEnemy } = useGame();
+
+  const handleClick = (e: any) => {
+      e.stopPropagation();
+      if (type === EntityType.ENEMY && executionReady) {
+          // Trigger Execution
+          executeEnemy(task?.id); // Actually pass the enemy ID, but here task ID links them
+          // We need the enemy ID though. 
+      } else if (onClick) {
+          onClick();
+      }
+  };
+
   const content = useMemo(() => {
     switch (type) {
       case EntityType.HERO:
@@ -151,8 +186,7 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
       case EntityType.ENEMY:
         let visualArchetype = archetype || 'MONSTER';
         if (race === 'HUMAN' && archetype === 'KNIGHT') visualArchetype = 'KNIGHT';
-        // Pass task down to EnemyMesh for the Label, pass isFuture for styling
-        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={onClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} failed={failed} task={task} isFuture={isFuture} />;
+        return <EnemyMesh priority={variant as TaskPriority} name={name || 'Unknown'} onClick={handleClick} isSelected={isSelected} scale={scale} archetype={visualArchetype} subtaskCount={subtaskCount} race={race} failed={failed} task={task} isFuture={isFuture} executionReady={executionReady} />;
       case EntityType.MINION:
           return <MinionMesh />;
       case EntityType.VILLAGER:
@@ -161,22 +195,39 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
           if (variant === 'WOLF') return <WolfConstruct />;
           if (variant === 'CROW') return <Crow />;
           return <ForestStag />;
+      case EntityType.LOOT_ORB:
+          return <LootOrbMesh type={orbType || 'GOLD'} onClick={onClick || (() => {})} />;
       default:
         return null;
     }
-  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture]);
+  }, [type, variant, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture, executionReady, orbType]);
 
   if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null;
 
-  // VISUAL SYNC SAFEGUARD: Force hide enemy if task is completed
-  if (type === EntityType.ENEMY && task && task.completed) {
+  // VISUAL SYNC SAFEGUARD: Force hide enemy if task is completed AND not waiting for execution
+  if (type === EntityType.ENEMY && task && task.completed && !executionReady) {
       return null;
   }
 
-  // Use specialized wrapper for Enemies to handle the "Approaching" mechanic
+  if (type === EntityType.LOOT_ORB) {
+      return <LootWrapper pos={position}>{content}</LootWrapper>;
+  }
+
+  // Use specialized wrapper for Enemies
   if (type === EntityType.ENEMY && task) {
+      // If execution ready, intercept click to execute
+      const handleEnemyClick = () => {
+          if (executionReady && name) { 
+             // We need to pass the ID. The component above passes `name` which might be ID or Name.
+             // Best to rely on the parent `onClick` which should be bound correctly.
+             if(onClick) onClick();
+          } else {
+             if(onClick) onClick();
+          }
+      };
+
       return (
-          <ApproachingEnemyWrapper initialPos={position} task={task}>
+          <ApproachingEnemyWrapper initialPos={position} task={task} executionReady={executionReady}>
               {content}
           </ApproachingEnemyWrapper>
       )

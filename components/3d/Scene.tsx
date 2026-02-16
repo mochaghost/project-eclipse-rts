@@ -14,13 +14,31 @@ import * as THREE from 'three';
 // --- MATH HELPERS ---
 const noise = (x: number, z: number) => Math.sin(x * 0.05) * Math.cos(z * 0.05) + Math.sin(x * 0.1 + z * 0.1) * 0.5;
 
-// --- OPTIMIZED VEGETATION SYSTEM ---
-const VegetationSystem = React.memo(() => {
+// --- OPTIMIZED VEGETATION SYSTEM (WITH VOID TIDE) ---
+const VegetationSystem = React.memo(({ fearLevel }: { fearLevel: number }) => {
     const grassRef = useRef<THREE.InstancedMesh>(null);
     const rockRef = useRef<THREE.InstancedMesh>(null);
     
     const GRASS_COUNT = 1500; 
     const ROCK_COUNT = 150;
+
+    // React to Fear Level Change
+    useEffect(() => {
+        if (grassRef.current) {
+            // Darken grass based on fear
+            const baseColor = new THREE.Color("#1a2e10");
+            const voidColor = new THREE.Color("#1a0518"); // Purple/Black
+            const mixRatio = Math.min(1, fearLevel / 100);
+            
+            const finalColor = baseColor.clone().lerp(voidColor, mixRatio);
+            
+            // Apply to all instances
+            for (let i = 0; i < GRASS_COUNT; i++) {
+                grassRef.current.setColorAt(i, finalColor);
+            }
+            grassRef.current.instanceColor!.needsUpdate = true;
+        }
+    }, [fearLevel]);
 
     useLayoutEffect(() => {
         const dummy = new THREE.Object3D();
@@ -300,7 +318,7 @@ const HierarchyLines = React.memo(({ enemies, tasks }: { enemies: EnemyEntity[],
 
 const LoaderFallback = () => <Html center><div className="text-yellow-600 font-serif text-sm animate-pulse">LOADING WORLD...</div></Html>;
 
-const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC, isChronosOpen }: { state: GameState, selectEnemy: any, interactWithNPC: any, isChronosOpen: boolean }) => {
+const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC, isChronosOpen, executeEnemy, collectLoot }: any) => {
     const { camera } = useThree();
     const isRitual = state.activeAlert === AlertType.RITUAL_MORNING || state.activeAlert === AlertType.RITUAL_EVENING;
     const isHighQuality = (state.settings?.graphicsQuality || 'HIGH') === 'HIGH';
@@ -318,15 +336,13 @@ const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC, isChronosOp
         <>
             <RealTimeLighting isRitual={isRitual} weather={state.weather || 'CLEAR'} structures={state.structures} />
             <WeatherSystem type={state.weather || 'CLEAR'} />
-            <VegetationSystem />
+            <VegetationSystem fearLevel={state.realmStats?.fear || 0} />
             <StaticDecorations level={state.playerLevel} />
             {isHighQuality && <Stars radius={150} depth={50} count={1000} factor={4} saturation={0} fade speed={0.2} />}
             <VazarothTitan />
             
-            {/* NEW: THE CHRONOS PROJECTION - Pass props explicitly */}
             <ChronosProjection isOpen={isChronosOpen} tasks={state.tasks || []} />
 
-            {/* ENTITIES */}
             <EntityRenderer type={EntityType.BUILDING_BASE} variant={state.era} position={[0, 0, 0]} stats={{ hp: state.baseHp, maxHp: state.maxBaseHp }} structures={state.structures} />
             <EntityRenderer type={EntityType.HERO} variant={state.playerLevel as any} position={[4, 0, 4]} winStreak={state.winStreak} equipment={state.heroEquipment} />
 
@@ -347,8 +363,8 @@ const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC, isChronosOp
                         type={EntityType.ENEMY}
                         variant={enemy.priority}
                         position={[enemy.position.x, enemy.position.y, enemy.position.z]} 
-                        name={enemy.name}
-                        onClick={() => selectEnemy(enemy.id)}
+                        name={enemy.id} // Pass ID as name for selection
+                        onClick={() => enemy.executionReady ? executeEnemy(enemy.id) : selectEnemy(enemy.id)}
                         isSelected={state.selectedEnemyId === enemy.id}
                         scale={enemy.scale || 1}
                         archetype={enemy.race === 'HUMAN' ? 'KNIGHT' : 'MONSTER'}
@@ -356,10 +372,22 @@ const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC, isChronosOp
                         failed={task?.failed}
                         task={task} 
                         isFuture={isFuture}
+                        executionReady={enemy.executionReady} // NEW: Pass broken state
                     />
                 );
             })}
             
+            {/* LOOT ORBS */}
+            {(state.lootOrbs || []).map(orb => (
+                <EntityRenderer 
+                    key={orb.id} 
+                    type={EntityType.LOOT_ORB} 
+                    position={[orb.position.x, orb.position.y, orb.position.z]} 
+                    orbType={orb.type}
+                    onClick={() => collectLoot(orb.id)}
+                />
+            ))}
+
             <HierarchyLines enemies={state.enemies || []} tasks={state.tasks || []} />
             
             {(state.population || []).map((npc, i) => {
@@ -385,12 +413,12 @@ const GameWorld = React.memo(({ state, selectEnemy, interactWithNPC, isChronosOp
 
 export const Scene: React.FC = () => {
   // @ts-ignore
-  const { state, selectEnemy, interactWithNPC, isChronosOpen } = useGame();
+  const { state, selectEnemy, interactWithNPC, isChronosOpen, executeEnemy, collectLoot } = useGame();
   if (!state) return null;
   return (
     <Canvas shadows={false} dpr={[1, 1.5]} gl={{ antialias: false, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: 1.2 }} camera={{ position: [15, 15, 15], fov: 45 }}>
       <Suspense fallback={<LoaderFallback />}>
-          <GameWorld state={state} selectEnemy={selectEnemy} interactWithNPC={interactWithNPC} isChronosOpen={isChronosOpen} />
+          <GameWorld state={state} selectEnemy={selectEnemy} interactWithNPC={interactWithNPC} isChronosOpen={isChronosOpen} executeEnemy={executeEnemy} collectLoot={collectLoot} />
       </Suspense>
     </Canvas>
   );

@@ -26,6 +26,7 @@ declare global {
       fogExp2: any;
       spotLight: any;
       primitive: any;
+      ringGeometry: any;
       [elemName: string]: any;
     }
   }
@@ -56,6 +57,7 @@ declare module 'react' {
       fogExp2: any;
       spotLight: any;
       primitive: any;
+      ringGeometry: any;
       [elemName: string]: any;
     }
   }
@@ -77,7 +79,8 @@ export enum EntityType {
   DECORATION_TREE = 'DECORATION_TREE',
   DECORATION_ROCK = 'DECORATION_ROCK',
   ANIMAL = 'ANIMAL',
-  PEASANT = 'PEASANT'
+  PEASANT = 'PEASANT',
+  LOOT_ORB = 'LOOT_ORB' 
 }
 
 export enum TaskPriority {
@@ -106,7 +109,7 @@ export interface Vector3 {
 
 export interface VisualEffect {
   id: string;
-  type: 'TEXT_XP' | 'TEXT_DAMAGE' | 'TEXT_GOLD' | 'EXPLOSION' | 'TEXT_LOOT' | 'SPLAT_TOMATO' | 'SPLAT_MUD' | 'SPELL_CAST' | 'SHIELD_BLOCK';
+  type: 'TEXT_XP' | 'TEXT_DAMAGE' | 'TEXT_GOLD' | 'EXPLOSION' | 'TEXT_LOOT' | 'SPLAT_TOMATO' | 'SPLAT_MUD' | 'SPELL_CAST' | 'SHIELD_BLOCK' | 'SHOCKWAVE';
   position: Vector3;
   text?: string;
   timestamp: number;
@@ -137,7 +140,8 @@ export interface EnemyEntity {
   initialPosition: Vector3; 
   taskId: string; 
   subtaskId?: string; 
-  scale: number; 
+  scale: number;
+  executionReady?: boolean; // The "Broken" state waiting for click
 }
 
 export interface MinionEntity {
@@ -145,6 +149,18 @@ export interface MinionEntity {
     type: 'WARRIOR' | 'MAGE';
     position: Vector3;
     targetEnemyId: string | null;
+    createdAt: number;
+}
+
+export type MaterialType = 'IRON' | 'WOOD' | 'OBSIDIAN' | 'ASTRAL';
+
+export interface LootOrb {
+    id: string;
+    type: 'GOLD' | 'XP' | 'MATERIAL';
+    value: number;
+    material?: MaterialType; // For MATERIAL type
+    position: Vector3;
+    velocity: Vector3;
     createdAt: number;
 }
 
@@ -187,7 +203,7 @@ export interface Task {
 export interface HistoryLog {
     id: string;
     timestamp: number;
-    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE' | 'DAILY_REPORT' | 'NARRATIVE';
+    type: 'VICTORY' | 'DEFEAT' | 'ERA_CHANGE' | 'RITUAL' | 'TRADE' | 'LORE' | 'WORLD_EVENT' | 'DIPLOMACY' | 'LOOT' | 'MAGIC' | 'SIEGE' | 'DAILY_REPORT' | 'NARRATIVE' | 'CRAFT';
     message: string;
     details?: string;
     cause?: string; 
@@ -265,6 +281,7 @@ export interface Item {
     value: number;
     acquiredAt: number;
     isEquipped: boolean;
+    rarity?: 'COMMON' | 'RARE' | 'LEGENDARY' | 'MYTHIC';
 }
 
 export interface HeroEquipment {
@@ -370,10 +387,14 @@ export interface GameState {
   tasks: Task[];
   enemies: EnemyEntity[];
   minions: MinionEntity[];
+  lootOrbs: LootOrb[]; // NEW: Floating loot in the world
   effects: VisualEffect[]; 
   era: Era;
   weather: WeatherType; 
   
+  // New: Crafting
+  materials: Record<MaterialType, number>;
+
   // Legacy
   sageMessage: string;
   vazarothMessage: string; 
@@ -386,6 +407,7 @@ export interface GameState {
   isAuditOpen: boolean; 
   isSettingsOpen: boolean;
   isDiplomacyOpen: boolean; 
+  isForgeOpen: boolean; // NEW
   selectedEnemyId: string | null; 
   activeAlert: AlertType;
   alertTaskId: string | null; 
@@ -447,6 +469,8 @@ export interface GameContextType {
   moveTask: (taskId: string, newStartTime: number) => void;
   deleteTask: (taskId: string) => void; 
   completeTask: (taskId: string) => void;
+  executeEnemy: (enemyId: string) => void; // NEW: The visceral kill action
+  collectLoot: (orbId: string) => void; // NEW: The reward collection
   partialCompleteTask: (taskId: string, percentage: number) => void; 
   completeSubtask: (taskId: string, subtaskId: string) => void;
   failTask: (taskId: string) => void;
@@ -464,12 +488,14 @@ export interface GameContextType {
   toggleAudit: () => void; 
   toggleSettings: () => void;
   toggleDiplomacy: () => void; 
+  toggleForge: () => void; // NEW
   isChronosOpen: boolean;
   toggleChronos: () => void;
   interactWithFaction: (factionId: FactionKey, action: 'GIFT' | 'TRADE' | 'INSULT' | 'PROPAGANDA') => void;
   buyItem: (itemId: string) => void;
   sellItem: (itemId: string) => void; 
   equipItem: (itemId: string) => void; 
+  craftItem: (tier: number, materialsCost: Record<MaterialType, number>) => void; // NEW
   clearSave: () => void; 
   exportSave: () => string; 
   importSave: (data: string) => boolean; 

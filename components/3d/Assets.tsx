@@ -368,16 +368,30 @@ export const VillagerAvatar = ({ role, name, status, onClick, currentAction }: a
     )
 }
 
-export const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype = 'MONSTER', subtaskCount = 0, race, failed, task, isFuture }: any) => {
-    const finalScale = failed ? (scale * 1.3) : (scale || 1);
+export const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, archetype = 'MONSTER', subtaskCount = 0, race, failed, task, isFuture, executionReady }: any) => {
+    // EXECUTION MODE LOGIC
+    const finalScale = executionReady ? (scale * 0.8) : failed ? (scale * 1.3) : (scale || 1);
     
     // Color Logic
     let baseColor = priority === TaskPriority.HIGH ? PALETTE.BLOOD_BRIGHT : PALETTE.RUST;
     if (failed) baseColor = '#ff0000';
-    if (race === 'ORC') baseColor = "#4d7c0f";
-    if (race === 'ELF') baseColor = "#1e1b4b"; // Dark Indigo
-    if (race === 'DEMON') baseColor = "#000000";
-    if (race === 'CONSTRUCT') baseColor = "#475569";
+    if (executionReady) baseColor = '#9f1239'; // Deep blood red for broken
+    else {
+        if (race === 'ORC') baseColor = "#4d7c0f";
+        if (race === 'ELF') baseColor = "#1e1b4b"; 
+        if (race === 'DEMON') baseColor = "#000000";
+        if (race === 'CONSTRUCT') baseColor = "#475569";
+    }
+
+    // Vibration ref for broken state
+    const groupRef = useRef<THREE.Group>(null);
+    useFrame((state) => {
+        if (groupRef.current && executionReady) {
+            // Kneeling/Broken Animation
+            groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 10) * 0.05; 
+            groupRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 20) * 0.05;
+        }
+    });
 
     // Ghost Mode (Future)
     const matProps = isFuture ? { 
@@ -390,7 +404,9 @@ export const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, arch
     } : { 
         color: baseColor,
         roughness: 0.7,
-        metalness: race === 'CONSTRUCT' || race === 'HUMAN' ? 0.6 : 0.1
+        metalness: race === 'CONSTRUCT' || race === 'HUMAN' ? 0.6 : 0.1,
+        emissive: executionReady ? '#ff0000' : 'black',
+        emissiveIntensity: executionReady ? 2 : 0
     };
 
     // --- PROCEDURAL SHAPE BASED ON RACE ---
@@ -441,13 +457,24 @@ export const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, arch
     };
 
     return (
-        <group onClick={onClick}>
-            {task && !task.completed && !task.failed && <EnemyTimer deadline={task.deadline} isFuture={isFuture} />}
+        <group ref={groupRef} onClick={onClick}>
+            {task && !task.completed && !task.failed && !executionReady && <EnemyTimer deadline={task.deadline} isFuture={isFuture} />}
+            
+            {/* EXECUTION INDICATOR */}
+            {executionReady && (
+                <Html position={[0, 2.5, 0]} center distanceFactor={12} style={{ pointerEvents: 'none' }}>
+                    <div className="text-red-500 font-black text-2xl animate-pulse tracking-widest drop-shadow-[0_0_10px_rgba(255,0,0,0.8)]">
+                        FINISH HIM!
+                    </div>
+                </Html>
+            )}
+
             <group scale={[finalScale, finalScale, finalScale]}>
                 <RenderShape />
             </group>
             
-            {/* Future Beacon - KEEP THIS for visibility */}
+            {executionReady && <Sparkles count={20} scale={1} size={10} speed={2} color="red" />}
+
             {isFuture && (
                 <group position={[0, 0, 0]}>
                     <mesh position={[0, 10, 0]}>
@@ -457,6 +484,36 @@ export const EnemyMesh = ({ priority, name, onClick, isSelected, scale = 1, arch
                     <pointLight position={[0, 2, 0]} color="#a855f7" intensity={2} distance={10} />
                 </group>
             )}
+        </group>
+    )
+}
+
+// --- NEW LOOT ORB MESH ---
+export const LootOrbMesh = ({ type, onClick }: { type: 'GOLD' | 'XP' | 'MATERIAL', onClick: () => void }) => {
+    let color = '#eab308'; // Gold
+    if (type === 'XP') color = '#3b82f6';
+    if (type === 'MATERIAL') color = '#a855f7'; // Purple for mats
+
+    const meshRef = useRef<THREE.Mesh>(null);
+
+    useFrame((state) => {
+        if(meshRef.current) {
+            meshRef.current.rotation.y += 0.05;
+            meshRef.current.rotation.z += 0.05;
+        }
+    });
+
+    return (
+        <group 
+            onPointerOver={onClick} // Collecting by hovering
+            onClick={onClick} // Or clicking
+        >
+            <mesh ref={meshRef}>
+                <dodecahedronGeometry args={[0.2, 0]} />
+                <meshStandardMaterial color={color} emissive={color} emissiveIntensity={type === 'MATERIAL' ? 3 : 2} />
+            </mesh>
+            <pointLight color={color} intensity={2} distance={3} />
+            <Sparkles count={5} scale={1} size={4} speed={0.2} color={color} />
         </group>
     )
 }

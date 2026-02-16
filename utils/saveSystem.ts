@@ -25,6 +25,7 @@ const DEFAULT_STATE: GameState = {
   tasks: [],
   enemies: [],
   minions: [],
+  lootOrbs: [], // Added to satisfy GameState interface
   effects: [],
   era: Era.RUIN,
   weather: 'CLEAR',
@@ -59,12 +60,14 @@ const DEFAULT_STATE: GameState = {
   ],
   heroEquipment: { weapon: 'Rusty Blade', armor: 'Tattered Rags', relic: 'None' },
   inventory: [],
+  materials: { IRON: 0, WOOD: 0, OBSIDIAN: 0, ASTRAL: 0 },
   templates: [],
   nemesisGraveyard: [],
   worldGenerationDay: 0,
   isAuditOpen: false,
   isSettingsOpen: false,
   isDiplomacyOpen: false,
+  isForgeOpen: false,
   settings: {
       masterVolume: 0.2, 
       graphicsQuality: 'HIGH'
@@ -85,7 +88,8 @@ export const saveGame = (state: GameState) => {
             isMarketOpen: false,
             isAuditOpen: false,
             isSettingsOpen: false,
-            isDiplomacyOpen: false
+            isDiplomacyOpen: false,
+            isForgeOpen: false
         };
 
         const saveFile: SaveFile = {
@@ -132,6 +136,7 @@ export const loadGame = (): GameState => {
             })) : [],
             enemies: Array.isArray(loadedState.enemies) ? loadedState.enemies : [],
             minions: Array.isArray(loadedState.minions) ? loadedState.minions : [],
+            lootOrbs: Array.isArray(loadedState.lootOrbs) ? loadedState.lootOrbs : [], // Ensure lootOrbs is array
             history: Array.isArray(loadedState.history) ? loadedState.history : [],
             // Ensure NPCs have valid arrays to prevent 'undefined.find' crashes in worldSim
             population: Array.isArray(loadedState.population) ? loadedState.population.map((p: any) => ({
@@ -147,6 +152,7 @@ export const loadGame = (): GameState => {
             nemesisGraveyard: Array.isArray(loadedState.nemesisGraveyard) ? loadedState.nemesisGraveyard : [],
             settings: loadedState.settings || DEFAULT_STATE.settings,
             inventory: Array.isArray(loadedState.inventory) ? loadedState.inventory : [],
+            materials: loadedState.materials || DEFAULT_STATE.materials,
             visionQueue: Array.isArray(loadedState.visionQueue) ? loadedState.visionQueue : [],
             seenVisionUrls: Array.isArray(loadedState.seenVisionUrls) ? loadedState.seenVisionUrls : [],
             templates: Array.isArray(loadedState.templates) ? loadedState.templates : []
@@ -174,6 +180,7 @@ const performMigration = (state: any, fromVersion: number): GameState => {
     migrated.tasks = Array.isArray(migrated.tasks) ? migrated.tasks : [];
     migrated.enemies = Array.isArray(migrated.enemies) ? migrated.enemies : [];
     migrated.population = Array.isArray(migrated.population) ? migrated.population : [];
+    migrated.lootOrbs = Array.isArray(migrated.lootOrbs) ? migrated.lootOrbs : [];
 
     return migrated;
 };

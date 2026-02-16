@@ -3,11 +3,11 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { 
     GameState, GameContextType, TaskPriority, EntityType, Era, AlertType, 
     VisualEffect, Task, SubtaskDraft, TaskTemplate, FirebaseConfig, 
-    FactionKey, MapEventType, WeatherType, ShopItem, HistoryLog, GameSettings, CharacterID, DialoguePacket 
+    FactionKey, MapEventType, WeatherType, ShopItem, HistoryLog, GameSettings, CharacterID, DialoguePacket, LootOrb, MaterialType, Item 
 } from '../types';
 import { 
     generateId, generateNemesis, generateLoot, getSageWisdom, 
-    getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateSpawnPosition 
+    getVazarothLine, fetchMotivationVideos, generateWorldRumor, generateSpawnPosition, getEquipmentLore
 } from '../utils/generators';
 import { saveGame, loadGame } from '../utils/saveSystem';
 import { playSfx, initAudio } from '../utils/audio';
@@ -141,6 +141,42 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         return () => unsub();
+    }, []);
+
+    // --- PHYSICS LOOP FOR LOOT ORBS ---
+    useEffect(() => {
+        const physicsInterval = setInterval(() => {
+            setState(prev => {
+                if (!prev.lootOrbs || prev.lootOrbs.length === 0) return prev;
+
+                const nextOrbs = prev.lootOrbs.map(orb => {
+                    const newPos = { ...orb.position };
+                    let newVel = { ...orb.velocity };
+
+                    // Gravity
+                    newVel.y -= 0.02;
+
+                    // Move
+                    newPos.x += newVel.x;
+                    newPos.y += newVel.y;
+                    newPos.z += newVel.z;
+
+                    // Floor Bounce
+                    if (newPos.y <= 0.5) {
+                        newPos.y = 0.5;
+                        newVel.y *= -0.6; // Bounce with energy loss
+                        newVel.x *= 0.9;  // Friction
+                        newVel.z *= 0.9;
+                    }
+
+                    return { ...orb, position: newPos, velocity: newVel };
+                }).filter(orb => Date.now() - orb.createdAt < 30000); // Remove after 30s
+
+                return { ...prev, lootOrbs: nextOrbs };
+            });
+        }, 33); // ~30 FPS for physics
+
+        return () => clearInterval(physicsInterval);
     }, []);
 
     // --- GAME LOOP (1 Second Tick) ---
@@ -465,64 +501,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const completeTask = (taskId: string) => {
         playSfx('VICTORY');
         setState(prev => {
-            const task = prev.tasks.find(t => t.id === taskId);
-            if (!task) return prev;
+            // Find Enemy
+            const enemies = prev.enemies.map(e => {
+                if (e.taskId === taskId) {
+                    // SET EXECUTION STATE - The "Groggy" State
+                    return { ...e, executionReady: true };
+                }
+                return e;
+            });
 
-            const enemy = prev.enemies.find(e => e.taskId === taskId && !e.subtaskId);
-            const baseXp = task.priority * 100;
-            const streakBonus = prev.winStreak * 10;
-            const xpGain = baseXp + streakBonus;
-            
-            // INCREASED GOLD REWARD
-            const goldGain = (task.priority * 50) + (prev.winStreak * 5); // From 25 to 50 base
-
-            // Loot
-            const loot = generateLoot(prev.playerLevel);
-            let newInventory = [...prev.inventory];
-            let historyUpdate = [];
-            
-            if (loot) {
-                const item = { ...loot, id: generateId(), acquiredAt: Date.now(), isEquipped: false, value: 50 * task.priority };
-                newInventory.push(item);
-                historyUpdate.push({ id: generateId(), type: 'LOOT', timestamp: Date.now(), message: `Loot Found: ${item.name}`, details: item.lore } as HistoryLog);
-                playSfx('COINS');
-            }
-
-            // Graveyard
-            let graveyard = [...prev.nemesisGraveyard];
-            if (enemy) {
-                graveyard.push({ name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'HERO' });
-                if (graveyard.length > 20) graveyard.shift();
-            }
-
-            // Level Up
-            let newLevel = prev.playerLevel;
-            let newXp = prev.xp + xpGain;
-            const xpReq = newLevel * 1000;
-            if (newXp >= xpReq) {
-                newLevel++;
-                newXp -= xpReq;
-                playSfx('VICTORY');
-                historyUpdate.push({ id: generateId(), type: 'VICTORY', timestamp: Date.now(), message: `Level Up! Rank ${newLevel}`, details: "The Hero grows stronger." } as HistoryLog);
-            }
-
+            // Mark Task as Completed
             const next = {
                 ...prev,
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
-                enemies: prev.enemies.filter(e => e.taskId !== taskId), 
-                xp: newXp,
-                playerLevel: newLevel,
-                gold: prev.gold + goldGain,
+                enemies: enemies, // Do not remove yet!
                 winStreak: prev.winStreak + 1,
                 lossStreak: 0,
-                nemesisGraveyard: graveyard,
-                inventory: newInventory,
-                history: [{ id: generateId(), type: 'VICTORY', timestamp: Date.now(), message: `Vanquished: ${task.title}`, details: `+${xpGain} XP, +${goldGain}g`, cause: "Combat Victory" } as HistoryLog, ...historyUpdate, ...prev.history],
-                vazarothMessage: getVazarothLine('WIN', prev.winStreak + 1),
-                sageMessage: getSageWisdom('STREAK'),
-                effects: [...prev.effects, { id: generateId(), type: 'TEXT_XP', position: {x:0, y:2, z:0}, text: `+${xpGain} XP`, timestamp: Date.now() }, { id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:3, z:0}, text: `+${goldGain}g`, timestamp: Date.now() }] as VisualEffect[],
-                lastSyncTimestamp: Date.now()
+                lastSyncTimestamp: Date.now(),
+                // PURIFICATION WAVE (Void Tide Mechanics)
+                effects: [...prev.effects, { id: generateId(), type: 'SHOCKWAVE' as const, position: {x:0, y:0, z:0}, timestamp: Date.now() }]
             };
+            
             saveGame(next);
             return next;
         });
@@ -531,12 +530,140 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const task = state.tasks.find(t => t.id === taskId);
         if (task && task.priority === TaskPriority.HIGH) {
             triggerDialogue(state.activeAllyId || 'MARSHAL_THORNE', DIALOGUE_POOLS.MARSHAL_THORNE.VICTORY, 'HAPPY');
-        } else {
-            // Chance for Seneschal to comment on gold
-            if (Math.random() > 0.6) {
-                triggerDialogue('SENESCHAL_MORVATH', DIALOGUE_POOLS.SENESCHAL_MORVATH.GOLD_GAIN, 'HAPPY');
+        }
+    };
+
+    // --- NEW: VISCERAL EXECUTION SYSTEM ---
+    const executeEnemy = (enemyId: string) => {
+        const enemy = state.enemies.find(e => e.id === enemyId);
+        if (!enemy) return;
+
+        playSfx('EXECUTION');
+
+        // Spawn Loot Orbs based on rank/priority
+        const orbs: LootOrb[] = [];
+        const orbCount = 3 + enemy.rank; // More rank = more loot
+        
+        for (let i=0; i<orbCount; i++) {
+            // Material Roll (Gacha Mechanics)
+            const isMaterial = Math.random() < 0.3; // 30% chance for material per orb
+            let type: any = Math.random() > 0.7 ? 'XP' : 'GOLD';
+            let materialType: MaterialType | undefined = undefined;
+
+            if (isMaterial) {
+                type = 'MATERIAL';
+                const roll = Math.random();
+                if (state.winStreak > 5 && roll > 0.9) materialType = 'ASTRAL';
+                else if (enemy.priority === TaskPriority.HIGH && roll > 0.7) materialType = 'OBSIDIAN';
+                else materialType = Math.random() > 0.5 ? 'IRON' : 'WOOD';
+            }
+
+            orbs.push({
+                id: generateId(),
+                type,
+                material: materialType,
+                value: (enemy.priority * 20) + Math.floor(Math.random() * 20),
+                position: { ...enemy.position, y: 1.5 }, // Start at chest height
+                velocity: {
+                    x: (Math.random() - 0.5) * 0.4,
+                    y: 0.3 + (Math.random() * 0.4), // Pop up
+                    z: (Math.random() - 0.5) * 0.4
+                },
+                createdAt: Date.now()
+            });
+        }
+
+        addEffect('EXPLOSION', enemy.position);
+        addEffect('TEXT_DAMAGE', { ...enemy.position, y: 3 }, "EXECUTED!");
+
+        // Remove Enemy & Add Orbs
+        setState(prev => ({
+            ...prev,
+            enemies: prev.enemies.filter(e => e.id !== enemyId),
+            lootOrbs: [...(prev.lootOrbs || []), ...orbs],
+            nemesisGraveyard: [...prev.nemesisGraveyard, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'HERO' }]
+        }));
+    };
+
+    const collectLoot = (orbId: string) => {
+        const orb = state.lootOrbs?.find(o => o.id === orbId);
+        if (!orb) return;
+
+        playSfx('LOOT_COLLECT');
+
+        setState(prev => {
+            let next = { ...prev };
+            // Remove Orb
+            next.lootOrbs = next.lootOrbs.filter(o => o.id !== orbId);
+            
+            // Apply Reward
+            if (orb.type === 'GOLD') {
+                next.gold += orb.value;
+                next.effects = [...next.effects, { id: generateId(), type: 'TEXT_GOLD' as const, position: orb.position, text: `+${orb.value}g`, timestamp: Date.now() }];
+            } else if (orb.type === 'XP') {
+                next.xp += orb.value;
+                // Level Up Check
+                const xpReq = next.playerLevel * 1000;
+                if (next.xp >= xpReq) {
+                    next.playerLevel++;
+                    next.xp -= xpReq;
+                    playSfx('VICTORY');
+                    next.history = [{ id: generateId(), type: 'VICTORY', timestamp: Date.now(), message: `Level Up! Rank ${next.playerLevel}`, details: "The Hero grows stronger." } as HistoryLog, ...next.history];
+                }
+                next.effects = [...next.effects, { id: generateId(), type: 'TEXT_XP' as const, position: orb.position, text: `+${orb.value} XP`, timestamp: Date.now() }];
+            } else if (orb.type === 'MATERIAL' && orb.material) {
+                // Add material
+                next.materials = {
+                    ...next.materials,
+                    [orb.material]: (next.materials[orb.material] || 0) + 1
+                };
+                next.effects = [...next.effects, { id: generateId(), type: 'TEXT_LOOT' as const, position: orb.position, text: `${orb.material}`, timestamp: Date.now() }];
+            }
+            
+            return next;
+        });
+    };
+
+    const craftItem = (tier: number, materialsCost: Record<MaterialType, number>) => {
+        // Verify materials
+        const currentMats = state.materials;
+        for (const [mat, cost] of Object.entries(materialsCost)) {
+            if ((currentMats[mat as MaterialType] || 0) < cost) {
+                playSfx('ERROR');
+                return; // Not enough mats
             }
         }
+
+        // Deduct Mats & Generate Loot
+        const loot = generateLoot(tier * 10); // Rough level approx
+        if (!loot) return; // Should guarantee drop for crafting really, but sticking to generator
+
+        playSfx('MAGIC');
+        
+        setState(prev => {
+            const nextMats = { ...prev.materials };
+            for (const [mat, cost] of Object.entries(materialsCost)) {
+                nextMats[mat as MaterialType] -= cost;
+            }
+
+            const newItem: Item = {
+                id: generateId(),
+                type: loot.type,
+                name: loot.name,
+                lore: loot.lore,
+                value: 100 * tier,
+                acquiredAt: Date.now(),
+                isEquipped: false,
+                rarity: 'RARE' // Forged items are at least rare
+            };
+
+            return {
+                ...prev,
+                materials: nextMats,
+                inventory: [...prev.inventory, newItem],
+                history: [{ id: generateId(), type: 'CRAFT', timestamp: Date.now(), message: `Forged ${newItem.name}`, details: "Destiny Shaped" } as HistoryLog, ...prev.history]
+            };
+        });
     };
 
     // --- OTHER ACTIONS ---
@@ -558,6 +685,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const toggleAudit = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isAuditOpen: !p.isAuditOpen })); };
     const toggleSettings = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isSettingsOpen: !p.isSettingsOpen })); };
     const toggleDiplomacy = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isDiplomacyOpen: !p.isDiplomacyOpen })); };
+    const toggleForge = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isForgeOpen: !p.isForgeOpen })); };
     const toggleChronos = () => { playSfx('MAGIC'); setIsChronosOpen(prev => !prev); };
     const resolveCrisisHubris = (taskId: string) => setState(prev => ({ ...prev, activeAlert: AlertType.NONE, alertTaskId: null }));
     const resolveCrisisHumility = (taskId: string) => setState(prev => ({ ...prev, activeAlert: AlertType.AEON_ENCOUNTER }));
@@ -585,8 +713,29 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         triggerDialogue('SENESCHAL_MORVATH', DIALOGUE_POOLS.SENESCHAL_MORVATH.GOLD_GAIN, 'HAPPY'); // Spending is good for economy?
     };
-    const sellItem = (itemId: string) => { /* ... existing logic ... */ };
-    const equipItem = (itemId: string) => { /* ... existing logic ... */ };
+    const sellItem = (itemId: string) => { 
+        const item = state.inventory.find(i => i.id === itemId);
+        if (!item) return;
+        setState(prev => ({
+            ...prev,
+            gold: prev.gold + Math.floor(item.value / 2),
+            inventory: prev.inventory.filter(i => i.id !== itemId),
+            history: [{ id: generateId(), type: 'TRADE', timestamp: Date.now(), message: `Sold ${item.name}`, details: `+${Math.floor(item.value/2)}g` } as HistoryLog, ...prev.history]
+        }));
+        playSfx('COINS');
+    };
+    const equipItem = (itemId: string) => { 
+        const item = state.inventory.find(i => i.id === itemId);
+        if(!item) return;
+        setState(prev => {
+            let nextEquip = { ...prev.heroEquipment };
+            if(item.type === 'WEAPON') nextEquip.weapon = item.name;
+            if(item.type === 'ARMOR') nextEquip.armor = item.name;
+            if(item.type === 'RELIC') nextEquip.relic = item.name;
+            return { ...prev, heroEquipment: nextEquip };
+        });
+        playSfx('UI_CLICK');
+    };
     const rerollVision = async () => { /* ... existing logic ... */ };
     const closeVision = () => setState(prev => ({ ...prev, activeMapEvent: 'NONE', activeVisionVideo: null }));
     const triggerEvent = (type: MapEventType) => setState(prev => ({ ...prev, activeMapEvent: type }));
@@ -621,13 +770,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addTask, editTask, moveTask, deleteTask, completeTask, partialCompleteTask, completeSubtask, failTask,
         selectEnemy, resolveCrisisHubris, resolveCrisisHumility, resolveAeonBattle, resolveFailedTask,
         triggerRitual, triggerEvent, completeRitual,
-        toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, toggleDiplomacy,
-        interactWithFaction, buyItem, sellItem, equipItem,
+        toggleGrimoire, toggleProfile, toggleMarket, toggleAudit, toggleSettings, toggleDiplomacy, toggleForge,
+        interactWithFaction, buyItem, sellItem, equipItem, craftItem, // Export Crafting
         clearSave, exportSave, importSave,
         connectToCloud, loginWithGoogle, logout, disconnectCloud,
         addEffect, closeVision, rerollVision, interactWithNPC, updateSettings, castSpell,
         testCloudConnection, forcePull, saveTemplate, deleteTemplate, requestPermissions, takeBaseDamage,
-        resolveNightPhase, closeBattleReport, dismissDialogue
+        resolveNightPhase, closeBattleReport, dismissDialogue,
+        executeEnemy, collectLoot // Export new functions
     };
 
     return (
