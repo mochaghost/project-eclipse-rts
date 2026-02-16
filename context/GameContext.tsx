@@ -667,7 +667,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // --- OTHER ACTIONS ---
-    // (Keeping existing implementations for these helpers as they don't impact narrative core directly)
     const partialCompleteTask = (taskId: string, percentage: number) => { /* ... existing logic ... */ };
     const completeSubtask = (taskId: string, subtaskId: string) => { /* ... existing logic ... */ };
     const failTask = (taskId: string) => { 
@@ -736,7 +735,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         playSfx('UI_CLICK');
     };
-    const rerollVision = async () => { /* ... existing logic ... */ };
+    
+    // --- VISION MIRROR RESTORED ---
+    const rerollVision = async () => {
+        const { googleSheetId, googleSheetId2, directVisionUrl } = state.settings;
+        try {
+            const content = await fetchMotivationVideos(googleSheetId, googleSheetId2, directVisionUrl);
+            if (content && content.length > 0) {
+                const randomItem = content[Math.floor(Math.random() * content.length)];
+                setState(prev => ({
+                    ...prev,
+                    activeVisionVideo: JSON.stringify(randomItem) // Store as JSON string
+                }));
+            } else {
+                setState(prev => ({ ...prev, activeVisionVideo: "NO_SIGNAL" }));
+            }
+        } catch (e) {
+            console.error("Vision Error", e);
+            setState(prev => ({ ...prev, activeVisionVideo: "NO_SIGNAL" }));
+        }
+    };
+
     const closeVision = () => setState(prev => ({ ...prev, activeMapEvent: 'NONE', activeVisionVideo: null }));
     const triggerEvent = (type: MapEventType) => setState(prev => ({ ...prev, activeMapEvent: type }));
     const selectEnemy = (id: string | null) => setState(p => ({ ...p, selectedEnemyId: id }));

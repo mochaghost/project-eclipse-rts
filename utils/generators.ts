@@ -304,8 +304,11 @@ export interface VisionContent {
     platform: 'YOUTUBE' | 'INSTAGRAM' | 'PINTEREST' | 'TIKTOK' | 'OTHER';
 }
 
-const VOID_LIBRARY_DEFAULTS = [
-    { type: 'SOCIAL', embedUrl: "https://www.instagram.com/reel/DF3dhFat9Xe/", originalUrl: "https://www.instagram.com/reel/DF3dhFat9Xe/", platform: 'INSTAGRAM' } as VisionContent
+const VOID_LIBRARY_DEFAULTS: VisionContent[] = [
+    { type: 'SOCIAL', embedUrl: "https://www.instagram.com/reel/DF3dhFat9Xe/", originalUrl: "https://www.instagram.com/reel/DF3dhFat9Xe/", platform: 'INSTAGRAM' },
+    { type: 'SOCIAL', embedUrl: "https://www.pinterest.com/pin/2111131068832367/", originalUrl: "https://www.pinterest.com/pin/2111131068832367/", platform: 'PINTEREST' },
+    { type: 'IMAGE', embedUrl: "https://images.unsplash.com/photo-1519681393784-d120267933ba", originalUrl: "https://images.unsplash.com/photo-1519681393784-d120267933ba", platform: 'OTHER' },
+    { type: 'IMAGE', embedUrl: "https://images.unsplash.com/photo-1534447677768-be436bb09401", originalUrl: "https://images.unsplash.com/photo-1534447677768-be436bb09401", platform: 'OTHER' }
 ];
 
 const fetchGoogleSheetCsv = async (url: string): Promise<string> => {
@@ -348,15 +351,10 @@ const extractVisionContent = (rawText: string): VisionContent[] => {
     }
 
     // 2. PINTEREST (ID HUNTING - THE FIX)
-    // Zapier y Sheets suelen guardar enlaces "sucios" (ar.pinterest, mx.pinterest) que fallan al abrirse.
-    // Esta función IGNORA el dominio que viene en la hoja y busca SOLO el número ID.
-    // Luego reconstruye un enlace limpio y global (www.pinterest.com) que siempre funciona.
     const pinMatches = rawText.matchAll(/\/pin\/(\d+)/g);
     for (const match of pinMatches) {
         const id = match[1];
-        // Validación básica: los IDs de Pinterest son numéricos largos
         if (id.length > 5) {
-            // Forzamos el dominio global para evitar el "Infierno de Redirección"
             const cleanUrl = `https://www.pinterest.com/pin/${id}/`; 
             if (!seen.has(cleanUrl)) {
                 seen.add(cleanUrl);
@@ -434,9 +432,10 @@ export const fetchMotivationVideos = async (sheet1?: string, sheet2?: string, di
     // Mine the soup for diamonds (IDs)
     const extractedContent = extractVisionContent(combinedRaw);
 
-    // Fallback
+    // Fallback logic
     if (extractedContent.length === 0) {
-        return VOID_LIBRARY_DEFAULTS;
+        // If we found nothing, merge with defaults to avoid "NO SIGNAL" unless absolutely necessary
+        return VOID_LIBRARY_DEFAULTS; 
     }
 
     return extractedContent;
