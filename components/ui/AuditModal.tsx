@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { X, Activity, Skull, Heart, Shield, Scroll, Users, Globe, Flag, Hammer, BookOpen, Clock, Info } from 'lucide-react';
+import { X, Activity, Skull, Heart, Shield, Scroll, Users, Globe, Flag, Hammer, BookOpen, Clock, Info, Feather } from 'lucide-react';
 import { FACTIONS } from '../../constants';
 
 export const AuditModal: React.FC = () => {
@@ -76,58 +76,29 @@ export const AuditModal: React.FC = () => {
                     )}
 
                     {tab === 'STORY' && (
-                        <div className="flex flex-col h-full">
-                            <div className="text-center mb-8">
-                                <h3 className="text-2xl font-serif text-stone-200 font-bold tracking-[0.2em] uppercase">{narrative?.title || "The Unwritten Day"}</h3>
-                                <div className="flex justify-center gap-4 mt-2 text-xs font-mono text-stone-500">
+                        <div className="flex flex-col h-full max-w-4xl mx-auto">
+                            <div className="text-center mb-8 border-b border-stone-800 pb-4">
+                                <h3 className="text-3xl font-serif text-stone-200 font-bold tracking-[0.2em] uppercase">{narrative?.title || "The Unwritten Day"}</h3>
+                                <div className="text-xs text-stone-500 mt-2 font-mono">
+                                    {new Date().toLocaleDateString(undefined, {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}
+                                </div>
+                                <div className="flex justify-center gap-4 mt-4 text-xs font-mono text-stone-500">
                                     <span>Theme: <span className="text-yellow-600">{narrative?.theme || "PENDING"}</span></span>
-                                    <span>Stage: <span className="text-blue-400">{narrative?.stage || "WAITING"}</span></span>
+                                    <span>Current Stage: <span className="text-blue-400 animate-pulse">{narrative?.currentStage || "DAWN"}</span></span>
                                     <span>Intensity: <span className="text-red-500">{narrative?.intensity || 0}%</span></span>
                                 </div>
-                                <div className="mt-4 text-xs text-stone-600 italic">"Events are forged in the fires of consequence."</div>
                             </div>
 
-                            {/* 3 ACT TIMELINE */}
-                            <div className="relative flex-1 px-12">
-                                <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-stone-800 -translate-x-1/2"></div>
-                                
-                                <div className="relative z-10 flex flex-col gap-12">
-                                    {/* ACT 1 */}
-                                    <div className="flex items-center gap-8 group">
-                                        <div className="flex-1 text-right">
-                                            <h4 className="text-yellow-600 font-bold font-serif text-lg">ACT I: THE INCIDENT</h4>
-                                            <p className="text-stone-400 text-sm mt-1">{narrative?.acts.act1 || "The day begins in silence. Awaiting the first spark of action."}</p>
-                                            {narrative?.acts.act1 && <div className="text-[10px] text-stone-600 mt-1 uppercase tracking-widest">Origin: {narrative.cause}</div>}
-                                        </div>
-                                        <div className={`w-8 h-8 rounded-full border-4 flex items-center justify-center shrink-0 bg-[#0c0a09] ${narrative?.acts.act1 ? 'border-yellow-600 text-yellow-600' : 'border-stone-800 text-stone-800'}`}>
-                                            <BookOpen size={14} />
-                                        </div>
-                                        <div className="flex-1"></div>
-                                    </div>
-
-                                    {/* ACT 2 */}
-                                    <div className="flex items-center gap-8 group">
-                                        <div className="flex-1"></div>
-                                        <div className={`w-8 h-8 rounded-full border-4 flex items-center justify-center shrink-0 bg-[#0c0a09] ${narrative?.acts.act2 ? 'border-orange-600 text-orange-600' : 'border-stone-800 text-stone-800'}`}>
-                                            <Activity size={14} />
-                                        </div>
-                                        <div className="flex-1 text-left">
-                                            <h4 className={`${narrative?.acts.act2 ? 'text-orange-600' : 'text-stone-700'} font-bold font-serif text-lg`}>ACT II: RISING TENSION</h4>
-                                            <p className="text-stone-400 text-sm mt-1">{narrative?.acts.act2 || "The conflict has not yet escalated. Continue your duties."}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* ACT 3 */}
-                                    <div className="flex items-center gap-8 group">
-                                        <div className="flex-1 text-right">
-                                            <h4 className={`${narrative?.acts.act3 ? 'text-red-600' : 'text-stone-700'} font-bold font-serif text-lg`}>ACT III: THE CLIMAX</h4>
-                                            <p className="text-stone-400 text-sm mt-1">{narrative?.acts.act3 || "The final confrontation approaches at nightfall."}</p>
-                                        </div>
-                                        <div className={`w-8 h-8 rounded-full border-4 flex items-center justify-center shrink-0 bg-[#0c0a09] ${narrative?.acts.act3 ? 'border-red-600 text-red-600' : 'border-stone-800 text-stone-800'}`}>
-                                            <Skull size={14} />
-                                        </div>
-                                        <div className="flex-1"></div>
-                                    </div>
+                            {/* THE STORY PARAGRAPH */}
+                            <div className="flex-1 bg-[#151210] p-8 border border-stone-800 shadow-inner relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                                    <Feather size={120} className="text-stone-500" />
+                                </div>
+                                <p className="font-serif text-lg text-stone-300 leading-loose indent-8 first-letter:text-5xl first-letter:font-bold first-letter:text-yellow-600 first-letter:mr-3 first-letter:float-left">
+                                    {narrative?.fullStory || "The ink is dry. The scribe waits for the first event..."}
+                                </p>
+                                <div className="mt-8 flex justify-center">
+                                    <div className="w-16 h-1 bg-stone-800 rounded-full"></div>
                                 </div>
                             </div>
                         </div>

@@ -43,6 +43,76 @@ export const LEVEL_THRESHOLDS = {
   GOD: 80
 };
 
+// --- NARRATIVE PROCEDURAL POOLS (NEW) ---
+export const NARRATIVE_TEMPLATES = {
+    // Act 1: Setting the Scene
+    DAWN: {
+        CLEAR: [
+            "The sun rose over a silent battlefield, casting long shadows across the camp.",
+            "A rare moment of clarity pierced the Void as morning broke.",
+            "The air was crisp and cold, smelling of iron and dew.",
+            "Birds dared to sing today, a sign of defiance against the gloom."
+        ],
+        RAIN: [
+            "Rain lashed against the stone walls, drumming a rhythm of war.",
+            "Mud churned in the courtyard as a grey dawn wept over the realm.",
+            "The sky was bruised purple, leaking cold rain onto the armor of the guard."
+        ],
+        ASH_STORM: [
+            "Cinders fell like snow, choking the morning light.",
+            "The horizon burned red. The day began with the taste of ash.",
+            "Winds howled from the waste, carrying the whispers of dead gods."
+        ],
+        VOID_MIST: [
+            "A thick fog swallowed the sunrise, hiding the horizon.",
+            "Shapes moved in the mist. The day started blind.",
+            "Silence reigned. The mist dampened every sound, isolating the citadel."
+        ]
+    },
+    // Dynamic Events
+    ACTIONS: {
+        STEAL_GOLD: [
+            "raided the supply caravans, making off with coin",
+            "infiltrated the treasury under cover of noise",
+            "extorted the local merchants, draining our coffers",
+            "ambushed a tax collector on the king's road"
+        ],
+        DRAIN_MANA: [
+            "corrupted a ley line, siphoning arcane power",
+            "performed a dark ritual that dulled the air",
+            "drank the essence of the surrounding spirits",
+            "erected a null-field that weakened our spells"
+        ],
+        ATTACK_BASE: [
+            "launched a probing strike against the western wall",
+            "sabotaged the gate mechanism with brute force",
+            "hurled stones and curses at the battlements",
+            "set fire to the outer barricades"
+        ],
+        SUPPORT_HERO: [
+            "rallied the despondent guards with a rousing speech",
+            "found a cache of supplies hidden in the ruins",
+            "patched the cracks in the defense with masterful skill",
+            "intercepted an assassin before the blade could fall"
+        ]
+    },
+    // Connectors
+    CONNECTORS: [
+        "Later that morning,",
+        "As the sun climbed higher,",
+        "Without warning,",
+        "Amidst the chaos,",
+        "Taking advantage of the distraction,"
+    ],
+    // Act 3: Climax / Resolution
+    NIGHTFALL: [
+        "As darkness fell, the realm held its breath, surviving another cycle.",
+        "The stars watched coldly as the gates were barred for the night.",
+        "Night brought no peace, only the promise of tomorrow's struggle.",
+        "Fires burned low in the camp. We live to fight another dawn."
+    ]
+};
+
 // --- NARRATIVE CHARACTERS & DIALOGUE ---
 
 export const CHARACTERS: Record<CharacterID, CampaignCharacter> = {

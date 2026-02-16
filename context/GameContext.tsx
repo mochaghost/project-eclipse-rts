@@ -63,7 +63,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [lastTick, setLastTick] = useState<number>(Date.now());
     const [isChronosOpen, setIsChronosOpen] = useState(false);
 
-    // Cloud Sync Refs
+    // Cloud Sync Refs - Keeps track of latest state to prevent overwrites
     const stateRef = useRef(state);
     useEffect(() => { stateRef.current = state; }, [state]);
 
@@ -105,18 +105,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Auto-subscribe if we have a room
                 if (user.uid) {
                     subscribeToCloud(user.uid, (cloudState) => {
-                        // SANITIZE CLOUD DATA BEFORE MERGING
+                        // CLOUD CONFLICT RESOLUTION
+                        // Only apply cloud state if it is NEWER than local state
                         if (cloudState && typeof cloudState === 'object') {
-                            const sanitizedCloud = {
-                                ...cloudState,
-                                tasks: Array.isArray(cloudState.tasks) ? cloudState.tasks : [],
-                                enemies: Array.isArray(cloudState.enemies) ? cloudState.enemies : [],
-                                population: Array.isArray(cloudState.population) ? cloudState.population : []
-                            };
+                            const localTime = stateRef.current.lastSyncTimestamp || 0;
+                            const cloudTime = cloudState.lastSyncTimestamp || 0;
 
-                            if (sanitizedCloud.lastSyncTimestamp && (!stateRef.current.lastSyncTimestamp || sanitizedCloud.lastSyncTimestamp > stateRef.current.lastSyncTimestamp)) {
-                                console.log("Cloud state is newer, hydrating...");
+                            if (cloudTime > localTime) {
+                                console.log(`[Cloud] Hydrating newer state (Cloud: ${cloudTime} > Local: ${localTime})`);
+                                const sanitizedCloud = {
+                                    ...cloudState,
+                                    tasks: Array.isArray(cloudState.tasks) ? cloudState.tasks : [],
+                                    enemies: Array.isArray(cloudState.enemies) ? cloudState.enemies : [],
+                                    population: Array.isArray(cloudState.population) ? cloudState.population : []
+                                };
                                 setState(prev => ({ ...prev, ...sanitizedCloud }));
+                            } else {
+                                console.log(`[Cloud] Ignoring stale/older update (Cloud: ${cloudTime} <= Local: ${localTime})`);
                             }
                         }
                     });
@@ -307,7 +312,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (simResult.hpChange !== 0) updated.baseHp = Math.min(updated.maxBaseHp, updated.baseHp + simResult.hpChange);
 
                 // CHECK FOR NARRATIVE STAGE CHANGE TO TRIGGER ORACLE
-                if (simResult.dailyNarrative.stage !== current.dailyNarrative?.stage) {
+                if (simResult.dailyNarrative.currentStage !== current.dailyNarrative?.currentStage) {
                     const pool = DIALOGUE_POOLS.ORACLE_ELARA.ACT_CHANGE;
                     const text = pool[Math.floor(Math.random() * pool.length)];
                     updated.activeDialogue = { id: generateId(), characterId: 'ORACLE_ELARA', text, mood: 'MYSTERIOUS', timestamp: now, duration: 6000 };
@@ -329,6 +334,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 if (Math.random() > 0.99) {
                     saveGame(updated);
+                    // Only auto-push if user is online
                     if (updated.syncConfig?.isConnected && updated.syncConfig.roomId) {
                         pushToCloud(updated.syncConfig.roomId, updated);
                     }
@@ -381,9 +387,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const enemy = generateNemesis(id, priority, state.nemesisGraveyard, state.winStreak, undefined, title, durationMinutes, state.realmStats);
         
-        // Narrative override: If High Priority, the Campaign Rival sends a Lieutenant
         if (priority === TaskPriority.HIGH) {
-            enemy.factionId = CHARACTERS[state.activeRivalId || 'RIVAL_KROG'].race === 'ORC' ? 'ASH' : 'VAZAROTH'; // Map Character to Faction
+            enemy.factionId = CHARACTERS[state.activeRivalId || 'RIVAL_KROG'].race === 'ORC' ? 'ASH' : 'VAZAROTH'; 
             enemy.title = `${state.activeRivalId === 'RIVAL_KROG' ? 'Krog' : 'Vazaroth'}'s Chosen: ${enemy.name}`;
         }
 
@@ -396,13 +401,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...prev,
                 tasks: [...prev.tasks, newTask],
                 enemies: [...prev.enemies, enemy, ...minionEnemies],
-                isGrimoireOpen: false
+                isGrimoireOpen: false,
+                lastSyncTimestamp: Date.now() // FORCE TIMESTAMP UPDATE
             };
-            saveGame(next);
+            saveGame(next); // IMMEDIATE SAVE
             return next;
         });
         
-        // Ally Briefing
         triggerDialogue(state.activeAllyId || 'MARSHAL_THORNE', DIALOGUE_POOLS.MARSHAL_THORNE.GREETING, 'NEUTRAL');
         playSfx('UI_CLICK');
     };
@@ -421,7 +426,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 return { ...t, ...data, subtasks: newSubtasks };
             });
-            const next = { ...prev, tasks, isGrimoireOpen: false };
+            const next = { ...prev, tasks, isGrimoireOpen: false, lastSyncTimestamp: Date.now() };
             saveGame(next);
             return next;
         });
@@ -435,7 +440,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const newDeadline = newStartTime + duration;
             const next = {
                 ...prev,
-                tasks: prev.tasks.map(t => t.id === taskId ? { ...t, startTime: newStartTime, deadline: newDeadline } : t)
+                tasks: prev.tasks.map(t => t.id === taskId ? { ...t, startTime: newStartTime, deadline: newDeadline } : t),
+                lastSyncTimestamp: Date.now()
             };
             saveGame(next);
             return next;
@@ -448,7 +454,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...prev,
                 tasks: prev.tasks.filter(t => t.id !== taskId),
                 enemies: prev.enemies.filter(e => e.taskId !== taskId),
-                isGrimoireOpen: false
+                isGrimoireOpen: false,
+                lastSyncTimestamp: Date.now()
             };
             saveGame(next);
             return next;
@@ -465,7 +472,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const baseXp = task.priority * 100;
             const streakBonus = prev.winStreak * 10;
             const xpGain = baseXp + streakBonus;
-            const goldGain = task.priority * 25; 
+            
+            // INCREASED GOLD REWARD
+            const goldGain = (task.priority * 50) + (prev.winStreak * 5); // From 25 to 50 base
 
             // Loot
             const loot = generateLoot(prev.playerLevel);
@@ -511,7 +520,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 history: [{ id: generateId(), type: 'VICTORY', timestamp: Date.now(), message: `Vanquished: ${task.title}`, details: `+${xpGain} XP, +${goldGain}g`, cause: "Combat Victory" } as HistoryLog, ...historyUpdate, ...prev.history],
                 vazarothMessage: getVazarothLine('WIN', prev.winStreak + 1),
                 sageMessage: getSageWisdom('STREAK'),
-                effects: [...prev.effects, { id: generateId(), type: 'TEXT_XP', position: {x:0, y:2, z:0}, text: `+${xpGain} XP`, timestamp: Date.now() }, { id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:3, z:0}, text: `+${goldGain}g`, timestamp: Date.now() }] as VisualEffect[]
+                effects: [...prev.effects, { id: generateId(), type: 'TEXT_XP', position: {x:0, y:2, z:0}, text: `+${xpGain} XP`, timestamp: Date.now() }, { id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:3, z:0}, text: `+${goldGain}g`, timestamp: Date.now() }] as VisualEffect[],
+                lastSyncTimestamp: Date.now()
             };
             saveGame(next);
             return next;
@@ -534,8 +544,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const partialCompleteTask = (taskId: string, percentage: number) => { /* ... existing logic ... */ };
     const completeSubtask = (taskId: string, subtaskId: string) => { /* ... existing logic ... */ };
     const failTask = (taskId: string) => { 
-        setState(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, failed: true } : t) }));
-        triggerDialogue('ORACLE_ELARA', DIALOGUE_POOLS.ORACLE_ELARA.ACT_CHANGE); // Generic fail line
+        setState(prev => {
+            const next = { ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, failed: true } : t), lastSyncTimestamp: Date.now() };
+            saveGame(next);
+            return next;
+        });
+        triggerDialogue('ORACLE_ELARA', DIALOGUE_POOLS.ORACLE_ELARA.ACT_CHANGE); 
     };
     const resolveFailedTask = (taskId: string, action: 'RESCHEDULE' | 'MERGE', newTime?: number) => { /* ... existing logic ... */ };
     const toggleGrimoire = () => { playSfx('UI_CLICK'); setState(p => ({ ...p, isGrimoireOpen: !p.isGrimoireOpen, activeAlert: AlertType.NONE })); };
@@ -565,6 +579,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (item.type === 'UPGRADE_LIGHTS') next.structures.lightingLevel = (next.structures.lightingLevel || 0) + 1;
             }
             next.history = [{ id: generateId(), type: 'TRADE', timestamp: Date.now(), message: `Purchased ${item.name}`, details: `-${item.cost}g` } as HistoryLog, ...next.history];
+            next.lastSyncTimestamp = Date.now();
             saveGame(next);
             return next;
         });

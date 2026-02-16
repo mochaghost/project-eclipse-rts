@@ -1,7 +1,7 @@
 
 import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile, DailyNarrative, CharacterID, DialoguePacket } from '../types';
 import { generateId, generateNemesis } from './generators';
-import { RACES, TRAITS, FACTIONS, CHARACTERS } from '../constants';
+import { RACES, TRAITS, FACTIONS, CHARACTERS, NARRATIVE_TEMPLATES } from '../constants';
 
 // ... (Keep existing Name/NPC generators) ...
 const NAMES_FIRST = ["Ael", "Bor", "Cael", "Dun", "Ela", "Fen", "Gor", "Hul", "Ion", "Jur", "Kal", "Lom", "Mara", "Nia", "Oren", "Pia", "Quin", "Ren", "Sola", "Tor", "Ul", "Vea", "Wyn", "Xan", "Yor", "Zen", "Kael", "Thar", "Isol"];
@@ -105,40 +105,51 @@ const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: 
     return { updatedFactions, log };
 };
 
-// --- NARRATIVE CHARACTER INTERVENTION ENGINE ---
-// This system makes the Rival/Ally actively change game state, not just talk.
-const generateCharacterEvent = (state: GameState): { log?: HistoryLog, dialogue?: DialoguePacket, goldMod?: number, manaMod?: number, hpMod?: number } => {
-    if (Math.random() > 0.05) return {}; // 5% chance per tick to check, further reduced inside
+// --- NARRATIVE CHARACTER INTERVENTION ENGINE (PNE 1.0) ---
+const generateCharacterEvent = (state: GameState): { log?: HistoryLog, dialogue?: DialoguePacket, goldMod?: number, manaMod?: number, hpMod?: number, storyFragment?: string } => {
+    if (Math.random() > 0.05) return {}; 
 
     const rivalId = state.activeRivalId || 'RIVAL_KROG';
     const allyId = state.activeAllyId || 'MARSHAL_THORNE';
+    const rivalName = CHARACTERS[rivalId].name;
+    const allyName = CHARACTERS[allyId].name;
     
-    // RIVAL ACTION (If player is weak or just random harassment)
-    if (Math.random() > 0.98) {
+    // RIVAL ACTION
+    if (Math.random() > 0.99) { // Reduced frequency
+        const actionPool = NARRATIVE_TEMPLATES.ACTIONS.STEAL_GOLD;
+        const action = actionPool[Math.floor(Math.random() * actionPool.length)];
+        
         if (rivalId === 'RIVAL_KROG') {
-            const theft = Math.floor(Math.random() * 20) + 10;
+            const theft = Math.floor(Math.random() * 10) + 5; 
             return {
-                log: { id: generateId(), timestamp: Date.now(), type: 'DEFEAT', message: "Krog's Raiders stole supplies", details: `-${theft} Gold`, cause: "Rival Action" },
+                log: { id: generateId(), timestamp: Date.now(), type: 'DEFEAT', message: `${rivalName} raids supplies`, details: `-${theft} Gold`, cause: "Rival Action" },
                 dialogue: { id: generateId(), characterId: rivalId, text: "I take what you cannot defend!", mood: 'ANGRY', timestamp: Date.now(), duration: 5000 },
-                goldMod: -theft
+                goldMod: -theft,
+                storyFragment: `${rivalName} ${action}, seizing ${theft} gold from the stockpile.`
             };
         } else if (rivalId === 'RIVAL_VASHJ') {
-            const drain = 15;
+            const actionPoolMagic = NARRATIVE_TEMPLATES.ACTIONS.DRAIN_MANA;
+            const actionMagic = actionPoolMagic[Math.floor(Math.random() * actionPoolMagic.length)];
+            const drain = 10;
             return {
-                log: { id: generateId(), timestamp: Date.now(), type: 'MAGIC', message: "Vashj drains the ley lines", details: `-${drain} Mana`, cause: "Rival Spell" },
+                log: { id: generateId(), timestamp: Date.now(), type: 'MAGIC', message: `${rivalName} corrupts mana`, details: `-${drain} Mana`, cause: "Rival Spell" },
                 dialogue: { id: generateId(), characterId: rivalId, text: "Your magic is... clumsy. I shall repurpose it.", mood: 'MYSTERIOUS', timestamp: Date.now(), duration: 5000 },
-                manaMod: -drain
+                manaMod: -drain,
+                storyFragment: `${rivalName} ${actionMagic}, draining ${drain} mana from the citadels reserves.`
             };
         }
     }
 
-    // ALLY ACTION (If player is struggling or randomly)
+    // ALLY ACTION
     if (Math.random() > 0.99 && state.baseHp < state.maxBaseHp * 0.5) {
         if (allyId === 'MARSHAL_THORNE') {
+            const actionPool = NARRATIVE_TEMPLATES.ACTIONS.SUPPORT_HERO;
+            const action = actionPool[Math.floor(Math.random() * actionPool.length)];
             return {
-                log: { id: generateId(), timestamp: Date.now(), type: 'VICTORY', message: "Thorne rallies the guard", details: "+20 Base HP", cause: "Ally Support" },
+                log: { id: generateId(), timestamp: Date.now(), type: 'VICTORY', message: `${allyName} rallies guard`, details: "+20 Base HP", cause: "Ally Support" },
                 dialogue: { id: generateId(), characterId: allyId, text: "Hold the line! I've brought reinforcements!", mood: 'HAPPY', timestamp: Date.now(), duration: 5000 },
-                hpMod: 20
+                hpMod: 20,
+                storyFragment: `Seeing the defenses falter, ${allyName} ${action}, restoring 20 integrity to the walls.`
             };
         }
     }
@@ -146,79 +157,83 @@ const generateCharacterEvent = (state: GameState): { log?: HistoryLog, dialogue?
     return {};
 };
 
-// --- CAUSALITY ENGINE (DWARF FORTRESS STYLE) ---
-const updateDailyNarrative = (current: DailyNarrative | undefined, state: GameState, logs: HistoryLog[]): DailyNarrative => {
+// --- CAUSALITY ENGINE V2 (NARRATIVE BUILDER) ---
+const updateDailyNarrative = (current: DailyNarrative | undefined, state: GameState, logs: HistoryLog[], extraFragment?: string): DailyNarrative => {
     const todayId = new Date().toISOString().split('T')[0];
     
-    // Initialize if missing or new day
+    // 1. Initialize or Reset
     let narrative = current;
     if (!narrative || narrative.dayId !== todayId) {
+        // ACT 1: DAWN (Procedural Start)
+        const weather = state.weather || 'CLEAR';
+        const templates = NARRATIVE_TEMPLATES.DAWN[weather] || NARRATIVE_TEMPLATES.DAWN.CLEAR;
+        const openingLine = templates[Math.floor(Math.random() * templates.length)];
+
         narrative = {
             dayId: todayId,
-            title: "The Silent Morning",
+            title: "The Unwritten Day",
             theme: 'ORDER',
-            stage: 'INCIDENT',
-            acts: {},
-            logs: [],
+            currentStage: 'DAWN',
+            fullStory: openingLine, // Start the story string
+            eventsTracked: [],
             intensity: 0,
-            resolved: false,
-            cause: "A new dawn breaks."
         };
     }
 
-    // ACT 1: INCIDENT (The first significant event sets the timeline)
-    if (narrative.stage === 'INCIDENT') {
-        const trigger = logs.find(l => l.type === 'DEFEAT' || l.type === 'VICTORY' || l.type === 'WORLD_EVENT' || (l.type === 'NARRATIVE' && l.cause?.includes('Crime')));
-        
-        if (trigger) {
-            narrative.stage = 'RISING';
-            narrative.acts.act1 = trigger.message;
-            narrative.cause = trigger.cause || "Unknown Origin";
-            
-            // Set Theme based on Causality, not just Type
-            if (trigger.cause?.includes('Greed') || trigger.type === 'TRADE') narrative.theme = 'GREED';
-            else if (trigger.type === 'VICTORY') narrative.theme = 'HOPE';
-            else if (trigger.type === 'DEFEAT') narrative.theme = 'FEAR';
-            else if (trigger.cause?.includes('Magic')) narrative.theme = 'MAGIC';
-            else narrative.theme = 'CHAOS';
-            
-            narrative.title = `The Day of ${trigger.cause || 'Change'}`;
-            narrative.logs.push(`ACT I: It began when ${trigger.message}.`);
+    // 2. Append Story Fragments based on significant events
+    let newStory = narrative.fullStory;
+    let newStage = narrative.currentStage;
+    let newIntensity = narrative.intensity;
+    const tracked = new Set(narrative.eventsTracked);
+
+    // Inject Character Events (from generateCharacterEvent)
+    if (extraFragment) {
+        const connectors = NARRATIVE_TEMPLATES.CONNECTORS;
+        const conn = connectors[Math.floor(Math.random() * connectors.length)];
+        newStory += ` ${conn} ${extraFragment}`;
+        newStage = 'RISING'; // Any event pushes us towards rising action
+    }
+
+    // Process logs for Major Events (only if not already tracked)
+    logs.forEach(log => {
+        if (!tracked.has(log.id)) {
+            // Task Completion
+            if (log.type === 'VICTORY' && log.message.includes('Vanquished')) {
+                const taskName = log.message.replace('Vanquished: ', '');
+                newStory += ` The Commander successfully purged "${taskName}", driving back the shadows.`;
+                newIntensity += 10;
+                tracked.add(log.id);
+            }
+            // Task Failure
+            if (log.type === 'DEFEAT' && log.message.includes('Failed')) {
+                newStory += ` However, discipline faltered. The task "${log.message.replace('Task Failed: ', '')}" was lost to the Void, damaging morale.`;
+                newIntensity += 15;
+                newStage = 'CLIMAX'; // Failures escalate quickly
+                tracked.add(log.id);
+            }
+            // Major World Events
+            if (log.type === 'WORLD_EVENT') {
+                newStory += ` In the distance, news arrived: ${log.message}.`;
+                tracked.add(log.id);
+            }
         }
-    }
+    });
 
-    // ACT 2: RISING ACTION (Escalation based on Stats)
-    if (narrative.stage === 'RISING') {
-        // Tension calculation based on accumulated state
-        const tension = (100 - state.realmStats.hope) + state.realmStats.fear + (state.enemies.length * 10);
-        
-        if (tension > 150 || state.baseHp < state.maxBaseHp * 0.6) {
-            narrative.stage = 'CLIMAX';
-            narrative.intensity = Math.min(100, tension / 2);
-            
-            let escalationMsg = "Tensions boil over.";
-            if (narrative.theme === 'GREED') escalationMsg = "Markets collapse and riots begin.";
-            if (narrative.theme === 'FEAR') escalationMsg = "Shadows lengthen, hiding monsters.";
-            if (narrative.theme === 'HOPE') escalationMsg = "The people rally for a final push.";
-            
-            narrative.acts.act2 = escalationMsg;
-            narrative.logs.push(`ACT II: ${escalationMsg} The realm prepares for the worst.`);
-        }
-    }
+    // 3. Stage Progression Logic
+    if (newStage === 'DAWN' && newIntensity > 10) newStage = 'INCIDENT';
+    if (newStage === 'INCIDENT' && newIntensity > 30) newStage = 'RISING';
+    if (newStage === 'RISING' && newIntensity > 60) newStage = 'CLIMAX';
 
-    // ACT 3: CLIMAX (The inevitable conclusion)
-    if (narrative.stage === 'CLIMAX') {
-        const threatLevel = state.enemies.reduce((acc, e) => acc + e.rank, 0);
-        narrative.intensity = threatLevel + (100 - state.realmStats.order);
-        
-        let climaxMsg = "A storm approaches.";
-        if (narrative.theme === 'GREED') climaxMsg = "A Golden Horde marches to collect debts.";
-        if (narrative.theme === 'FEAR') climaxMsg = "Nightmares manifest in the courtyard.";
-        
-        narrative.acts.act3 = `${climaxMsg} Threat Level: ${narrative.intensity}.`;
-    }
+    // 4. Nightfall Check (End of Day Summary) - Optional trigger logic here
+    // For now, we rely on the HUD button to trigger "Night Phase" which could finalize this.
 
-    return narrative;
+    return {
+        ...narrative,
+        fullStory: newStory,
+        currentStage: newStage,
+        intensity: newIntensity,
+        eventsTracked: Array.from(tracked)
+    };
 };
 
 export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' | 'DEFEAT'): any => {
@@ -229,32 +244,30 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     let manaChange = 0;
     let hpChange = 0;
     let activeDialogue = undefined;
+    let storyFragment = undefined;
     
-    // 1. Update Global Stats
     let newStats = updateRealmStats(state.realmStats || { hope: 50, fear: 10, order: 50 }, triggerEvent || 'NEGLECT');
 
-    // 2. Run Faction AI
     const factionSim = simulateFactionTurn(state.factions || []);
     const newFactions = factionSim.updatedFactions;
     if (factionSim.log) logs.push(factionSim.log);
 
-    // 3. CAMPAIGN CHARACTER EVENTS (ACTIVE INTERVENTION)
-    // This connects the specific Rival/Ally to the game economy
     const charEvent = generateCharacterEvent(state);
     if (charEvent.log) logs.push(charEvent.log);
     if (charEvent.dialogue) activeDialogue = charEvent.dialogue;
     if (charEvent.goldMod) goldChange += charEvent.goldMod;
     if (charEvent.manaMod) manaChange += charEvent.manaMod;
     if (charEvent.hpMod) hpChange += charEvent.hpMod;
+    if (charEvent.storyFragment) storyFragment = charEvent.storyFragment;
 
-    // 4. GOLD DECAY & UPKEEP (Standard)
-    if (Math.random() > 0.998) { 
+    // 4. GOLD DECAY & UPKEEP (SIGNIFICANTLY REDUCED)
+    if (Math.random() > 0.999) { 
         const s = state.structures;
-        const upkeep = 1 + (s.forgeLevel * 2) + s.wallsLevel + s.libraryLevel + s.lightingLevel + Math.ceil(state.minions.length / 2);
+        const rawUpkeep = 1 + (s.forgeLevel * 1) + (s.wallsLevel * 1) + Math.ceil(state.minions.length / 4);
+        const upkeep = Math.min(10, rawUpkeep); // Cap upkeep at 10g
         goldChange -= upkeep;
     }
 
-    // 5. NPC Deep Simulation
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;
         let newNpc = { ...npc };
@@ -278,8 +291,7 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         return newNpc;
     });
 
-    // 6. Update Narrative State
-    const dailyNarrative = updateDailyNarrative(state.dailyNarrative, state, logs);
+    const dailyNarrative = updateDailyNarrative(state.dailyNarrative, state, logs, storyFragment);
 
     return { 
         newPopulation: pop, 
@@ -288,9 +300,9 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
         newFactions, 
         spawnedEnemies, 
         goldChange,
-        manaChange, // NEW
-        hpChange, // NEW
-        activeDialogue, // NEW
+        manaChange,
+        hpChange,
+        activeDialogue,
         dailyNarrative 
     };
 };

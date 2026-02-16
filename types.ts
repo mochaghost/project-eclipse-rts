@@ -1,8 +1,38 @@
 
+import React from 'react';
 
-// ... existing imports
 // Extend JSX.IntrinsicElements to include Three.js elements
 declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      group: any;
+      mesh: any;
+      pointLight: any;
+      dodecahedronGeometry: any;
+      meshStandardMaterial: any;
+      cylinderGeometry: any;
+      boxGeometry: any;
+      sphereGeometry: any;
+      coneGeometry: any;
+      planeGeometry: any;
+      torusGeometry: any;
+      octahedronGeometry: any;
+      instancedMesh: any;
+      fog: any;
+      directionalLight: any;
+      hemisphereLight: any;
+      ambientLight: any;
+      meshBasicMaterial: any;
+      fogExp2: any;
+      spotLight: any;
+      primitive: any;
+      [elemName: string]: any;
+    }
+  }
+}
+
+// Augment React's internal JSX namespace for newer TS/React versions
+declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
       group: any;
@@ -320,16 +350,10 @@ export interface DailyNarrative {
     dayId: string; 
     title: string; 
     theme: 'FEAR' | 'HOPE' | 'ORDER' | 'CHAOS' | 'GREED' | 'MAGIC' | 'WAR';
-    stage: 'INCIDENT' | 'RISING' | 'CLIMAX' | 'RESOLUTION'; 
-    acts: {
-        act1?: string; 
-        act2?: string; 
-        act3?: string; 
-    };
-    logs: string[]; 
+    currentStage: 'DAWN' | 'INCIDENT' | 'RISING' | 'CLIMAX' | 'NIGHTFALL'; 
+    fullStory: string; // The coherent paragraph
+    eventsTracked: string[]; // IDs of events already chronicled to avoid dupes
     intensity: number; 
-    resolved: boolean;
-    cause: string; 
 }
 
 export interface GameState {
