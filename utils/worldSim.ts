@@ -1,7 +1,7 @@
 
 import { NPC, GameState, HistoryLog, RealmStats, Era, FactionReputation, EnemyEntity, TaskPriority, NPCRelationship, PsychProfile, DailyNarrative, CharacterID, DialoguePacket } from '../types';
 import { generateId, generateNemesis } from './generators';
-import { RACES, TRAITS, FACTIONS, CHARACTERS, NARRATIVE_TEMPLATES } from '../constants';
+import { RACES, TRAITS, FACTIONS, CHARACTERS, NARRATIVE_TEMPLATES, WORLD_EVENT_TEMPLATES, WARLORDS } from '../constants';
 
 // ... (Keep existing Name/NPC generators) ...
 const NAMES_FIRST = ["Ael", "Bor", "Cael", "Dun", "Ela", "Fen", "Gor", "Hul", "Ion", "Jur", "Kal", "Lom", "Mara", "Nia", "Oren", "Pia", "Quin", "Ren", "Sola", "Tor", "Ul", "Vea", "Wyn", "Xan", "Yor", "Zen", "Kael", "Thar", "Isol"];
@@ -61,48 +61,66 @@ export const updateRealmStats = (current: RealmStats, event: 'VICTORY' | 'DEFEAT
     return next;
 };
 
-// --- AUTONOMOUS FACTION AI ---
-const simulateFactionTurn = (factions: FactionReputation[]): { updatedFactions: FactionReputation[], log?: HistoryLog } => {
+// --- DEEP LORE GENERATOR (The "Warcraft" Engine) ---
+const generateDeepWorldEvent = (factions: FactionReputation[]): { updatedFactions: FactionReputation[], log?: HistoryLog } => {
+    if (Math.random() > 0.08) return { updatedFactions: factions }; // 8% chance per tick
+
+    const newFactions = [...factions];
     let log: HistoryLog | undefined;
-    const updatedFactions = factions.map(f => {
-        // Random Event Chance (5% per tick per faction)
-        if (Math.random() > 0.995) {
-            const roll = Math.random();
-            if (roll < 0.3) {
-                const target = factions[Math.floor(Math.random() * factions.length)];
-                if (target.id !== f.id && f.status !== 'WAR') {
-                    log = {
-                        id: generateId(),
-                        timestamp: Date.now(),
-                        type: 'WORLD_EVENT',
-                        message: `${f.name} declares WAR on ${target.name}`,
-                        details: "Armies are marching on the borders.",
-                        cause: "Geopolitical Tension"
-                    };
-                }
-            } else if (roll < 0.6) {
-                log = {
-                    id: generateId(),
-                    timestamp: Date.now(),
-                    type: 'WORLD_EVENT',
-                    message: `${f.name} enters a Golden Age`,
-                    details: "Trade flows freely. Market prices may drop.",
-                    cause: "Economic Surplus"
-                };
-            } else {
-                log = {
-                    id: generateId(),
-                    timestamp: Date.now(),
-                    type: 'WORLD_EVENT',
-                    message: `Plague strikes ${f.name}`,
-                    details: "Refugees may arrive at your gates soon.",
-                    cause: "Natural Disaster"
-                };
-            }
-        }
-        return f;
-    });
-    return { updatedFactions, log };
+
+    // Pick two factions to interact
+    const f1Index = Math.floor(Math.random() * newFactions.length);
+    let f2Index = Math.floor(Math.random() * newFactions.length);
+    while(f2Index === f1Index) f2Index = Math.floor(Math.random() * newFactions.length);
+
+    const f1 = newFactions[f1Index];
+    const f2 = newFactions[f2Index];
+
+    // Determine Logic
+    const isWar = f1.status === 'WAR' || f1.status === 'HOSTILE';
+    const isAlly = f1.status === 'ALLIED' || f1.status === 'FRIENDLY';
+    
+    let category = 'POLITICAL';
+    if (isWar && Math.random() > 0.4) category = 'WAR';
+    else if (isAlly && Math.random() > 0.4) category = 'ALLIANCE';
+    else if (Math.random() > 0.7) category = 'MYSTIC';
+
+    // Pick a Template
+    const templates = WORLD_EVENT_TEMPLATES[category as keyof typeof WORLD_EVENT_TEMPLATES] || WORLD_EVENT_TEMPLATES.POLITICAL;
+    const template = templates[Math.floor(Math.random() * templates.length)];
+
+    // Warlord Injection (30% chance)
+    let warlordName = "The leader";
+    if (Math.random() > 0.7) {
+        const warlord = WARLORDS.find(w => w.faction === f1.id);
+        if (warlord) warlordName = `${warlord.title} ${warlord.name}`;
+    }
+
+    // Process String
+    let message = template
+        .replace('{F1}', f1.name)
+        .replace('{F2}', f2.name)
+        .replace('{WARLORD}', warlordName);
+
+    // Apply Effects
+    if (category === 'WAR') {
+        newFactions[f1Index].reputation -= 5;
+        newFactions[f2Index].reputation -= 5;
+    } else if (category === 'ALLIANCE') {
+        newFactions[f1Index].reputation += 2;
+        newFactions[f2Index].reputation += 2;
+    }
+
+    log = {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'WORLD_EVENT',
+        message: message,
+        details: "The balance of power shifts.",
+        cause: category
+    };
+
+    return { updatedFactions: newFactions, log };
 };
 
 // --- NARRATIVE CHARACTER INTERVENTION ENGINE (PNE 1.0) ---
@@ -213,7 +231,7 @@ const updateDailyNarrative = (current: DailyNarrative | undefined, state: GameSt
             }
             // Major World Events
             if (log.type === 'WORLD_EVENT') {
-                newStory += ` In the distance, news arrived: ${log.message}.`;
+                newStory += ` News arrived from the border: ${log.message}.`;
                 tracked.add(log.id);
             }
         }
@@ -223,9 +241,6 @@ const updateDailyNarrative = (current: DailyNarrative | undefined, state: GameSt
     if (newStage === 'DAWN' && newIntensity > 10) newStage = 'INCIDENT';
     if (newStage === 'INCIDENT' && newIntensity > 30) newStage = 'RISING';
     if (newStage === 'RISING' && newIntensity > 60) newStage = 'CLIMAX';
-
-    // 4. Nightfall Check (End of Day Summary) - Optional trigger logic here
-    // For now, we rely on the HUD button to trigger "Night Phase" which could finalize this.
 
     return {
         ...narrative,
@@ -248,7 +263,8 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     
     let newStats = updateRealmStats(state.realmStats || { hope: 50, fear: 10, order: 50 }, triggerEvent || 'NEGLECT');
 
-    const factionSim = simulateFactionTurn(state.factions || []);
+    // Replaced simple faction sim with Deep World Event Generator
+    const factionSim = generateDeepWorldEvent(state.factions || []);
     const newFactions = factionSim.updatedFactions;
     if (factionSim.log) logs.push(factionSim.log);
 

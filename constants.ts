@@ -113,6 +113,47 @@ export const NARRATIVE_TEMPLATES = {
     ]
 };
 
+// --- WORLD EVENTS (THE WARCRAFT/GRIMDARK FLAVOR) ---
+export const WORLD_EVENT_TEMPLATES = {
+    WAR: [
+        "The {F1} executes the ambassadors of {F2}. War is declared.",
+        "{F1} legions cross the River of Woe, burning {F2} villages.",
+        "The {F1} breaks the Obsidian Pact, launching a surprise raid on {F2}.",
+        "Drums of war sound in the deep. {F1} marches on {F2}.",
+        "A {F2} prince is assassinated by {F1} spies. Total war begins."
+    ],
+    ALLIANCE: [
+        "A political marriage unites {F1} and {F2} against the darkness.",
+        "{F1} sends grain ships to relieve the famine in {F2}.",
+        "The {F1} and {F2} sign the Treaty of the Silver Moon.",
+        "Generals from {F1} and {F2} meet to plan a joint crusade."
+    ],
+    MYSTIC: [
+        "A Star-Eater is sighted over {F1}. Panic spreads.",
+        "The Great Library of {F1} burns with blue fire. Ancient texts are lost.",
+        "{F1} discovers a Titan artifact buried in the ice.",
+        "A mana-storm ravages the lands of {F2}, mutating the wildlife."
+    ],
+    POLITICAL: [
+        "The King of {F1} succumbs to the Void madness. Civil unrest begins.",
+        "A usurper seizes the throne of {F1}, executing the old council.",
+        "{F1} imposes a heavy trade tariff on {F2}, strangling the economy.",
+        "Prophets in {F1} declare the end times are nigh."
+    ]
+};
+
+// --- RECURRING WARLORDS ---
+export const WARLORDS = [
+    { name: "General Kael", faction: "SOL", title: "The Lightbringer" },
+    { name: "Inquisitor Malakor", faction: "VAZAROTH", title: "The Hand of Eclipse" },
+    { name: "Thorg Ironbelly", faction: "IRON", title: "Forge-Father" },
+    { name: "Lady Sylvani", faction: "SILVER", title: "The Banshee Queen" },
+    { name: "Grommash", faction: "ASH", title: "The World-Eater" },
+    { name: "Unit-734", faction: "GEAR", title: "Prime Logic" },
+    { name: "Archdruid Elowen", faction: "VERDANT", title: "Root-Mother" },
+    { name: "Jarl Frostbeard", faction: "FROST", title: "King under the Mountain" }
+];
+
 // --- NARRATIVE CHARACTERS & DIALOGUE ---
 
 export const CHARACTERS: Record<CharacterID, CampaignCharacter> = {

@@ -448,6 +448,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         playSfx('UI_CLICK');
     };
 
+    // ... (Keep existing edit/move/delete methods) ...
     const editTask = (taskId: string, data: any) => {
         setState(prev => {
             const tasks = prev.tasks.map(t => {
@@ -496,41 +497,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             saveGame(next);
             return next;
         });
-    };
-
-    const completeTask = (taskId: string) => {
-        playSfx('VICTORY');
-        setState(prev => {
-            // Find Enemy
-            const enemies = prev.enemies.map(e => {
-                if (e.taskId === taskId) {
-                    // SET EXECUTION STATE - The "Groggy" State
-                    return { ...e, executionReady: true };
-                }
-                return e;
-            });
-
-            // Mark Task as Completed
-            const next = {
-                ...prev,
-                tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
-                enemies: enemies, // Do not remove yet!
-                winStreak: prev.winStreak + 1,
-                lossStreak: 0,
-                lastSyncTimestamp: Date.now(),
-                // PURIFICATION WAVE (Void Tide Mechanics)
-                effects: [...prev.effects, { id: generateId(), type: 'SHOCKWAVE' as const, position: {x:0, y:0, z:0}, timestamp: Date.now() }]
-            };
-            
-            saveGame(next);
-            return next;
-        });
-        
-        // Narrative Trigger
-        const task = state.tasks.find(t => t.id === taskId);
-        if (task && task.priority === TaskPriority.HIGH) {
-            triggerDialogue(state.activeAllyId || 'MARSHAL_THORNE', DIALOGUE_POOLS.MARSHAL_THORNE.VICTORY, 'HAPPY');
-        }
     };
 
     // --- NEW: VISCERAL EXECUTION SYSTEM ---
@@ -583,6 +549,50 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lootOrbs: [...(prev.lootOrbs || []), ...orbs],
             nemesisGraveyard: [...prev.nemesisGraveyard, { name: enemy.name, clan: enemy.clan, deathTime: Date.now(), killer: 'HERO' }]
         }));
+    };
+
+    const completeTask = (taskId: string) => {
+        playSfx('VICTORY');
+        
+        // Find if there is an enemy linked to this task
+        const linkedEnemy = state.enemies.find(e => e.taskId === taskId && !e.subtaskId);
+
+        // If the Grimorie is open (UI Mode), we want to auto-kill the enemy to avoid disconnect
+        if (state.isGrimoireOpen && linkedEnemy) {
+            executeEnemy(linkedEnemy.id);
+        }
+
+        setState(prev => {
+            // Find Enemy (for 3D interaction logic if UI didn't kill it)
+            const enemies = prev.enemies.map(e => {
+                if (e.taskId === taskId) {
+                    // SET EXECUTION STATE - The "Groggy" State (Only effective if not killed above)
+                    return { ...e, executionReady: true };
+                }
+                return e;
+            });
+
+            // Mark Task as Completed
+            const next = {
+                ...prev,
+                tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
+                enemies: enemies, // Do not remove yet if not executed!
+                winStreak: prev.winStreak + 1,
+                lossStreak: 0,
+                lastSyncTimestamp: Date.now(),
+                // PURIFICATION WAVE (Void Tide Mechanics)
+                effects: [...prev.effects, { id: generateId(), type: 'SHOCKWAVE' as const, position: {x:0, y:0, z:0}, timestamp: Date.now() }]
+            };
+            
+            saveGame(next);
+            return next;
+        });
+        
+        // Narrative Trigger
+        const task = state.tasks.find(t => t.id === taskId);
+        if (task && task.priority === TaskPriority.HIGH) {
+            triggerDialogue(state.activeAllyId || 'MARSHAL_THORNE', DIALOGUE_POOLS.MARSHAL_THORNE.VICTORY, 'HAPPY');
+        }
     };
 
     const collectLoot = (orbId: string) => {
