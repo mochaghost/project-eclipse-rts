@@ -164,7 +164,7 @@ const ApproachingEnemyWrapper = ({ children, initialPos, task, executionReady }:
 }
 
 // Wrapper for Loot Orbs to allow smooth interpolation if Context updates are slow
-const LootWrapper = ({ children, pos }: { children: React.ReactNode, pos: [number, number, number] }) => {
+const LootWrapper = ({ children, pos }: { children?: React.ReactNode, pos: [number, number, number] }) => {
     const group = useRef<THREE.Group>(null);
     useFrame((_, delta) => {
         if(group.current) {

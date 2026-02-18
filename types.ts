@@ -32,37 +32,6 @@ declare global {
   }
 }
 
-// Augment React's internal JSX namespace for newer TS/React versions
-declare module 'react' {
-  namespace JSX {
-    interface IntrinsicElements {
-      group: any;
-      mesh: any;
-      pointLight: any;
-      dodecahedronGeometry: any;
-      meshStandardMaterial: any;
-      cylinderGeometry: any;
-      boxGeometry: any;
-      sphereGeometry: any;
-      coneGeometry: any;
-      planeGeometry: any;
-      torusGeometry: any;
-      octahedronGeometry: any;
-      instancedMesh: any;
-      fog: any;
-      directionalLight: any;
-      hemisphereLight: any;
-      ambientLight: any;
-      meshBasicMaterial: any;
-      fogExp2: any;
-      spotLight: any;
-      primitive: any;
-      ringGeometry: any;
-      [elemName: string]: any;
-    }
-  }
-}
-
 export enum Era {
   RUIN = 'RUIN',
   CAPTAIN = 'CAPTAIN',

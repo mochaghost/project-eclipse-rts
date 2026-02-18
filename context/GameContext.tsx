@@ -18,6 +18,14 @@ import {
 } from '../services/firebase';
 import { FACTIONS, LEVEL_THRESHOLDS, ERA_CONFIG, SPELLS, DIALOGUE_POOLS, CHARACTERS } from '../constants';
 
+// --- SHOP CONSTANTS ---
+export const SHOP_ITEMS: ShopItem[] = [
+    { id: 'POTION_HP', name: "Elixir of Vitality", description: "Restores 50 HP to Hero.", cost: 40, type: 'HEAL_HERO', value: 50, tier: 0 },
+    { id: 'POTION_BASE', name: "Mason's Brew", description: "Repairs 30 HP to Citadel Walls.", cost: 60, type: 'HEAL_BASE', value: 30, tier: 0 },
+    { id: 'MERCENARY', name: "Void Mercenary", description: "Hires a guard for 1 day.", cost: 100, type: 'MERCENARY', value: 1, tier: 0 },
+    // ... (Structures are generated dynamically now)
+];
+
 // --- DYNAMIC SHOP GENERATOR ---
 export const getDynamicShopItems = (state: GameState): ShopItem[] => {
     const s = state.structures;
@@ -72,6 +80,13 @@ const getDist = (p1: {x:number, z:number}, p2: {x:number, z:number}) => {
     const dz = p1.z - p2.z;
     return Math.sqrt(dx*dx + dz*dz);
 }
+
+// --- DEFAULT FALLBACK VISIONS (If user has no config) ---
+const FALLBACK_VISIONS = [
+    "https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=1&controls=0&loop=1", // Lofi Girl
+    "https://www.youtube.com/embed/5qap5aO4i9A?autoplay=1&mute=1&controls=0&loop=1", // Lofi Hip Hop
+    "https://www.youtube.com/embed/tNkZsRW7h2c?autoplay=1&mute=1&controls=0&loop=1"  // Space Ambient
+];
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, setState] = useState<GameState>(() => loadGame());
@@ -260,9 +275,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         playSfx('VICTORY');
                         
                         // Reward (Boosted from 10 to 25 to help economy)
-                        updated.gold += 25; 
+                        updated.gold += 75; // Increased auto-combat reward
                         effectsUpdate.push({ id: generateId(), type: 'EXPLOSION', position: e.position, timestamp: now });
-                        effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: e.position, text: "+25g (Routed)", timestamp: now });
+                        effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: e.position, text: "+75g (Routed)", timestamp: now });
 
                         // Teleport back to edge (Respawn logic)
                         const newPos = generateSpawnPosition(50, 60);
@@ -555,14 +570,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Find enemy linked to this task
         const linkedEnemy = state.enemies.find(e => e.taskId === taskId && !e.subtaskId);
 
-        // If from Grimoire UI, auto-execute logic (as requested)
+        // If from Grimoire UI, auto-execute logic
         if (state.isGrimoireOpen && linkedEnemy) {
             executeEnemy(linkedEnemy.id);
         }
 
         setState(prev => {
             const task = prev.tasks.find(t => t.id === taskId);
-            const reward = task ? task.priority * 100 : 50; // Guaranteed reward!
+            
+            // FIX: Explicitly handle gold calculation with safe fallback for undefined priority
+            const rewardBase = task ? (task.priority || 1) * 150 : 150; // Increased base reward
+            const currentGold = prev.gold || 0;
+            const newGold = currentGold + rewardBase;
 
             const enemies = prev.enemies.map(e => {
                 if (e.taskId === taskId) {
@@ -573,14 +592,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             const next = {
                 ...prev,
-                militaryTech: prev.militaryTech + 1, // Upgrade tech on victory
-                gold: prev.gold + reward, // Guaranteed Gold on top of loot
+                militaryTech: (prev.militaryTech || 1) + 1,
+                gold: newGold, // Guaranteed update
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
                 enemies: enemies, 
                 winStreak: prev.winStreak + 1,
                 lossStreak: 0,
                 lastSyncTimestamp: Date.now(),
-                effects: [...prev.effects, { id: generateId(), type: 'SHOCKWAVE' as const, position: {x:0, y:0, z:0}, timestamp: Date.now() }, { id: generateId(), type: 'TEXT_GOLD' as const, position: {x:0, y:2, z:0}, text: `+${reward}g`, timestamp: Date.now() }]
+                // Add explicit Center Screen Effect for the reward
+                effects: [
+                    ...prev.effects, 
+                    { id: generateId(), type: 'SHOCKWAVE' as const, position: {x:0, y:0, z:0}, timestamp: Date.now() }, 
+                    { id: generateId(), type: 'TEXT_GOLD' as const, position: {x:0, y:0, z:0}, text: `+${rewardBase}g`, timestamp: Date.now() } // Center screen reward
+                ]
             };
             
             saveGame(next);
@@ -802,6 +826,94 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    // --- VISION MIRROR LOGIC ---
+    
+    // Helper to fetch CSV from Google Sheet
+    const fetchSheetData = async (sheetIdOrUrl: string): Promise<string[]> => {
+        if (!sheetIdOrUrl) return [];
+        
+        let url = sheetIdOrUrl;
+        // If it's just an ID, construct the CSV export URL
+        if (!url.startsWith('http')) {
+            url = `https://docs.google.com/spreadsheets/d/${sheetIdOrUrl}/export?format=csv`;
+        } else if (url.includes('/edit')) {
+            url = url.replace(/\/edit.*$/, '/export?format=csv');
+        }
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Sheet fetch failed');
+            const text = await res.text();
+            
+            // Parse CSV: Assume URLs are in the first column or scattered
+            const urls: string[] = [];
+            const rows = text.split('\n');
+            rows.forEach(row => {
+                const cols = row.split(',');
+                cols.forEach(cell => {
+                    const clean = cell.replace(/['"]+/g, '').trim();
+                    if (clean.startsWith('http')) urls.push(clean);
+                });
+            });
+            return urls;
+        } catch (e) {
+            console.warn("Failed to fetch sheet:", e);
+            return [];
+        }
+    };
+
+    const rerollVision = async () => {
+        const settings = state.settings || {};
+        let pool: string[] = [...FALLBACK_VISIONS]; // Always start with fallback so it's never empty
+
+        // 1. Collect Manual List
+        if (settings.directVisionUrl) {
+            // Split by comma, newline, or space
+            const manual = settings.directVisionUrl.split(/[\n,\s]+/).filter(u => u.startsWith('http'));
+            pool = [...pool, ...manual];
+        }
+
+        // 2. Collect Sheet Data
+        if (settings.googleSheetId) {
+            const sheet1 = await fetchSheetData(settings.googleSheetId);
+            pool = [...pool, ...sheet1];
+        }
+        if (settings.googleSheetId2) {
+            const sheet2 = await fetchSheetData(settings.googleSheetId2);
+            pool = [...pool, ...sheet2];
+        }
+
+        // 3. Cycle Logic (No Repeats)
+        const seen = new Set(state.seenVisionUrls || []);
+        let available = pool.filter(url => !seen.has(url));
+
+        let resetSeen = false;
+        if (available.length === 0) {
+            // Cycle finished! Reset.
+            available = pool;
+            resetSeen = true;
+        }
+
+        if (available.length === 0) {
+            // Should theoretically never happen due to Fallback, but just in case
+            console.error("No vision sources available.");
+            return;
+        }
+
+        // 4. Pick Random
+        const pick = available[Math.floor(Math.random() * available.length)];
+
+        // 5. Update State
+        setState(prev => ({
+            ...prev,
+            activeVisionVideo: pick,
+            seenVisionUrls: resetSeen ? [pick] : [...(prev.seenVisionUrls || []), pick]
+        }));
+    };
+
+    const closeVision = () => setState(prev => ({ ...prev, activeMapEvent: 'NONE', activeVisionVideo: null }));
+    const triggerEvent = (type: MapEventType) => setState(prev => ({ ...prev, activeMapEvent: type }));
+    
     // --- BOILERPLATE HELPERS ---
     const partialCompleteTask = (taskId: string, percentage: number) => { /* ... existing logic ... */ };
     const completeSubtask = (taskId: string, subtaskId: string) => { /* ... existing logic ... */ };
@@ -849,9 +961,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         playSfx('UI_CLICK');
     };
-    const rerollVision = async () => { /* ... existing logic ... */ };
-    const closeVision = () => setState(prev => ({ ...prev, activeMapEvent: 'NONE', activeVisionVideo: null }));
-    const triggerEvent = (type: MapEventType) => setState(prev => ({ ...prev, activeMapEvent: type }));
     const selectEnemy = (id: string | null) => setState(p => ({ ...p, selectedEnemyId: id }));
     const interactWithFaction = (factionId: FactionKey, action: string) => { /* ... existing logic ... */ };
     const interactWithNPC = (id: string) => playSfx('UI_HOVER');
