@@ -23,12 +23,11 @@ export const SHOP_ITEMS: ShopItem[] = [
     { id: 'POTION_HP', name: "Elixir of Vitality", description: "Restores 50 HP to Hero.", cost: 40, type: 'HEAL_HERO', value: 50, tier: 0 },
     { id: 'POTION_BASE', name: "Mason's Brew", description: "Repairs 30 HP to Citadel Walls.", cost: 60, type: 'HEAL_BASE', value: 30, tier: 0 },
     { id: 'MERCENARY', name: "Void Mercenary", description: "Hires a guard for 1 day.", cost: 100, type: 'MERCENARY', value: 1, tier: 0 },
-    // ... (Structures are generated dynamically now)
 ];
 
 // --- DYNAMIC SHOP GENERATOR ---
 export const getDynamicShopItems = (state: GameState): ShopItem[] => {
-    const s = state.structures;
+    const s = state.structures || { forgeLevel: 0, wallsLevel: 0, libraryLevel: 0, marketLevel: 0, lightingLevel: 0 };
     const tech = state.militaryTech || 1;
 
     // 1. Calculate Costs based on Infinite Progression (Base * 1.5 ^ Level)
@@ -213,7 +212,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 // --- 0. COMBAT SYSTEM ---
                 // Narrative Modifiers
-                const stats = current.realmStats;
+                const stats = current.realmStats || { hope: 50, fear: 10, order: 50 };
                 const minionDmgMod = stats.hope > 70 ? 1.5 : 1;
                 const enemyDmgMod = stats.fear > 70 ? 1.5 : 1;
                 const minionArmorMod = stats.order > 70 ? 0.8 : 1; // 0.8 = takes less damage
@@ -275,7 +274,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         playSfx('VICTORY');
                         
                         // Reward (Boosted from 10 to 25 to help economy)
-                        updated.gold += 75; // Increased auto-combat reward
+                        updated.gold = (updated.gold || 0) + 75; 
                         effectsUpdate.push({ id: generateId(), type: 'EXPLOSION', position: e.position, timestamp: now });
                         effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: e.position, text: "+75g (Routed)", timestamp: now });
 
@@ -409,7 +408,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 
                 if (simResult.goldChange !== 0) {
-                    updated.gold = Math.max(0, updated.gold + simResult.goldChange);
+                    updated.gold = Math.max(0, (updated.gold || 0) + simResult.goldChange);
                     if (simResult.goldChange < 0 && Math.random() > 0.5) effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: `${simResult.goldChange}g`, timestamp: now });
                     if (simResult.goldChange > 0) effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:2, z:0}, text: `+${simResult.goldChange}g`, timestamp: now });
                 }
@@ -487,7 +486,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             hubris: false
         };
 
-        const enemy = generateNemesis(id, priority, state.nemesisGraveyard, state.winStreak, undefined, title, durationMinutes, state.realmStats);
+        const enemy = generateNemesis(id, priority, state.nemesisGraveyard, state.winStreak, undefined, title, durationMinutes, state.realmStats || { hope: 50, fear: 10, order: 50 });
         
         if (priority === TaskPriority.HIGH) {
             enemy.factionId = CHARACTERS[state.activeRivalId || 'RIVAL_KROG'].race === 'ORC' ? 'ASH' : 'VAZAROTH'; 
@@ -495,7 +494,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const minionEnemies = newTask.subtasks.map(sub => 
-            generateNemesis(id, TaskPriority.LOW, [], 0, sub.id, sub.title, durationMinutes / newTask.subtasks.length, state.realmStats)
+            generateNemesis(id, TaskPriority.LOW, [], 0, sub.id, sub.title, durationMinutes / newTask.subtasks.length, state.realmStats || { hope: 50, fear: 10, order: 50 })
         );
 
         setState(prev => {
@@ -579,7 +578,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const task = prev.tasks.find(t => t.id === taskId);
             
             // FIX: Explicitly handle gold calculation with safe fallback for undefined priority
-            const rewardBase = task ? (task.priority || 1) * 150 : 150; // Increased base reward
+            // Increased base reward to help economy
+            const rewardBase = task ? (task.priority || 1) * 150 : 150; 
             const currentGold = prev.gold || 0;
             const newGold = currentGold + rewardBase;
 
@@ -678,7 +678,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             next.lootOrbs = next.lootOrbs.filter(o => o.id !== orbId);
             
             if (orb.type === 'GOLD') {
-                next.gold += orb.value;
+                next.gold = (next.gold || 0) + orb.value;
                 next.effects = [...next.effects, { id: generateId(), type: 'TEXT_GOLD' as const, position: orb.position, text: `+${orb.value}g`, timestamp: Date.now() }];
             } else if (orb.type === 'XP') {
                 next.xp += orb.value;
@@ -863,7 +863,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const rerollVision = async () => {
-        const settings = state.settings || {};
+        const settings = (state.settings || {}) as GameSettings; // Fix TS error with explicit cast
         let pool: string[] = [...FALLBACK_VISIONS]; // Always start with fallback so it's never empty
 
         // 1. Collect Manual List
