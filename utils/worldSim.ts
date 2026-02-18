@@ -276,13 +276,8 @@ export const simulateReactiveTurn = (state: GameState, triggerEvent?: 'VICTORY' 
     if (charEvent.hpMod) hpChange += charEvent.hpMod;
     if (charEvent.storyFragment) storyFragment = charEvent.storyFragment;
 
-    // 4. GOLD DECAY & UPKEEP (SIGNIFICANTLY REDUCED)
-    if (Math.random() > 0.999) { 
-        const s = state.structures;
-        const rawUpkeep = 1 + (s.forgeLevel * 1) + (s.wallsLevel * 1) + Math.ceil(state.minions.length / 4);
-        const upkeep = Math.min(10, rawUpkeep); // Cap upkeep at 10g
-        goldChange -= upkeep;
-    }
+    // --- GOLD DECAY REMOVED BY ARCHITECT ORDER ---
+    // The economy now relies on Task Rewards vs Shop Sinks, no passive drain.
 
     pop = pop.map(npc => {
         if (npc.status !== 'ALIVE') return npc;

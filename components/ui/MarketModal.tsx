@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { useGame, SHOP_ITEMS } from '../../context/GameContext';
-import { X, ShoppingBag, Coins, Hammer, FlaskConical, Archive, ArrowUpCircle } from 'lucide-react';
+import { useGame, getDynamicShopItems } from '../../context/GameContext';
+import { X, ShoppingBag, Coins, Hammer, FlaskConical, Archive, ArrowUpCircle, Dna } from 'lucide-react';
 
 export const MarketModal: React.FC = () => {
   const { state, toggleMarket, buyItem, sellItem } = useGame();
@@ -9,8 +9,10 @@ export const MarketModal: React.FC = () => {
 
   if (!state.isMarketOpen) return null;
 
-  const consumables = SHOP_ITEMS.filter(i => i.tier === 0);
-  const structures = SHOP_ITEMS.filter(i => i.tier && i.tier > 0);
+  // Use Dynamic Generator for infinite progression
+  const shopItems = getDynamicShopItems(state);
+  const consumables = shopItems.filter(i => i.tier === 0);
+  const structures = shopItems.filter(i => i.tier && i.tier > 0);
   const inventory = state.inventory || [];
 
   const handleBuyStructure = (itemId: string) => {
@@ -34,10 +36,10 @@ export const MarketModal: React.FC = () => {
         {/* TABS */}
         <div className="flex border-b border-stone-800 bg-[#151210]">
             <button onClick={() => setTab('CONSUMABLES')} className={`flex-1 py-4 text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2 ${tab === 'CONSUMABLES' ? 'bg-[#1c1917] text-yellow-500 border-b-2 border-yellow-500' : 'text-stone-500 hover:text-stone-300'}`}>
-                <FlaskConical size={14}/> Supplies
+                <FlaskConical size={14}/> Supplies & Mercs
             </button>
             <button onClick={() => setTab('ARCHITECTURE')} className={`flex-1 py-4 text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2 ${tab === 'ARCHITECTURE' ? 'bg-[#1c1917] text-blue-400 border-b-2 border-blue-400' : 'text-stone-500 hover:text-stone-300'}`}>
-                <Hammer size={14}/> Architecture
+                <Hammer size={14}/> Infrastructure
             </button>
             <button onClick={() => setTab('SELL')} className={`flex-1 py-4 text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2 ${tab === 'SELL' ? 'bg-[#1c1917] text-green-500 border-b-2 border-green-500' : 'text-stone-500 hover:text-stone-300'}`}>
                 <Archive size={14}/> Sell Loot ({inventory.length})
@@ -51,9 +53,12 @@ export const MarketModal: React.FC = () => {
             {tab === 'CONSUMABLES' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {consumables.map((item) => (
-                        <div key={item.id} className="border border-stone-800 bg-[#151210] p-4 flex flex-col justify-between group hover:border-yellow-700 transition-colors">
+                        <div key={item.id} className={`border p-4 flex flex-col justify-between group transition-colors ${item.id === 'MYSTERY_BOX' ? 'border-purple-900 bg-purple-950/10' : 'border-stone-800 bg-[#151210] hover:border-yellow-700'}`}>
                             <div>
-                                <div className="font-serif font-bold text-stone-200 mb-1">{item.name}</div>
+                                <div className={`font-serif font-bold mb-1 ${item.id === 'MYSTERY_BOX' ? 'text-purple-400 flex items-center gap-2' : 'text-stone-200'}`}>
+                                    {item.id === 'MYSTERY_BOX' && <Dna size={14} className="animate-spin-slow"/>}
+                                    {item.name}
+                                </div>
                                 <div className="text-xs text-stone-500 mb-4 h-10">{item.description}</div>
                             </div>
                             <button 
@@ -68,44 +73,34 @@ export const MarketModal: React.FC = () => {
                 </div>
             )}
 
-            {/* ARCHITECTURE TAB */}
+            {/* ARCHITECTURE TAB - INFINITE SCALING */}
             {tab === 'ARCHITECTURE' && (
                 <div className="space-y-8">
-                    <p className="text-stone-500 text-center italic text-sm font-serif">"Civilization is built on the ruins of the lazy."</p>
+                    <p className="text-stone-500 text-center italic text-sm font-serif">"The city grows ever upwards, defying the void."</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {structures.map((item) => {
-                            // Check if already bought (logic dependent on item type)
-                            let currentLevel = 0;
-                            if (item.type === 'UPGRADE_FORGE') currentLevel = state.structures.forgeLevel;
-                            if (item.type === 'UPGRADE_WALLS') currentLevel = state.structures.wallsLevel;
-                            if (item.type === 'UPGRADE_LIBRARY') currentLevel = state.structures.libraryLevel;
-                            
-                            const isOwned = currentLevel >= (item.tier || 0);
-                            const isNext = currentLevel === ((item.tier || 0) - 1);
+                            // Infinite upgrades: We just check if they can afford the next tier
+                            // The `item` object already contains the NEXT tier info from context generator
+                            const canAfford = state.gold >= item.cost;
                             
                             return (
-                                <div key={item.id} className={`relative p-6 border-2 flex flex-col justify-between h-64 ${isOwned ? 'border-green-900/30 bg-green-950/5' : isNext ? 'border-blue-900 bg-blue-950/10' : 'border-stone-800 bg-black opacity-50'}`}>
-                                    {isOwned && <div className="absolute top-2 right-2 text-green-500 text-[10px] uppercase font-bold border border-green-900 px-2 bg-black">Owned</div>}
-                                    
+                                <div key={item.id} className="relative p-6 border-2 flex flex-col justify-between h-64 border-blue-900/30 bg-blue-950/10 hover:border-blue-500 transition-colors">
                                     <div>
-                                        <div className="text-[10px] text-stone-500 uppercase tracking-widest mb-1">Tier {item.tier} Structure</div>
-                                        <h3 className={`text-xl font-serif font-bold mb-2 ${isOwned ? 'text-green-400' : isNext ? 'text-blue-300' : 'text-stone-500'}`}>{item.name}</h3>
+                                        <div className="text-[10px] text-blue-400 uppercase tracking-widest mb-1">Upgrade Available</div>
+                                        <h3 className="text-xl font-serif font-bold mb-2 text-blue-200">{item.name}</h3>
                                         <p className="text-xs text-stone-400 leading-relaxed">{item.description}</p>
                                     </div>
 
-                                    {!isOwned && (
-                                        <button 
-                                            onClick={() => handleBuyStructure(item.id)}
-                                            disabled={!isNext || state.gold < item.cost}
-                                            className={`w-full py-3 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${
-                                                !isNext ? 'bg-stone-900 text-stone-600 border border-stone-800 cursor-not-allowed' :
-                                                state.gold < item.cost ? 'bg-red-950/20 text-red-500 border border-red-900 cursor-not-allowed' :
-                                                'bg-blue-900/20 text-blue-400 border border-blue-500 hover:bg-blue-900/40'
-                                            }`}
-                                        >
-                                            {!isNext ? 'Locked' : <><ArrowUpCircle size={14} /> Construct {item.cost}g</>}
-                                        </button>
-                                    )}
+                                    <button 
+                                        onClick={() => handleBuyStructure(item.id)}
+                                        disabled={!canAfford}
+                                        className={`w-full py-3 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${
+                                            !canAfford ? 'bg-stone-900 text-stone-600 border border-stone-800 cursor-not-allowed' :
+                                            'bg-blue-600 text-white border border-blue-400 hover:bg-blue-500 shadow-lg'
+                                        }`}
+                                    >
+                                        <ArrowUpCircle size={14} /> Construct {item.cost}g
+                                    </button>
                                 </div>
                             )
                         })}

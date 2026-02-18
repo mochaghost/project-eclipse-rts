@@ -4,7 +4,7 @@ import { generateId } from './generators';
 import { FACTIONS } from '../constants';
 
 const SAVE_KEY = 'PROJECT_ECLIPSE_SAVE_V1';
-const CURRENT_VERSION = 13; // Increment version to force deep sanitization
+const CURRENT_VERSION = 14; // Increment version for militaryTech
 
 interface SaveFile {
     version: number;
@@ -14,6 +14,7 @@ interface SaveFile {
 
 const DEFAULT_STATE: GameState = {
   playerLevel: 1,
+  militaryTech: 1, // Start at basic tech level
   xp: 0,
   gold: 150,
   heroHp: 100,
@@ -25,7 +26,7 @@ const DEFAULT_STATE: GameState = {
   tasks: [],
   enemies: [],
   minions: [],
-  lootOrbs: [], // Added to satisfy GameState interface
+  lootOrbs: [], 
   effects: [],
   era: Era.RUIN,
   weather: 'CLEAR',
@@ -44,7 +45,7 @@ const DEFAULT_STATE: GameState = {
   activeMapEvent: 'NONE',
   activeVisionVideo: null,
   visionQueue: [],
-  seenVisionUrls: [], // NEW
+  seenVisionUrls: [],
   population: [],
   realmStats: { hope: 50, fear: 10, order: 50 },
   structures: { forgeLevel: 0, wallsLevel: 0, libraryLevel: 0, marketLevel: 0, lightingLevel: 0 },
@@ -112,7 +113,6 @@ export const loadGame = (): GameState => {
 
         const saveFile: any = JSON.parse(raw); 
         
-        // CRITICAL FIX: Ensure 'data' exists
         if (!saveFile || typeof saveFile !== 'object' || !saveFile.data) {
             console.warn("[System] Corrupt save file structure. Resetting to Default.");
             return DEFAULT_STATE;
@@ -130,15 +130,21 @@ export const loadGame = (): GameState => {
         return {
             ...DEFAULT_STATE,
             ...loadedState,
+            militaryTech: loadedState.militaryTech || 1, // Default if missing
             tasks: Array.isArray(loadedState.tasks) ? loadedState.tasks.map((t: any) => ({
                 ...t,
                 subtasks: Array.isArray(t.subtasks) ? t.subtasks : []
             })) : [],
-            enemies: Array.isArray(loadedState.enemies) ? loadedState.enemies : [],
-            minions: Array.isArray(loadedState.minions) ? loadedState.minions : [],
-            lootOrbs: Array.isArray(loadedState.lootOrbs) ? loadedState.lootOrbs : [], // Ensure lootOrbs is array
+            enemies: Array.isArray(loadedState.enemies) ? loadedState.enemies.map((e: any) => ({
+                ...e,
+                combat: e.combat || { damage: 10, range: 2, attackSpeed: 1, lastAttack: 0 }
+            })) : [],
+            minions: Array.isArray(loadedState.minions) ? loadedState.minions.map((m: any) => ({
+                ...m,
+                combat: m.combat || { damage: 10, range: 2, attackSpeed: 1, lastAttack: 0 }
+            })) : [],
+            lootOrbs: Array.isArray(loadedState.lootOrbs) ? loadedState.lootOrbs : [], 
             history: Array.isArray(loadedState.history) ? loadedState.history : [],
-            // Ensure NPCs have valid arrays to prevent 'undefined.find' crashes in worldSim
             population: Array.isArray(loadedState.population) ? loadedState.population.map((p: any) => ({
                 ...p,
                 relationships: Array.isArray(p.relationships) ? p.relationships : [],
@@ -166,19 +172,17 @@ export const loadGame = (): GameState => {
 
 const performMigration = (state: any, fromVersion: number): GameState => {
     let migrated = { ...state };
-    
-    // Safety check for base object
     if (!migrated) return DEFAULT_STATE;
 
     if (fromVersion < 2) {
         migrated.gold = migrated.gold ?? 100;
         migrated.isMarketOpen = false;
     }
-    // ... previous migrations ...
     
     // Ensure critical arrays exist for migration steps
     migrated.tasks = Array.isArray(migrated.tasks) ? migrated.tasks : [];
     migrated.enemies = Array.isArray(migrated.enemies) ? migrated.enemies : [];
+    migrated.minions = Array.isArray(migrated.minions) ? migrated.minions : [];
     migrated.population = Array.isArray(migrated.population) ? migrated.population : [];
     migrated.lootOrbs = Array.isArray(migrated.lootOrbs) ? migrated.lootOrbs : [];
 

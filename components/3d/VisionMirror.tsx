@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Html, Float, Sparkles, ContactShadows, Billboard } from '@react-three/drei';
 import { useGame } from '../../context/GameContext';
 import { X, ExternalLink, RefreshCcw, SignalHigh, Instagram, Youtube, Image as ImageIcon, Globe, Loader2, SkipForward, AlertTriangle } from 'lucide-react';
-import { VisionContent } from '../../utils/generators';
+import { VisionContent } from '../../types';
 
 export const VisionMirror: React.FC = () => {
     const { state, closeVision, rerollVision, toggleSettings } = useGame();

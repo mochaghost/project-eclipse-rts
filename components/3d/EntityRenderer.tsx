@@ -1,6 +1,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei'; // Needed for Health Bar
 import * as THREE from 'three';
 import { EntityType, Era, TaskPriority, NPC, RaceType, Structures, HeroEquipment, Task } from '../../types';
 import { HeroAvatar, BaseComplex, EnemyMesh, VillagerAvatar, MinionMesh, ForestStag, WolfConstruct, Crow, LootOrbMesh } from './Assets';
@@ -27,10 +28,22 @@ interface EntityRendererProps {
   equipment?: HeroEquipment;
   task?: Task; 
   isFuture?: boolean; 
-  executionReady?: boolean; // New Prop
-  orbId?: string; // For Loot
-  orbType?: 'GOLD' | 'XP'; // For Loot
+  executionReady?: boolean; 
+  orbId?: string; 
+  orbType?: 'GOLD' | 'XP'; 
 }
+
+const HealthBar = ({ hp, maxHp }: { hp: number, maxHp: number }) => {
+    if (hp >= maxHp) return null;
+    const pct = Math.max(0, hp / maxHp) * 100;
+    return (
+        <Html position={[0, 2.2, 0]} center distanceFactor={10} style={{ pointerEvents: 'none' }}>
+            <div className="w-16 h-1.5 bg-black border border-stone-600 rounded overflow-hidden">
+                <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${pct}%` }}></div>
+            </div>
+        </Html>
+    );
+};
 
 // Moves entities randomly (Villagers, Animals)
 const MovingEntityWrapper = ({ children, initialPos, type, speed = 1 }: { children?: React.ReactNode, initialPos: [number,number,number], type: EntityType, speed?: number }) => {
@@ -164,18 +177,23 @@ const LootWrapper = ({ children, pos }: { children: React.ReactNode, pos: [numbe
 
 export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, position, name, isDamaged, onClick, isSelected, stats, winStreak, npcStatus, scale, archetype, race, subtaskCount, npcAction, failed, structures, equipment, task, isFuture, executionReady, orbType }) => {
   // @ts-ignore
-  const { executeEnemy, selectEnemy } = useGame();
+  const { executeEnemy, selectEnemy, state } = useGame();
 
   const handleClick = (e: any) => {
       e.stopPropagation();
       if (type === EntityType.ENEMY && executionReady) {
-          // Trigger Execution
-          executeEnemy(task?.id); // Actually pass the enemy ID, but here task ID links them
-          // We need the enemy ID though. 
+          executeEnemy(task?.id); // Task ID acts as key here for safety, though executed via ID in context
       } else if (onClick) {
           onClick();
       }
   };
+
+  // Find actual enemy data for HP display if applicable
+  const combatEntity = type === EntityType.ENEMY 
+    ? state.enemies.find((e: any) => e.taskId === task?.id) 
+    : type === EntityType.MINION 
+    ? state.minions.find((m: any) => m.id === name) // Using name prop as ID for minion matching loop
+    : null;
 
   const content = useMemo(() => {
     switch (type) {
@@ -204,7 +222,7 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
 
   if (type === EntityType.DECORATION_TREE || type === EntityType.DECORATION_ROCK) return null;
 
-  // VISUAL SYNC SAFEGUARD: Force hide enemy if task is completed AND not waiting for execution
+  // VISUAL SYNC SAFEGUARD
   if (type === EntityType.ENEMY && task && task.completed && !executionReady) {
       return null;
   }
@@ -215,22 +233,25 @@ export const EntityRenderer: React.FC<EntityRendererProps> = ({ type, variant, p
 
   // Use specialized wrapper for Enemies
   if (type === EntityType.ENEMY && task) {
-      // If execution ready, intercept click to execute
-      const handleEnemyClick = () => {
-          if (executionReady && name) { 
-             // We need to pass the ID. The component above passes `name` which might be ID or Name.
-             // Best to rely on the parent `onClick` which should be bound correctly.
-             if(onClick) onClick();
-          } else {
-             if(onClick) onClick();
-          }
-      };
-
       return (
           <ApproachingEnemyWrapper initialPos={position} task={task} executionReady={executionReady}>
               {content}
+              {combatEntity && <HealthBar hp={combatEntity.hp} maxHp={combatEntity.maxHp} />}
           </ApproachingEnemyWrapper>
       )
+  }
+
+  // Minions need HP bars too
+  if (type === EntityType.MINION) {
+      // Find minion data in state to get HP
+      const minionData = state.minions.find((m: any) => Math.abs(m.position.x - position[0]) < 0.1 && Math.abs(m.position.z - position[2]) < 0.1);
+      
+      return (
+        <MovingEntityWrapper initialPos={position} type={type} speed={0.8}>
+            {content}
+            {minionData && <HealthBar hp={minionData.hp} maxHp={minionData.maxHp} />}
+        </MovingEntityWrapper>
+      );
   }
 
   return (

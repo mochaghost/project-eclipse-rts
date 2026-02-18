@@ -120,6 +120,13 @@ export type RaceType = 'HUMAN' | 'DWARF' | 'ELF' | 'CONSTRUCT' | 'ORC' | 'DEMON'
 export type FactionKey = 'SOL' | 'VAZAROTH' | 'UMBRA' | 'IRON' | 'FROST' | 'VERDANT' | 'SILVER' | 'ASH' | 'GEAR';
 export type EnemyPersonality = 'SADISTIC' | 'HONORABLE' | 'COWARDLY' | 'FANATIC' | 'CALCULATING';
 
+export interface CombatStats {
+    damage: number;
+    range: number;
+    attackSpeed: number;
+    lastAttack: number;
+}
+
 export interface EnemyEntity {
   id: string;
   name: string; 
@@ -135,18 +142,22 @@ export interface EnemyEntity {
   origin: string; 
   hp: number;
   maxHp: number;
+  combat: CombatStats; // NEW: Combat Stats
   priority: TaskPriority;
   position: Vector3;
   initialPosition: Vector3; 
   taskId: string; 
   subtaskId?: string; 
   scale: number;
-  executionReady?: boolean; // The "Broken" state waiting for click
+  executionReady?: boolean; 
 }
 
 export interface MinionEntity {
     id: string;
     type: 'WARRIOR' | 'MAGE';
+    hp: number;
+    maxHp: number;
+    combat: CombatStats; // NEW: Combat Stats
     position: Vector3;
     targetEnemyId: string | null;
     createdAt: number;
@@ -158,7 +169,7 @@ export interface LootOrb {
     id: string;
     type: 'GOLD' | 'XP' | 'MATERIAL';
     value: number;
-    material?: MaterialType; // For MATERIAL type
+    material?: MaterialType; 
     position: Vector3;
     velocity: Vector3;
     createdAt: number;
@@ -349,7 +360,6 @@ export interface CampaignCharacter {
     role: 'ALLY' | 'RIVAL' | 'NEUTRAL';
     color: string;
     description: string;
-    // Current mood towards player
     attitude: 'RESPECT' | 'DISDAIN' | 'HATRED' | 'FEAR' | 'NEUTRAL'; 
 }
 
@@ -360,7 +370,7 @@ export interface DialoguePacket {
     mood: 'ANGRY' | 'HAPPY' | 'NEUTRAL' | 'MYSTERIOUS';
     timestamp: number;
     duration: number;
-    context?: string; // e.g. "Task Complete", "Act 1 Start"
+    context?: string; 
 }
 
 export interface DailyNarrative {
@@ -368,13 +378,21 @@ export interface DailyNarrative {
     title: string; 
     theme: 'FEAR' | 'HOPE' | 'ORDER' | 'CHAOS' | 'GREED' | 'MAGIC' | 'WAR';
     currentStage: 'DAWN' | 'INCIDENT' | 'RISING' | 'CLIMAX' | 'NIGHTFALL'; 
-    fullStory: string; // The coherent paragraph
-    eventsTracked: string[]; // IDs of events already chronicled to avoid dupes
+    fullStory: string; 
+    eventsTracked: string[]; 
     intensity: number; 
+}
+
+export interface VisionContent {
+    type: 'VIDEO' | 'IMAGE';
+    embedUrl: string;
+    originalUrl: string;
+    platform: 'YOUTUBE' | 'TIKTOK' | 'INSTAGRAM' | 'PINTEREST' | 'OTHER';
 }
 
 export interface GameState {
   playerLevel: number;
+  militaryTech: number; // NEW: Global military level scaling with task completion
   xp: number;
   gold: number; 
   heroHp: number;
@@ -387,15 +405,13 @@ export interface GameState {
   tasks: Task[];
   enemies: EnemyEntity[];
   minions: MinionEntity[];
-  lootOrbs: LootOrb[]; // NEW: Floating loot in the world
+  lootOrbs: LootOrb[]; 
   effects: VisualEffect[]; 
   era: Era;
   weather: WeatherType; 
   
-  // New: Crafting
   materials: Record<MaterialType, number>;
 
-  // Legacy
   sageMessage: string;
   vazarothMessage: string; 
   
@@ -407,7 +423,7 @@ export interface GameState {
   isAuditOpen: boolean; 
   isSettingsOpen: boolean;
   isDiplomacyOpen: boolean; 
-  isForgeOpen: boolean; // NEW
+  isForgeOpen: boolean; 
   selectedEnemyId: string | null; 
   activeAlert: AlertType;
   alertTaskId: string | null; 
@@ -429,11 +445,10 @@ export interface GameState {
   lastBattleReport?: BattleReport; 
   defenseStats?: DefenseStats;
   
-  // NARRATIVE ENGINE
   dailyNarrative?: DailyNarrative;
   activeDialogue?: DialoguePacket; 
-  activeRivalId?: CharacterID; // Who is the main antagonist of this era?
-  activeAllyId?: CharacterID; // Who is your main advisor?
+  activeRivalId?: CharacterID; 
+  activeAllyId?: CharacterID; 
 
   syncConfig?: {
       firebase: FirebaseConfig;
@@ -469,8 +484,8 @@ export interface GameContextType {
   moveTask: (taskId: string, newStartTime: number) => void;
   deleteTask: (taskId: string) => void; 
   completeTask: (taskId: string) => void;
-  executeEnemy: (enemyId: string) => void; // NEW: The visceral kill action
-  collectLoot: (orbId: string) => void; // NEW: The reward collection
+  executeEnemy: (enemyId: string) => void; 
+  collectLoot: (orbId: string) => void; 
   partialCompleteTask: (taskId: string, percentage: number) => void; 
   completeSubtask: (taskId: string, subtaskId: string) => void;
   failTask: (taskId: string) => void;
@@ -488,14 +503,14 @@ export interface GameContextType {
   toggleAudit: () => void; 
   toggleSettings: () => void;
   toggleDiplomacy: () => void; 
-  toggleForge: () => void; // NEW
+  toggleForge: () => void; 
   isChronosOpen: boolean;
   toggleChronos: () => void;
   interactWithFaction: (factionId: FactionKey, action: 'GIFT' | 'TRADE' | 'INSULT' | 'PROPAGANDA') => void;
   buyItem: (itemId: string) => void;
   sellItem: (itemId: string) => void; 
   equipItem: (itemId: string) => void; 
-  craftItem: (tier: number, materialsCost: Record<MaterialType, number>) => void; // NEW
+  craftItem: (tier: number, materialsCost: Record<MaterialType, number>) => void; 
   clearSave: () => void; 
   exportSave: () => string; 
   importSave: (data: string) => boolean; 
