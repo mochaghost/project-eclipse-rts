@@ -18,39 +18,23 @@ import {
 } from '../services/firebase';
 import { FACTIONS, LEVEL_THRESHOLDS, ERA_CONFIG, SPELLS, DIALOGUE_POOLS, CHARACTERS } from '../constants';
 
-// --- SHOP CONSTANTS ---
-export const SHOP_ITEMS: ShopItem[] = [
-    { id: 'POTION_HP', name: "Elixir of Vitality", description: "Restores 50 HP to Hero.", cost: 40, type: 'HEAL_HERO', value: 50, tier: 0 },
-    { id: 'POTION_BASE', name: "Mason's Brew", description: "Repairs 30 HP to Citadel Walls.", cost: 60, type: 'HEAL_BASE', value: 30, tier: 0 },
-    { id: 'MERCENARY', name: "Void Mercenary", description: "Hires a guard for 1 day.", cost: 100, type: 'MERCENARY', value: 1, tier: 0 },
-];
-
 // --- DYNAMIC SHOP GENERATOR ---
 export const getDynamicShopItems = (state: GameState): ShopItem[] => {
     const s = state.structures || { forgeLevel: 0, wallsLevel: 0, libraryLevel: 0, marketLevel: 0, lightingLevel: 0 };
     const tech = state.militaryTech || 1;
 
-    // 1. Calculate Costs based on Infinite Progression (Base * 1.5 ^ Level)
     const forgeCost = Math.floor(200 * Math.pow(1.5, s.forgeLevel));
     const wallsCost = Math.floor(150 * Math.pow(1.5, s.wallsLevel));
     const libCost = Math.floor(300 * Math.pow(1.5, s.libraryLevel));
     const lightsCost = Math.floor(100 * Math.pow(1.5, s.lightingLevel));
     
-    // Mercenary cost scales slowly, but power scales with tech
     const mercCost = Math.floor(100 + (tech * 10)); 
 
     return [
-        // CONSUMABLES (Static)
         { id: 'POTION_HP', name: "Elixir of Vitality", description: "Restores 50 HP to Hero.", cost: 40, type: 'HEAL_HERO', value: 50, tier: 0 },
         { id: 'POTION_BASE', name: "Mason's Brew", description: "Repairs 30 HP to Citadel Walls.", cost: 60, type: 'HEAL_BASE', value: 30, tier: 0 },
-        
-        // MERCENARIES (Scaling)
         { id: 'MERCENARY', name: `Void Mercenary (Tier ${tech})`, description: `Hires a guard. Stats scale with Military Tech (${tech}).`, cost: mercCost, type: 'MERCENARY', value: 1, tier: 0 },
-        
-        // GAMBLE (Procedural)
         { id: 'MYSTERY_BOX', name: "Crate of the Unknown", description: "Contains a random item of your level.", cost: 150 + (state.playerLevel * 10), type: 'BUY_TIME', value: 0, tier: 0 },
-
-        // INFINITE UPGRADES
         { id: 'UPGRADE_FORGE', name: `Forge Expansion (Lvl ${s.forgeLevel + 1})`, description: "Increase production capabilities.", cost: forgeCost, type: 'UPGRADE_FORGE', value: 1, tier: s.forgeLevel + 1 },
         { id: 'UPGRADE_WALLS', name: `Reinforce Walls (Lvl ${s.wallsLevel + 1})`, description: "Increase Max Base HP (+50).", cost: wallsCost, type: 'UPGRADE_WALLS', value: 50, tier: s.wallsLevel + 1 },
         { id: 'UPGRADE_LIBRARY', name: `Arcane Archive (Lvl ${s.libraryLevel + 1})`, description: "Gain +5% XP from tasks.", cost: libCost, type: 'UPGRADE_LIBRARY', value: 5, tier: s.libraryLevel + 1 },
@@ -79,13 +63,6 @@ const getDist = (p1: {x:number, z:number}, p2: {x:number, z:number}) => {
     const dz = p1.z - p2.z;
     return Math.sqrt(dx*dx + dz*dz);
 }
-
-// --- DEFAULT FALLBACK VISIONS (If user has no config) ---
-const FALLBACK_VISIONS = [
-    "https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=1&controls=0&loop=1", // Lofi Girl
-    "https://www.youtube.com/embed/5qap5aO4i9A?autoplay=1&mute=1&controls=0&loop=1", // Lofi Hip Hop
-    "https://www.youtube.com/embed/tNkZsRW7h2c?autoplay=1&mute=1&controls=0&loop=1"  // Space Ambient
-];
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, setState] = useState<GameState>(() => loadGame());
@@ -118,7 +95,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             Notification.requestPermission();
         }
         
-        // Auth Listener
         const unsub = subscribeToAuth((user) => {
             if (user) {
                 setState(prev => ({ 
@@ -192,7 +168,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => clearInterval(physicsInterval);
     }, []);
 
-    // --- GAME LOOP (1 Second Tick + COMBAT) ---
+    // --- GAME LOOP ---
     useEffect(() => {
         const interval = setInterval(() => {
             const now = Date.now();
@@ -210,24 +186,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 let tasksUpdate = [...current.tasks];
                 let minionsUpdate = [...current.minions];
 
-                // --- 0. COMBAT SYSTEM ---
                 // Narrative Modifiers
                 const stats = current.realmStats || { hope: 50, fear: 10, order: 50 };
                 const minionDmgMod = stats.hope > 70 ? 1.5 : 1;
                 const enemyDmgMod = stats.fear > 70 ? 1.5 : 1;
-                const minionArmorMod = stats.order > 70 ? 0.8 : 1; // 0.8 = takes less damage
+                const minionArmorMod = stats.order > 70 ? 0.8 : 1;
 
                 // A. Minions Attack Enemies
                 minionsUpdate = minionsUpdate.map(minion => {
-                    // Find target
                     const target = enemiesUpdate.find(e => getDist(minion.position, e.position) < (minion.combat?.range || 2));
-                    
                     if (target) {
-                        // Deal Damage
                         const dmg = (minion.combat?.damage || 10) * minionDmgMod;
                         target.hp -= dmg;
-                        
-                        // Visual
                         if (Math.random() > 0.5) {
                             effectsUpdate.push({ id: generateId(), type: 'COMBAT_HIT' as any, position: target.position, text: '', timestamp: now });
                         }
@@ -235,23 +205,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     return minion;
                 });
 
-                // B. Enemies Attack Minions (Or Base if no minion close)
+                // B. Enemies Attack Minions
                 enemiesUpdate = enemiesUpdate.map(enemy => {
-                    if (enemy.executionReady) return enemy; // Stunned enemies don't attack
-
+                    if (enemy.executionReady) return enemy; 
                     const targetMinion = minionsUpdate.find(m => getDist(enemy.position, m.position) < (enemy.combat?.range || 2));
-                    
                     if (targetMinion) {
-                        // Attack Minion
                         const dmg = (enemy.combat?.damage || 10) * enemyDmgMod * minionArmorMod;
                         targetMinion.hp -= dmg;
                         if (Math.random() > 0.5) {
                             effectsUpdate.push({ id: generateId(), type: 'COMBAT_HIT' as any, position: targetMinion.position, text: '', timestamp: now });
                         }
                     } else if (getDist(enemy.position, {x:0, z:0}) < 15) {
-                        // Attack Base (if close enough and no minion blocking)
-                        updated.baseHp = Math.max(0, updated.baseHp - 0.5); // Slow siege damage
-                        // No visual spam for siege, handled by fire effects
+                        updated.baseHp = Math.max(0, updated.baseHp - 0.5); 
                     }
                     return enemy;
                 });
@@ -259,7 +224,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // C. Handle Deaths (Minions)
                 const deadMinions = minionsUpdate.filter(m => m.hp <= 0);
                 if (deadMinions.length > 0) {
-                    playSfx('FAILURE'); // Loss sound
+                    playSfx('FAILURE'); 
                     deadMinions.forEach(m => {
                         effectsUpdate.push({ id: generateId(), type: 'SPLAT_TOMATO', position: m.position, timestamp: now });
                         effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:m.position.x, y:2, z:m.position.z}, text: "FALLEN", timestamp: now });
@@ -267,41 +232,26 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     minionsUpdate = minionsUpdate.filter(m => m.hp > 0);
                 }
 
-                // D. Handle Routs (Enemies) -> THEY DO NOT DIE, THEY ARE "ROUTED" (Task remains)
+                // D. Handle Routs (Enemies)
                 enemiesUpdate = enemiesUpdate.map(e => {
                     if (e.hp <= 0 && !e.executionReady) {
-                        // Enemy is routed!
                         playSfx('VICTORY');
-                        
-                        // Reward (Boosted from 10 to 25 to help economy)
                         updated.gold = (updated.gold || 0) + 75; 
                         effectsUpdate.push({ id: generateId(), type: 'EXPLOSION', position: e.position, timestamp: now });
                         effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: e.position, text: "+75g (Routed)", timestamp: now });
-
-                        // Teleport back to edge (Respawn logic)
                         const newPos = generateSpawnPosition(50, 60);
-                        return {
-                            ...e,
-                            hp: e.maxHp, // Reset HP
-                            position: newPos // Send away
-                        };
+                        return { ...e, hp: e.maxHp, position: newPos };
                     }
                     return e;
                 });
 
-                // Update Lists
                 updated.minions = minionsUpdate;
                 updated.enemies = enemiesUpdate;
 
-                // --- 1. Task Logic ---
+                // Task Logic
                 tasksUpdate = tasksUpdate.map(t => {
                     if (!t.completed && !t.failed) {
-                        // Check Failure
-                        if (now > t.deadline) {
-                            return { ...t, failed: true };
-                        }
-
-                        // Progressive Warnings Logic
+                        if (now > t.deadline) return { ...t, failed: true };
                         const duration = t.deadline - t.startTime;
                         const elapsed = now - t.startTime;
                         const progress = elapsed / duration;
@@ -310,94 +260,39 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         if (progress > 0.75 && currentLevel < 3) {
                             if (current.activeAlert === AlertType.NONE) {
                                 playSfx('FAILURE');
-                                alertUpdate = { 
-                                    activeAlert: AlertType.CRISIS, 
-                                    alertTaskId: t.id, 
-                                    sageMessage: getSageWisdom('CRISIS')
-                                };
+                                alertUpdate = { activeAlert: AlertType.CRISIS, alertTaskId: t.id, sageMessage: getSageWisdom('CRISIS') };
                             }
                             sendNotification("URGENT: 75% Elapsed", `${t.title} is critical.`);
                             return { ...t, crisisTriggered: true, lastNotificationLevel: 3 };
                         }
-                        
-                        if (progress > 0.50 && currentLevel < 2) {
-                            playSfx('UI_HOVER'); 
-                            effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: "50% TIME GONE", timestamp: now });
-                            return { ...t, lastNotificationLevel: 2 };
-                        }
-
-                        if (progress > 0.25 && currentLevel < 1) {
-                            playSfx('UI_CLICK'); 
-                            effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:3, z:0}, text: "25% TIME GONE", timestamp: now });
-                            return { ...t, lastNotificationLevel: 1 };
-                        }
+                        if (progress > 0.50 && currentLevel < 2) return { ...t, lastNotificationLevel: 2 };
+                        if (progress > 0.25 && currentLevel < 1) return { ...t, lastNotificationLevel: 1 };
                     }
                     return t;
                 });
 
-                // 2. Check for Newly Failed Tasks
                 const newlyFailed = tasksUpdate.filter(t => t.failed && !current.tasks.find(ot => ot.id === t.id)?.failed);
                 newlyFailed.forEach(t => {
                     playSfx('FAILURE');
-                    historyUpdate.push({
-                        id: generateId(),
-                        type: 'DEFEAT',
-                        timestamp: now,
-                        message: `Task Failed: ${t.title}`,
-                        details: "The Void grows stronger.",
-                        cause: "Deadline Missed"
-                    });
-                    
+                    historyUpdate.push({ id: generateId(), type: 'DEFEAT', timestamp: now, message: `Task Failed: ${t.title}`, details: "The Void grows stronger." });
                     const dmg = t.priority * 10;
                     updated.baseHp = Math.max(0, updated.baseHp - dmg);
                     effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:2, z:0}, text: `-${dmg} HP`, timestamp: now });
-                    
                     updated.winStreak = 0;
                     updated.lossStreak += 1;
                     updated.vazarothMessage = getVazarothLine('FAIL');
-
                     sendNotification("Task Failed", `${t.title} has been consumed by the Void.`);
                 });
                 
-                // Narrative Failure Trigger (Only once per tick)
                 if (newlyFailed.length > 0) {
                     const rival = updated.activeRivalId || 'RIVAL_KROG';
                     const pool = (DIALOGUE_POOLS[rival as keyof typeof DIALOGUE_POOLS] as any)?.PLAYER_FAIL || DIALOGUE_POOLS.RIVAL_KROG.PLAYER_FAIL;
                     const text = pool[Math.floor(Math.random() * pool.length)];
-                    updated.activeDialogue = {
-                        id: generateId(),
-                        characterId: rival,
-                        text,
-                        mood: 'ANGRY',
-                        timestamp: now,
-                        duration: 6000
-                    };
+                    updated.activeDialogue = { id: generateId(), characterId: rival, text, mood: 'ANGRY', timestamp: now, duration: 6000 };
                 }
 
-                // 3. Regen Mana
-                if (updated.mana < updated.maxMana) {
-                    updated.mana = Math.min(updated.maxMana, updated.mana + 0.5);
-                }
+                if (updated.mana < updated.maxMana) updated.mana = Math.min(updated.maxMana, updated.mana + 0.5);
 
-                // 4. SAGE INTERVENTION & CHRONOS WISDOM
-                if (current.activeMapEvent === 'NONE' && current.activeAlert === AlertType.NONE && !current.isGrimoireOpen && !alertUpdate?.activeMapEvent && !current.activeDialogue) {
-                     // (Keep existing sage logic)
-                     // 4a. CHRONOS WISDOM
-                     if (Math.random() > 0.995) { 
-                         const text = DIALOGUE_POOLS.ORACLE_ELARA.TIME_WISDOM[Math.floor(Math.random() * DIALOGUE_POOLS.ORACLE_ELARA.TIME_WISDOM.length)];
-                         updated.activeDialogue = {
-                             id: generateId(),
-                             characterId: 'ORACLE_ELARA',
-                             text,
-                             mood: 'MYSTERIOUS',
-                             timestamp: now,
-                             duration: 8000 
-                         };
-                         playSfx('MAGIC');
-                     }
-                }
-
-                // 5. NPC Simulation (Every tick run sim)
                 const simResult = simulateReactiveTurn(updated);
                 updated.population = simResult.newPopulation;
                 updated.realmStats = simResult.newStats;
@@ -415,13 +310,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (simResult.manaChange !== 0) updated.mana = Math.max(0, Math.min(updated.maxMana, updated.mana + simResult.manaChange));
                 if (simResult.hpChange !== 0) updated.baseHp = Math.min(updated.maxBaseHp, updated.baseHp + simResult.hpChange);
 
-                if (simResult.dailyNarrative.currentStage !== current.dailyNarrative?.currentStage) {
-                    const pool = DIALOGUE_POOLS.ORACLE_ELARA.ACT_CHANGE;
-                    const text = pool[Math.floor(Math.random() * pool.length)];
-                    updated.activeDialogue = { id: generateId(), characterId: 'ORACLE_ELARA', text, mood: 'MYSTERIOUS', timestamp: now, duration: 6000 };
-                    playSfx('MAGIC');
-                }
-                
                 updated.dailyNarrative = simResult.dailyNarrative; 
 
                 if (simResult.spawnedEnemies && simResult.spawnedEnemies.length > 0) {
@@ -465,25 +353,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }));
     };
     
-    // --- TASK ACTIONS LINKED TO NARRATIVE ---
+    // --- TASK ACTIONS ---
 
     const addTask = (title: string, startTime: number, deadline: number, priority: TaskPriority, subtasks: SubtaskDraft[], durationMinutes: number, description?: string, parentId?: string) => {
         const id = generateId();
         const newTask: Task = {
-            id,
-            title,
-            description,
-            startTime,
-            deadline,
-            estimatedDuration: durationMinutes,
-            priority,
-            completed: false,
-            failed: false,
-            subtasks: subtasks.map(s => ({ ...s, id: generateId(), completed: false })),
-            parentId,
-            createdAt: Date.now(),
-            crisisTriggered: false,
-            hubris: false
+            id, title, description, startTime, deadline, estimatedDuration: durationMinutes, priority,
+            completed: false, failed: false, subtasks: subtasks.map(s => ({ ...s, id: generateId(), completed: false })),
+            parentId, createdAt: Date.now(), crisisTriggered: false, hubris: false
         };
 
         const enemy = generateNemesis(id, priority, state.nemesisGraveyard, state.winStreak, undefined, title, durationMinutes, state.realmStats || { hope: 50, fear: 10, order: 50 });
@@ -508,7 +385,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             saveGame(next); 
             return next;
         });
-        
         triggerDialogue(state.activeAllyId || 'MARSHAL_THORNE', DIALOGUE_POOLS.MARSHAL_THORNE.GREETING, 'NEUTRAL');
         playSfx('UI_CLICK');
     };
@@ -565,45 +441,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const completeTask = (taskId: string) => {
         playSfx('VICTORY');
-        
-        // Find enemy linked to this task
         const linkedEnemy = state.enemies.find(e => e.taskId === taskId && !e.subtaskId);
-
-        // If from Grimoire UI, auto-execute logic
         if (state.isGrimoireOpen && linkedEnemy) {
             executeEnemy(linkedEnemy.id);
         }
 
         setState(prev => {
             const task = prev.tasks.find(t => t.id === taskId);
-            
-            // FIX: Explicitly handle gold calculation with safe fallback for undefined priority
-            // Increased base reward to help economy
             const rewardBase = task ? (task.priority || 1) * 150 : 150; 
-            const currentGold = prev.gold || 0;
-            const newGold = currentGold + rewardBase;
+            const newGold = (prev.gold || 0) + rewardBase;
 
             const enemies = prev.enemies.map(e => {
-                if (e.taskId === taskId) {
-                    return { ...e, executionReady: true };
-                }
+                if (e.taskId === taskId) return { ...e, executionReady: true };
                 return e;
             });
 
             const next = {
                 ...prev,
                 militaryTech: (prev.militaryTech || 1) + 1,
-                gold: newGold, // Guaranteed update
+                gold: newGold,
                 tasks: prev.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
                 enemies: enemies, 
                 winStreak: prev.winStreak + 1,
                 lossStreak: 0,
                 lastSyncTimestamp: Date.now(),
-                // Add explicit Center Screen Effect for the reward
                 effects: [
                     ...prev.effects, 
                     { id: generateId(), type: 'SHOCKWAVE' as const, position: {x:0, y:0, z:0}, timestamp: Date.now() }, 
-                    { id: generateId(), type: 'TEXT_GOLD' as const, position: {x:0, y:0, z:0}, text: `+${rewardBase}g`, timestamp: Date.now() } // Center screen reward
+                    { id: generateId(), type: 'TEXT_GOLD' as const, position: {x:0, y:0, z:0}, text: `+${rewardBase}g`, timestamp: Date.now() } 
                 ]
             };
             
@@ -617,7 +482,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    // --- NEW: VISCERAL EXECUTION SYSTEM ---
     const executeEnemy = (enemyId: string) => {
         const enemy = state.enemies.find(e => e.id === enemyId);
         if (!enemy) return;
@@ -640,18 +504,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 else materialType = Math.random() > 0.5 ? 'IRON' : 'WOOD';
             }
 
-            // Boosted Values
             orbs.push({
-                id: generateId(),
-                type,
-                material: materialType,
-                value: (enemy.priority * 50) + Math.floor(Math.random() * 50), // Significant boost
+                id: generateId(), type, material: materialType,
+                value: (enemy.priority * 50) + Math.floor(Math.random() * 50),
                 position: { ...enemy.position, y: 1.5 },
-                velocity: {
-                    x: (Math.random() - 0.5) * 0.4,
-                    y: 0.3 + (Math.random() * 0.4),
-                    z: (Math.random() - 0.5) * 0.4
-                },
+                velocity: { x: (Math.random() - 0.5) * 0.4, y: 0.3 + (Math.random() * 0.4), z: (Math.random() - 0.5) * 0.4 },
                 createdAt: Date.now()
             });
         }
@@ -691,10 +548,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 next.effects = [...next.effects, { id: generateId(), type: 'TEXT_XP' as const, position: orb.position, text: `+${orb.value} XP`, timestamp: Date.now() }];
             } else if (orb.type === 'MATERIAL' && orb.material) {
-                next.materials = {
-                    ...next.materials,
-                    [orb.material]: (next.materials[orb.material] || 0) + 1
-                };
+                next.materials = { ...next.materials, [orb.material]: (next.materials[orb.material] || 0) + 1 };
                 next.effects = [...next.effects, { id: generateId(), type: 'TEXT_LOOT' as const, position: orb.position, text: `${orb.material}`, timestamp: Date.now() }];
             }
             
@@ -703,10 +557,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const buyItem = (itemId: string) => {
-        // DYNAMIC SHOP LOOKUP
         const dynamicItems = getDynamicShopItems(state);
         const item = dynamicItems.find(i => i.id === itemId);
-        
         if (!item) return;
         if (state.gold < item.cost) { playSfx('ERROR'); return; }
         
@@ -717,39 +569,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (item.type === 'HEAL_HERO') next.heroHp = Math.min(next.maxHeroHp, next.heroHp + item.value);
             if (item.type === 'HEAL_BASE') next.baseHp = Math.min(next.maxBaseHp, next.baseHp + item.value);
             
-            // SPAWN MINION WITH COMBAT STATS
             if (item.type === 'MERCENARY') {
-                const combatStats = {
-                    damage: 15 + (prev.militaryTech || 0), // Scales with tech
-                    range: 2,
-                    attackSpeed: 1,
-                    lastAttack: 0
-                };
+                const combatStats = { damage: 15 + (prev.militaryTech || 0), range: 2, attackSpeed: 1, lastAttack: 0 };
                 next.minions.push({ 
-                    id: generateId(), 
-                    type: 'WARRIOR', 
-                    hp: 50 + (prev.militaryTech * 5), 
-                    maxHp: 50 + (prev.militaryTech * 5),
-                    combat: combatStats,
-                    position: {x: 2, y:0, z:2}, 
-                    createdAt: Date.now(), 
-                    targetEnemyId: null 
+                    id: generateId(), type: 'WARRIOR', hp: 50 + (prev.militaryTech * 5), maxHp: 50 + (prev.militaryTech * 5),
+                    combat: combatStats, position: {x: 2, y:0, z:2}, createdAt: Date.now(), targetEnemyId: null 
                 });
             }
 
-            // MYSTERY BOX
             if (item.id === 'MYSTERY_BOX') {
-                const loot = generateLoot(prev.playerLevel + 5); // Better loot
+                const loot = generateLoot(prev.playerLevel + 5); 
                 if (loot) {
                     const newItem: Item = {
-                        id: generateId(),
-                        type: loot.type as any,
-                        name: loot.name,
-                        lore: loot.lore,
-                        value: (prev.playerLevel * 50) + 100,
-                        acquiredAt: Date.now(),
-                        isEquipped: false,
-                        rarity: 'RARE'
+                        id: generateId(), type: loot.type as any, name: loot.name, lore: loot.lore,
+                        value: (prev.playerLevel * 50) + 100, acquiredAt: Date.now(), isEquipped: false, rarity: 'RARE'
                     };
                     next.inventory.push(newItem);
                     next.effects.push({ id: generateId(), type: 'TEXT_LOOT', position: {x:0, y:0, z:0}, text: "RARE ITEM!", timestamp: Date.now() });
@@ -773,79 +606,42 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const craftItem = (tier: number, materialsCost: Record<MaterialType, number>) => {
         setState(prev => {
             const mats = { ...prev.materials };
-            // Check if affordable
             for (const [key, cost] of Object.entries(materialsCost)) {
-                if ((mats[key as MaterialType] || 0) < cost) {
-                    playSfx('ERROR');
-                    return prev;
-                }
+                if ((mats[key as MaterialType] || 0) < cost) { playSfx('ERROR'); return prev; }
             }
-
-            // Deduct
             for (const [key, cost] of Object.entries(materialsCost)) {
                 mats[key as MaterialType] -= cost;
             }
 
-            // Generate Loot
             const level = tier * 20; 
-            const loot = generateLoot(level) || { 
-                type: 'WEAPON', 
-                name: `Forged Blade T${tier}`, 
-                lore: "A simple weapon forged in desperation." 
-            };
-
+            const loot = generateLoot(level) || { type: 'WEAPON', name: `Forged Blade T${tier}`, lore: "A simple weapon forged in desperation." };
             const newItem: Item = {
-                id: generateId(),
-                type: loot.type as any, // generateLoot returns specific string union, Item type matches
-                name: loot.name,
-                lore: loot.lore,
-                value: tier * 50,
-                acquiredAt: Date.now(),
-                isEquipped: false,
-                rarity: tier >= 4 ? 'LEGENDARY' : tier >= 3 ? 'RARE' : 'COMMON'
+                id: generateId(), type: loot.type as any, name: loot.name, lore: loot.lore,
+                value: tier * 50, acquiredAt: Date.now(), isEquipped: false, rarity: tier >= 4 ? 'LEGENDARY' : tier >= 3 ? 'RARE' : 'COMMON'
             };
 
             playSfx('MAGIC');
-
             return {
-                ...prev,
-                materials: mats,
-                inventory: [...prev.inventory, newItem],
-                history: [
-                    { 
-                        id: generateId(), 
-                        type: 'CRAFT', 
-                        timestamp: Date.now(), 
-                        message: `Crafted ${newItem.name}`, 
-                        details: `Used ${materialsCost.IRON || 0} Iron...` 
-                    } as HistoryLog, 
-                    ...prev.history
-                ],
+                ...prev, materials: mats, inventory: [...prev.inventory, newItem],
+                history: [{ id: generateId(), type: 'CRAFT', timestamp: Date.now(), message: `Crafted ${newItem.name}`, details: `Used ${materialsCost.IRON || 0} Iron...` } as HistoryLog, ...prev.history],
                 lastSyncTimestamp: Date.now()
             };
         });
     };
 
     // --- VISION MIRROR LOGIC ---
-    
-    // Helper to fetch CSV from Google Sheet
     const fetchSheetData = async (sheetIdOrUrl: string): Promise<string[]> => {
         if (!sheetIdOrUrl) return [];
-        
         let url = sheetIdOrUrl;
-        // If it's just an ID, construct the CSV export URL
         if (!url.startsWith('http')) {
             url = `https://docs.google.com/spreadsheets/d/${sheetIdOrUrl}/export?format=csv`;
         } else if (url.includes('/edit')) {
             url = url.replace(/\/edit.*$/, '/export?format=csv');
         }
-
         try {
             const res = await fetch(url);
             if (!res.ok) throw new Error('Sheet fetch failed');
             const text = await res.text();
-            
-            // Parse CSV: Assume URLs are in the first column or scattered
             const urls: string[] = [];
             const rows = text.split('\n');
             rows.forEach(row => {
@@ -863,12 +659,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const rerollVision = async () => {
-        const settings = (state.settings || {}) as GameSettings; // Fix TS error with explicit cast
-        let pool: string[] = [...FALLBACK_VISIONS]; // Always start with fallback so it's never empty
+        // Safe access to settings
+        const settings = (state.settings || {}) as GameSettings; 
+        let pool: string[] = []; 
 
         // 1. Collect Manual List
         if (settings.directVisionUrl) {
-            // Split by comma, newline, or space
             const manual = settings.directVisionUrl.split(/[\n,\s]+/).filter(u => u.startsWith('http'));
             pool = [...pool, ...manual];
         }
@@ -883,27 +679,30 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             pool = [...pool, ...sheet2];
         }
 
-        // 3. Cycle Logic (No Repeats)
+        // 3. Fallback to STATIC if empty
+        if (pool.length === 0) {
+            setState(prev => ({
+                ...prev,
+                activeVisionVideo: "NO_SIGNAL", // TRIGGER STATIC
+                seenVisionUrls: [] // Reset seen list if empty
+            }));
+            return;
+        }
+
+        // 4. Cycle Logic (No Repeats)
         const seen = new Set(state.seenVisionUrls || []);
         let available = pool.filter(url => !seen.has(url));
 
         let resetSeen = false;
         if (available.length === 0) {
-            // Cycle finished! Reset.
-            available = pool;
+            available = pool; // Restart Cycle
             resetSeen = true;
         }
 
-        if (available.length === 0) {
-            // Should theoretically never happen due to Fallback, but just in case
-            console.error("No vision sources available.");
-            return;
-        }
-
-        // 4. Pick Random
+        // 5. Pick Random
         const pick = available[Math.floor(Math.random() * available.length)];
 
-        // 5. Update State
+        // 6. Update State
         setState(prev => ({
             ...prev,
             activeVisionVideo: pick,

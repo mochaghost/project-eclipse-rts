@@ -85,17 +85,22 @@ export const VisionMirror: React.FC = () => {
 
         if (!content) {
             return (
-                 <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[#0a0a0a] relative">
-                    <SignalHigh size={64} className="text-stone-700 mb-4 animate-pulse" />
-                    <h2 className="text-xl text-stone-500 font-serif font-bold tracking-widest mb-2">NO SIGNAL</h2>
-                    <p className="text-stone-600 text-xs font-mono mb-6">The Void could not retrieve your visions.</p>
-                    <div className="flex flex-col gap-2 w-full max-w-[180px] z-20">
-                        <button onClick={handleReroll} className="px-4 py-2 border border-purple-500 text-purple-400 text-xs hover:bg-purple-900/20 transition-colors cursor-pointer pointer-events-auto flex items-center justify-center gap-2">
-                            <RefreshCcw size={14}/> RETRY SIGNAL
-                        </button>
-                        <button onClick={() => { closeVision(); toggleSettings(); }} className="px-4 py-2 border border-stone-600 text-stone-400 text-xs hover:bg-stone-800 transition-colors cursor-pointer pointer-events-auto">
-                            CHECK SETTINGS
-                        </button>
+                 <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[#0a0a0a] relative overflow-hidden">
+                    {/* FULL SCREEN STATIC NOISE */}
+                    <div className="absolute inset-0 opacity-40 bg-[url('https://media.giphy.com/media/oEI9uBYSzLpBK/giphy.gif')] bg-cover pointer-events-none z-0 mix-blend-screen"></div>
+                    
+                    <div className="relative z-10 flex flex-col items-center">
+                        <SignalHigh size={64} className="text-stone-500 mb-4 animate-pulse drop-shadow-[0_0_10px_rgba(255,0,0,0.5)]" />
+                        <h2 className="text-xl text-stone-300 font-serif font-bold tracking-[0.5em] mb-2 drop-shadow-md">NO SIGNAL</h2>
+                        <p className="text-stone-500 text-xs font-mono mb-6 bg-black/50 px-2 py-1">The Void is silent.</p>
+                        <div className="flex flex-col gap-2 w-full max-w-[180px]">
+                            <button onClick={handleReroll} className="px-4 py-2 border border-purple-500 text-purple-400 text-xs bg-black/80 hover:bg-purple-900/40 transition-colors cursor-pointer pointer-events-auto flex items-center justify-center gap-2">
+                                <RefreshCcw size={14}/> RETRY SIGNAL
+                            </button>
+                            <button onClick={() => { closeVision(); toggleSettings(); }} className="px-4 py-2 border border-stone-600 text-stone-400 text-xs bg-black/80 hover:bg-stone-800 transition-colors cursor-pointer pointer-events-auto">
+                                CONFIGURE SOURCE
+                            </button>
+                        </div>
                     </div>
                 </div>
             );
