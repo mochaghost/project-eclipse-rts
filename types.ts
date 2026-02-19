@@ -353,7 +353,7 @@ export interface DailyNarrative {
 }
 
 export interface VisionContent {
-    type: 'VIDEO' | 'IMAGE';
+    type: 'VIDEO' | 'IMAGE' | 'SOCIAL';
     embedUrl: string;
     originalUrl: string;
     platform: 'YOUTUBE' | 'TIKTOK' | 'INSTAGRAM' | 'PINTEREST' | 'OTHER';

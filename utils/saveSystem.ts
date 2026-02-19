@@ -4,7 +4,7 @@ import { generateId } from './generators';
 import { FACTIONS } from '../constants';
 
 const SAVE_KEY = 'PROJECT_ECLIPSE_SAVE_V1';
-const CURRENT_VERSION = 14; // Increment version for militaryTech
+const CURRENT_VERSION = 15; // Bump version to force migration check
 
 interface SaveFile {
     version: number;
@@ -14,9 +14,9 @@ interface SaveFile {
 
 const DEFAULT_STATE: GameState = {
   playerLevel: 1,
-  militaryTech: 1, // Start at basic tech level
+  militaryTech: 1,
   xp: 0,
-  gold: 150,
+  gold: 150, // Default start
   heroHp: 100,
   maxHeroHp: 100,
   baseHp: 50,
@@ -100,7 +100,6 @@ export const saveGame = (state: GameState) => {
         };
 
         localStorage.setItem(SAVE_KEY, JSON.stringify(saveFile));
-        console.log(`[System] Game saved. Version ${CURRENT_VERSION}`);
     } catch (e) {
         console.error("[System] Save failed:", e);
     }
@@ -114,7 +113,6 @@ export const loadGame = (): GameState => {
         const saveFile: any = JSON.parse(raw); 
         
         if (!saveFile || typeof saveFile !== 'object' || !saveFile.data) {
-            console.warn("[System] Corrupt save file structure. Resetting to Default.");
             return DEFAULT_STATE;
         }
 
@@ -126,31 +124,21 @@ export const loadGame = (): GameState => {
             loadedState = performMigration(loadedState, loadedVersion);
         }
 
-        // DEEP SANITIZATION: Force arrays to be arrays, never undefined/null
+        // DEEP SANITIZATION FOR GOLD
+        // Ensure gold is a valid number. If NaN or undefined, reset to 150.
+        const safeGold = (typeof loadedState.gold === 'number' && !isNaN(loadedState.gold)) ? loadedState.gold : 150;
+
         return {
             ...DEFAULT_STATE,
             ...loadedState,
-            militaryTech: loadedState.militaryTech || 1, // Default if missing
-            tasks: Array.isArray(loadedState.tasks) ? loadedState.tasks.map((t: any) => ({
-                ...t,
-                subtasks: Array.isArray(t.subtasks) ? t.subtasks : []
-            })) : [],
-            enemies: Array.isArray(loadedState.enemies) ? loadedState.enemies.map((e: any) => ({
-                ...e,
-                combat: e.combat || { damage: 10, range: 2, attackSpeed: 1, lastAttack: 0 }
-            })) : [],
-            minions: Array.isArray(loadedState.minions) ? loadedState.minions.map((m: any) => ({
-                ...m,
-                combat: m.combat || { damage: 10, range: 2, attackSpeed: 1, lastAttack: 0 }
-            })) : [],
+            gold: safeGold,
+            militaryTech: loadedState.militaryTech || 1,
+            tasks: Array.isArray(loadedState.tasks) ? loadedState.tasks : [],
+            enemies: Array.isArray(loadedState.enemies) ? loadedState.enemies : [],
+            minions: Array.isArray(loadedState.minions) ? loadedState.minions : [],
             lootOrbs: Array.isArray(loadedState.lootOrbs) ? loadedState.lootOrbs : [], 
             history: Array.isArray(loadedState.history) ? loadedState.history : [],
-            population: Array.isArray(loadedState.population) ? loadedState.population.map((p: any) => ({
-                ...p,
-                relationships: Array.isArray(p.relationships) ? p.relationships : [],
-                memories: Array.isArray(p.memories) ? p.memories : [],
-                traits: Array.isArray(p.traits) ? p.traits : []
-            })) : [],
+            population: Array.isArray(loadedState.population) ? loadedState.population : [],
             realmStats: loadedState.realmStats || DEFAULT_STATE.realmStats,
             structures: { ...DEFAULT_STATE.structures, ...(loadedState.structures || {}) },
             factions: Array.isArray(loadedState.factions) ? loadedState.factions : DEFAULT_STATE.factions,
@@ -159,13 +147,11 @@ export const loadGame = (): GameState => {
             settings: loadedState.settings || DEFAULT_STATE.settings,
             inventory: Array.isArray(loadedState.inventory) ? loadedState.inventory : [],
             materials: loadedState.materials || DEFAULT_STATE.materials,
-            visionQueue: Array.isArray(loadedState.visionQueue) ? loadedState.visionQueue : [],
-            seenVisionUrls: Array.isArray(loadedState.seenVisionUrls) ? loadedState.seenVisionUrls : [],
             templates: Array.isArray(loadedState.templates) ? loadedState.templates : []
         };
 
     } catch (e) {
-        console.error("[System] Load crash. Data is likely malformed JSON.", e);
+        console.error("[System] Load crash.", e);
         return DEFAULT_STATE;
     }
 };
@@ -174,17 +160,15 @@ const performMigration = (state: any, fromVersion: number): GameState => {
     let migrated = { ...state };
     if (!migrated) return DEFAULT_STATE;
 
+    // FORCE FIX FOR NAN GOLD
+    if (migrated.gold === null || migrated.gold === undefined || isNaN(migrated.gold)) {
+        migrated.gold = 150;
+    }
+
     if (fromVersion < 2) {
-        migrated.gold = migrated.gold ?? 100;
+        migrated.gold = 150;
         migrated.isMarketOpen = false;
     }
     
-    // Ensure critical arrays exist for migration steps
-    migrated.tasks = Array.isArray(migrated.tasks) ? migrated.tasks : [];
-    migrated.enemies = Array.isArray(migrated.enemies) ? migrated.enemies : [];
-    migrated.minions = Array.isArray(migrated.minions) ? migrated.minions : [];
-    migrated.population = Array.isArray(migrated.population) ? migrated.population : [];
-    migrated.lootOrbs = Array.isArray(migrated.lootOrbs) ? migrated.lootOrbs : [];
-
     return migrated;
 };

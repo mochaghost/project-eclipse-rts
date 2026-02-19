@@ -186,13 +186,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 let tasksUpdate = [...current.tasks];
                 let minionsUpdate = [...current.minions];
 
-                // Narrative Modifiers
                 const stats = current.realmStats || { hope: 50, fear: 10, order: 50 };
                 const minionDmgMod = stats.hope > 70 ? 1.5 : 1;
                 const enemyDmgMod = stats.fear > 70 ? 1.5 : 1;
                 const minionArmorMod = stats.order > 70 ? 0.8 : 1;
 
-                // A. Minions Attack Enemies
                 minionsUpdate = minionsUpdate.map(minion => {
                     const target = enemiesUpdate.find(e => getDist(minion.position, e.position) < (minion.combat?.range || 2));
                     if (target) {
@@ -205,7 +203,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     return minion;
                 });
 
-                // B. Enemies Attack Minions
                 enemiesUpdate = enemiesUpdate.map(enemy => {
                     if (enemy.executionReady) return enemy; 
                     const targetMinion = minionsUpdate.find(m => getDist(enemy.position, m.position) < (enemy.combat?.range || 2));
@@ -221,7 +218,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     return enemy;
                 });
 
-                // C. Handle Deaths (Minions)
                 const deadMinions = minionsUpdate.filter(m => m.hp <= 0);
                 if (deadMinions.length > 0) {
                     playSfx('FAILURE'); 
@@ -232,11 +228,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     minionsUpdate = minionsUpdate.filter(m => m.hp > 0);
                 }
 
-                // D. Handle Routs (Enemies)
                 enemiesUpdate = enemiesUpdate.map(e => {
                     if (e.hp <= 0 && !e.executionReady) {
                         playSfx('VICTORY');
-                        updated.gold = (updated.gold || 0) + 75; 
+                        // Gold reward for routing enemy
+                        const currentGold = typeof updated.gold === 'number' && !isNaN(updated.gold) ? updated.gold : 0;
+                        updated.gold = currentGold + 75; 
+                        
                         effectsUpdate.push({ id: generateId(), type: 'EXPLOSION', position: e.position, timestamp: now });
                         effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: e.position, text: "+75g (Routed)", timestamp: now });
                         const newPos = generateSpawnPosition(50, 60);
@@ -248,7 +246,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 updated.minions = minionsUpdate;
                 updated.enemies = enemiesUpdate;
 
-                // Task Logic
                 tasksUpdate = tasksUpdate.map(t => {
                     if (!t.completed && !t.failed) {
                         if (now > t.deadline) return { ...t, failed: true };
@@ -303,7 +300,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 
                 if (simResult.goldChange !== 0) {
-                    updated.gold = Math.max(0, (updated.gold || 0) + simResult.goldChange);
+                    const currentGold = typeof updated.gold === 'number' && !isNaN(updated.gold) ? updated.gold : 0;
+                    updated.gold = Math.max(0, currentGold + simResult.goldChange);
+                    
                     if (simResult.goldChange < 0 && Math.random() > 0.5) effectsUpdate.push({ id: generateId(), type: 'TEXT_DAMAGE', position: {x:0, y:3, z:0}, text: `${simResult.goldChange}g`, timestamp: now });
                     if (simResult.goldChange > 0) effectsUpdate.push({ id: generateId(), type: 'TEXT_GOLD', position: {x:0, y:2, z:0}, text: `+${simResult.goldChange}g`, timestamp: now });
                 }
@@ -449,7 +448,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(prev => {
             const task = prev.tasks.find(t => t.id === taskId);
             const rewardBase = task ? (task.priority || 1) * 150 : 150; 
-            const newGold = (prev.gold || 0) + rewardBase;
+            
+            // STRICT NUMBER CHECK for GOLD
+            const currentGold = typeof prev.gold === 'number' && !isNaN(prev.gold) ? prev.gold : 0;
+            const newGold = currentGold + rewardBase;
 
             const enemies = prev.enemies.map(e => {
                 if (e.taskId === taskId) return { ...e, executionReady: true };
@@ -535,7 +537,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             next.lootOrbs = next.lootOrbs.filter(o => o.id !== orbId);
             
             if (orb.type === 'GOLD') {
-                next.gold = (next.gold || 0) + orb.value;
+                const currentGold = typeof next.gold === 'number' && !isNaN(next.gold) ? next.gold : 0;
+                next.gold = currentGold + orb.value;
                 next.effects = [...next.effects, { id: generateId(), type: 'TEXT_GOLD' as const, position: orb.position, text: `+${orb.value}g`, timestamp: Date.now() }];
             } else if (orb.type === 'XP') {
                 next.xp += orb.value;
@@ -563,7 +566,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (state.gold < item.cost) { playSfx('ERROR'); return; }
         
         setState(prev => {
-            let next = { ...prev, gold: prev.gold - item.cost };
+            const currentGold = typeof prev.gold === 'number' && !isNaN(prev.gold) ? prev.gold : 0;
+            let next = { ...prev, gold: currentGold - item.cost };
             playSfx('COINS');
             
             if (item.type === 'HEAL_HERO') next.heroHp = Math.min(next.maxHeroHp, next.heroHp + item.value);
@@ -659,17 +663,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const rerollVision = async () => {
-        // Safe access to settings
         const settings = (state.settings || {}) as GameSettings; 
         let pool: string[] = []; 
 
-        // 1. Collect Manual List
         if (settings.directVisionUrl) {
             const manual = settings.directVisionUrl.split(/[\n,\s]+/).filter(u => u.startsWith('http'));
             pool = [...pool, ...manual];
         }
 
-        // 2. Collect Sheet Data
         if (settings.googleSheetId) {
             const sheet1 = await fetchSheetData(settings.googleSheetId);
             pool = [...pool, ...sheet1];
@@ -679,30 +680,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             pool = [...pool, ...sheet2];
         }
 
-        // 3. Fallback to STATIC if empty
+        // STATIC FALLBACK
         if (pool.length === 0) {
             setState(prev => ({
                 ...prev,
-                activeVisionVideo: "NO_SIGNAL", // TRIGGER STATIC
-                seenVisionUrls: [] // Reset seen list if empty
+                activeVisionVideo: "NO_SIGNAL", // Handled by VisionMirror component
+                seenVisionUrls: [] 
             }));
             return;
         }
 
-        // 4. Cycle Logic (No Repeats)
         const seen = new Set(state.seenVisionUrls || []);
         let available = pool.filter(url => !seen.has(url));
 
         let resetSeen = false;
         if (available.length === 0) {
-            available = pool; // Restart Cycle
+            available = pool; 
             resetSeen = true;
         }
 
-        // 5. Pick Random
         const pick = available[Math.floor(Math.random() * available.length)];
 
-        // 6. Update State
         setState(prev => ({
             ...prev,
             activeVisionVideo: pick,
@@ -740,12 +738,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const sellItem = (itemId: string) => { 
         const item = state.inventory.find(i => i.id === itemId);
         if (!item) return;
-        setState(prev => ({
-            ...prev,
-            gold: prev.gold + Math.floor(item.value / 2),
-            inventory: prev.inventory.filter(i => i.id !== itemId),
-            history: [{ id: generateId(), type: 'TRADE', timestamp: Date.now(), message: `Sold ${item.name}`, details: `+${Math.floor(item.value/2)}g` } as HistoryLog, ...prev.history]
-        }));
+        setState(prev => {
+            const currentGold = typeof prev.gold === 'number' && !isNaN(prev.gold) ? prev.gold : 0;
+            const next = {
+                ...prev,
+                gold: currentGold + Math.floor(item.value / 2),
+                inventory: prev.inventory.filter(i => i.id !== itemId),
+                history: [{ id: generateId(), type: 'TRADE', timestamp: Date.now(), message: `Sold ${item.name}`, details: `+${Math.floor(item.value/2)}g` } as HistoryLog, ...prev.history]
+            };
+            return next;
+        });
         playSfx('COINS');
     };
     const equipItem = (itemId: string) => { 
